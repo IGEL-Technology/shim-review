@@ -94,7 +94,7 @@ Hint: If you attach all the patches and modifications that are being used to you
 
 You can also point to your custom git servers, where the code is hosted.
 *******************************************************************************
-[your url here]
+https://github.com/IGEL-Technology/shim
 
 *******************************************************************************
 ### What patches are being applied and why:
@@ -229,7 +229,7 @@ N/A. You can just use the provided Dockerfile.
 ### Which files in this repo are the logs for your build?
 This should include logs for creating the buildroots, applying patches, doing the build, creating the archives, etc.
 *******************************************************************************
-[your text here]
+build.log: attached is the full container log, including debuild will all build steps, comparing against upstream shim15.8, and so on. The last step outputs the resulting sha256sum on the submitted shimx64.efi.
 
 *******************************************************************************
 ### What changes were made in the distro's secure boot chain since your SHIM was last signed?
