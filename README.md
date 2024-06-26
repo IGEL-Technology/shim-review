@@ -46,10 +46,10 @@ The security contacts need to be verified before the shim can be accepted. For s
 An authorized reviewer will initiate contact verification by sending each security contact a PGP-encrypted email containing random words.
 You will be asked to post the contents of these mails in your `shim-review` issue to prove ownership of the email addresses and PGP keys.
 *******************************************************************************
-- Name:
-- Position:
-- Email address:
-- PGP key fingerprint:
+- Name: Kulow, Alexander Fabian
+- Position: Security Architect
+- Email address: kulow@igel.com
+- PGP key fingerprint: D53B9CE1CE8614C6
 
 (Key should be signed by the other security contacts, pushed to a keyserver
 like keyserver.ubuntu.com, and preferably have signatures that are reasonably
@@ -86,7 +86,7 @@ Make sure that you've verified that your build process uses that file as a sourc
 
 A short guide on verifying public keys and signatures should be available in the [docs](./docs/) directory.
 *******************************************************************************
-The build is based on the shim-15.8 linked above.
+Yes. The build is based on the shim-15.8 linked above.
 
 *******************************************************************************
 ### URL for a repo that contains the exact code which was built to result in your binary:
@@ -161,7 +161,7 @@ Skip this, if you're not using GRUB2.
   * CVE-2023-4693
   * CVE-2023-4692
 *******************************************************************************
-Yes. CVE-2022-28737 is actually not a GRUB CVE, but fixed in shim upstream here:
+Yes. CVE-2022-28737 is actually not a GRUB CVE, but fixed in shim upstream here (and thus fixed in our build):
 
 https://github.com/rhboot/shim/commit/159151b6649008793d6204a34d7b9c41221fb4b0
 https://github.com/rhboot/shim/commit/e99bdbb827a50cde019393d3ca1e89397db221a7
@@ -188,7 +188,7 @@ Yes.
 Hint: upstream kernels should have all these applied, but if you ship your own heavily-modified older kernel version, that is being maintained separately from upstream, this may not be the case.  
 If you are shipping an older kernel, double-check your sources; maybe you do not have all the patches, but ship a configuration, that does not expose the issue(s).
 *******************************************************************************
-Yes.
+Yes. Our kernel originates from upstream and has the respective patch commits included.
 
 *******************************************************************************
 ### Do you build your signed kernel with additional local patches? What do they do?
@@ -199,13 +199,13 @@ Yes.
 ### Do you use an ephemeral key for signing kernel modules?
 ### If not, please describe how you ensure that one kernel build does not load modules built for another kernel.
 *******************************************************************************
-[your text here]
+No. The kernel loads only modules signed off by us, the only step missing is that the key is not ephemeral yet.
 
 *******************************************************************************
 ### If you use vendor_db functionality of providing multiple certificates and/or hashes please briefly describe your certificate setup.
 ### If there are allow-listed hashes please provide exact binaries for which hashes are created via file sharing service, available in public with anonymous access for verification.
 *******************************************************************************
-[your text here]
+No.
 
 *******************************************************************************
 ### If you are re-using the CA certificate from your last shim binary, you will need to add the hashes of the previous GRUB2 binaries exposed to the CVEs mentioned earlier to vendor_dbx in shim. Please describe your strategy.
@@ -223,7 +223,7 @@ Hint: Prefer using *frozen* packages for your toolchain, since an update to GCC,
 
 If your shim binaries can't be reproduced using the provided Dockerfile, please explain why that's the case, what the differences would be and what build environment (OS and toolchain) is being used to reproduce this build? In this case please write a detailed guide, how to setup this build environment from scratch.
 *******************************************************************************
-N/A.
+N/A. You can just use the provided Dockerfile.
 
 *******************************************************************************
 ### Which files in this repo are the logs for your build?
@@ -237,12 +237,17 @@ For example, signing new kernel's variants, UKI, systemd-boot, new certs, new CA
 
 Skip this, if this is your first application for having shim signed.
 *******************************************************************************
-[your text here]
+
+ * We updated GRUB to 2.06
+ * We introduced new certificates for Kernel and GRUB signatures
+ * updated shim to 15.8.
 
 *******************************************************************************
 ### What is the SHA256 hash of your final shim binary?
 *******************************************************************************
-[your text here]
+```
+90ce33685c5ac241b582bdf27d0ae872b72263a5ae8271ef7f738bd1d13e8e63  shimx64.efi
+```
 
 *******************************************************************************
 ### How do you manage and protect the keys used in your shim?
@@ -280,7 +285,78 @@ Skip this, if you're not using GRUB2.
 
 Hint: this is about those modules that are in the binary itself, not the `.mod` files in your filesystem.
 *******************************************************************************
-[your text here]
+```
+boot
+bufio
+cat
+chain
+configfile
+datetime
+disk
+diskfilter
+echo
+efi_gop
+efi_uga
+efinet
+eval
+ext2
+extcmd
+fat
+file
+font
+gcry_rsa
+gcry_sha256
+gcry_sha512
+gfxmenu
+gfxterm
+gfxterm_background
+gfxterm_menu
+gzio
+halt
+hfsplus
+http
+jpeg
+linux
+linux16
+linuxefi
+ls
+lzopio
+memdisk
+minicmd
+mmap
+msdospart
+net
+normal
+ntfs
+part_gpt
+part_msdos
+password_pbkdf2
+pgp
+png
+priority_queue
+progress
+regexp
+relocator
+search
+search_fs_file
+search_fs_uuid
+search_label
+terminal
+test
+tftp
+tpm
+tr
+true
+udf
+video
+video_bochs
+video_cirrus
+video_colors
+video_fb
+videoinfo
+videotest
+xzio
+```
 
 *******************************************************************************
 ### If you are using systemd-boot on arm64 or riscv, is the fix for [unverified Devicetree Blob loading](https://github.com/systemd/systemd/security/advisories/GHSA-6m6p-rjcq-334c) included?
@@ -290,19 +366,19 @@ N/A
 *******************************************************************************
 ### What is the origin and full version number of your bootloader (GRUB2 or systemd-boot or other)?
 *******************************************************************************
-[your text here]
+GRUB2 2.06, Debian bookworm.
 
 *******************************************************************************
 ### If your shim launches any other components apart from your bootloader, please provide further details on what is launched.
 Hint: The most common case here will be a firmware updater like fwupd.
 *******************************************************************************
-[your text here]
+We launch fwupd.
 
 *******************************************************************************
 ### If your GRUB2 or systemd-boot launches any other binaries that are not the Linux kernel in SecureBoot mode, please provide further details on what is launched and how it enforces Secureboot lockdown.
 Skip this, if you're not using GRUB2 or systemd-boot.
 *******************************************************************************
-[your text here]
+ * fwupd
 
 *******************************************************************************
 ### How do the launched components prevent execution of unauthenticated code?
@@ -313,7 +389,7 @@ Summarize in one or two sentences, how your secure bootchain works on higher lev
 *******************************************************************************
 ### Does your shim load any loaders that support loading unsigned kernels (e.g. certain GRUB2 configurations)?
 *******************************************************************************
-[your text here]
+No.
 
 *******************************************************************************
 ### What kernel are you using? Which patches and configuration does it include to enforce Secure Boot?
