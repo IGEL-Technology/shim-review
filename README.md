@@ -22,22 +22,22 @@ Here's the template:
 *******************************************************************************
 ### What organization or people are asking to have this signed?
 *******************************************************************************
-[your text here]
+IGEL Technology GmbH. We are a software company from Germany, building IGEL OS, a managed, Linux-based operating system for thin clients.
 
 *******************************************************************************
 ### What product or service is this for?
 *******************************************************************************
-[your text here]
+IGEL OS. 
 
 *******************************************************************************
 ### What's the justification that this really does need to be signed for the whole world to be able to boot it?
 *******************************************************************************
-[your text here]
+Our IGEL OS is rolled out onto large numbers of customer devices. Booting it with UEFI Secureboot enabled must be feasible without rolling out custom keys first.
 
 *******************************************************************************
 ### Why are you unable to reuse shim from another distro that is already signed?
 *******************************************************************************
-[your text here]
+We roll out GRUB and kernel updates frequently, each customized by us. The Linux kernel must fulfill hardware support for most recent devices, and needs therefore be custom-built and signed by us. Hence, GRUB needs to accept out Kernel signatures for SecureBoot. GRUB is also kept up-to date with minor patches from our side, therefore is also signed by us frequently.
 
 *******************************************************************************
 ### Who is the primary contact for security updates, etc.?
@@ -58,10 +58,10 @@ well known in the Linux community.)
 *******************************************************************************
 ### Who is the secondary contact for security updates, etc.?
 *******************************************************************************
-- Name:
-- Position:
-- Email address:
-- PGP key fingerprint:
+- Name: Müller, Christina
+- Position: Manager Linux Development
+- Email address: christina.mueller@igel.com
+- PGP key fingerprint: 6FCDFA6477566085
 
 (Key should be signed by the other security contacts, pushed to a keyserver
 like keyserver.ubuntu.com, and preferably have signatures that are reasonably
@@ -86,7 +86,7 @@ Make sure that you've verified that your build process uses that file as a sourc
 
 A short guide on verifying public keys and signatures should be available in the [docs](./docs/) directory.
 *******************************************************************************
-[your text here]
+The build is based on the shim-15.8 linked above.
 
 *******************************************************************************
 ### URL for a repo that contains the exact code which was built to result in your binary:
@@ -100,14 +100,17 @@ You can also point to your custom git servers, where the code is hosted.
 ### What patches are being applied and why:
 Mention all the external patches and build process modifications, which are used during your building process, that make your shim binary be the exact one that you posted as part of this application.
 *******************************************************************************
-[your text here]
+
+ * Fix for CVE-2024-2312, by Julian Andres Klode
+ * Bump SBAT level to 4
+ * IGEL-specific change to load igelx64.efi instead of grubx64.efi
 
 *******************************************************************************
 ### Do you have the NX bit set in your shim? If so, is your entire boot stack NX-compatible and what testing have you done to ensure such compatibility?
 
 See https://techcommunity.microsoft.com/t5/hardware-dev-center/nx-exception-for-shim-community/ba-p/3976522 for more details on the signing of shim without NX bit.
 *******************************************************************************
-[your text here]
+No.
 
 *******************************************************************************
 ### What exact implementation of Secure Boot in GRUB2 do you have? (Either Upstream GRUB2 shim_lock verifier or Downstream RHEL/Fedora/Debian/Canonical-like implementation)
@@ -158,21 +161,24 @@ Skip this, if you're not using GRUB2.
   * CVE-2023-4693
   * CVE-2023-4692
 *******************************************************************************
-[your text here]
+Yes. CVE-2022-28737 is actually not a GRUB CVE, but fixed in shim upstream here:
+
+https://github.com/rhboot/shim/commit/159151b6649008793d6204a34d7b9c41221fb4b0
+https://github.com/rhboot/shim/commit/e99bdbb827a50cde019393d3ca1e89397db221a7
 
 *******************************************************************************
 ### If shim is loading GRUB2 bootloader, and if these fixes have been applied, is the upstream global SBAT generation in your GRUB2 binary set to 4?
 Skip this, if you're not using GRUB2, otherwise do you have an entry in your GRUB2 binary similar to:  
 `grub,4,Free Software Foundation,grub,GRUB_UPSTREAM_VERSION,https://www.gnu.org/software/grub/`?
 *******************************************************************************
-[your text here]
+Yes.
 
 *******************************************************************************
 ### Were old shims hashes provided to Microsoft for verification and to be added to future DBX updates?
 ### Does your new chain of trust disallow booting old GRUB2 builds affected by the CVEs?
 If you had no previous signed shim, say so here. Otherwise a simple _yes_ will do.
 *******************************************************************************
-[your text here]
+Yes.
 
 *******************************************************************************
 ### If your boot chain of trust includes a Linux kernel:
@@ -182,7 +188,7 @@ If you had no previous signed shim, say so here. Otherwise a simple _yes_ will d
 Hint: upstream kernels should have all these applied, but if you ship your own heavily-modified older kernel version, that is being maintained separately from upstream, this may not be the case.  
 If you are shipping an older kernel, double-check your sources; maybe you do not have all the patches, but ship a configuration, that does not expose the issue(s).
 *******************************************************************************
-[your text here]
+Yes.
 
 *******************************************************************************
 ### Do you build your signed kernel with additional local patches? What do they do?
@@ -207,7 +213,7 @@ This ensures that your new shim+GRUB2 can no longer chainload those older GRUB2 
 
 If this is your first application or you're using a new CA certificate, please say so here.
 *******************************************************************************
-[your text here]
+We use a new CA certificate.
 
 *******************************************************************************
 ### Is the Dockerfile in your repository the recipe for reproducing the building of your shim binary?
@@ -217,7 +223,7 @@ Hint: Prefer using *frozen* packages for your toolchain, since an update to GCC,
 
 If your shim binaries can't be reproduced using the provided Dockerfile, please explain why that's the case, what the differences would be and what build environment (OS and toolchain) is being used to reproduce this build? In this case please write a detailed guide, how to setup this build environment from scratch.
 *******************************************************************************
-[your text here]
+N/A.
 
 *******************************************************************************
 ### Which files in this repo are the logs for your build?
@@ -242,13 +248,13 @@ Skip this, if this is your first application for having shim signed.
 ### How do you manage and protect the keys used in your shim?
 Describe the security strategy that is used for key protection. This can range from using hardware tokens like HSMs or Smartcards, air-gapped vaults, physical safes to other good practices.
 *******************************************************************************
-[your text here]
+The keys are generated on a NitroKey HSM, which is stored in a safe in the company's facility.
 
 *******************************************************************************
 ### Do you use EV certificates as embedded certificates in the shim?
 A _yes_ or _no_ will do. There's no penalty for the latter.
 *******************************************************************************
-[your text here]
+No.
 
 *******************************************************************************
 ### Do you add a vendor-specific SBAT entry to the SBAT section in each binary that supports SBAT metadata ( GRUB2, fwupd, fwupdate, systemd-boot, systemd-stub, shim + all child shim binaries )?
@@ -261,7 +267,12 @@ If you are using a downstream implementation of GRUB2 (e.g. from Fedora or Debia
 
 Hint: run `objcopy --only-section .sbat -O binary YOUR_EFI_BINARY /dev/stdout` to get these entries. Paste them here. Preferably surround each listing with three backticks (\`\`\`), so they render well.
 *******************************************************************************
-[your text here]
+
+```
+sbat,1,SBAT Version,sbat,1,https://github.com/rhboot/shim/blob/main/SBAT.md
+shim,4,UEFI shim,shim,1,https://github.com/rhboot/shim
+shim.igel,1,Igel,shim,15.8,https://www.igel.com
+```
 
 *******************************************************************************
 ### If shim is loading GRUB2 bootloader, which modules are built into your signed GRUB2 image?
@@ -274,7 +285,7 @@ Hint: this is about those modules that are in the binary itself, not the `.mod` 
 *******************************************************************************
 ### If you are using systemd-boot on arm64 or riscv, is the fix for [unverified Devicetree Blob loading](https://github.com/systemd/systemd/security/advisories/GHSA-6m6p-rjcq-334c) included?
 *******************************************************************************
-[your text here]
+N/A
 
 *******************************************************************************
 ### What is the origin and full version number of your bootloader (GRUB2 or systemd-boot or other)?
