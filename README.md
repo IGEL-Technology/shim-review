@@ -116,7 +116,7 @@ No.
 ### What exact implementation of Secure Boot in GRUB2 do you have? (Either Upstream GRUB2 shim_lock verifier or Downstream RHEL/Fedora/Debian/Canonical-like implementation)
 Skip this, if you're not using GRUB2.
 *******************************************************************************
-[your text here]
+We're using the Debian implementation.
 
 *******************************************************************************
 ### Do you have fixes for all the following GRUB2 CVEs applied?
@@ -193,7 +193,11 @@ Yes. Our kernel originates from upstream and has the respective patch commits in
 *******************************************************************************
 ### Do you build your signed kernel with additional local patches? What do they do?
 *******************************************************************************
-[your text here]
+ * we apply various patches to support also the most recent hardware, e.g.
+  * MeteorLake processor generation
+  * HP mt645
+  * Surface tablets
+
 
 *******************************************************************************
 ### Do you use an ephemeral key for signing kernel modules?
@@ -384,7 +388,8 @@ Skip this, if you're not using GRUB2 or systemd-boot.
 ### How do the launched components prevent execution of unauthenticated code?
 Summarize in one or two sentences, how your secure bootchain works on higher level.
 *******************************************************************************
-[your text here]
+ * GRUB2 checks the launched components and only boots into kernels signed off by us.
+ * Our kernel is built with security lockdown patches, and only boots from read-only partitions also signed by us.
 
 *******************************************************************************
 ### Does your shim load any loaders that support loading unsigned kernels (e.g. certain GRUB2 configurations)?
@@ -394,7 +399,11 @@ No.
 *******************************************************************************
 ### What kernel are you using? Which patches and configuration does it include to enforce Secure Boot?
 *******************************************************************************
-[your text here]
+Upstream 6.6.32. The following module configuration is present:
+```
+CONFIG_SECURITY_LOCKDOWN_LSM=y
+CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
+```
 
 *******************************************************************************
 ### What contributions have you made to help us review the applications of other applicants?
@@ -404,7 +413,7 @@ A reasonable timeframe of waiting for a review can reach 2-3 months. Helping us 
 
 For newcomers, the applications labeled as [*easy to review*](https://github.com/rhboot/shim-review/issues?q=is%3Aopen+is%3Aissue+label%3A%22easy+to+review%22) are recommended to start the contribution process.
 *******************************************************************************
-[your text here]
+None so far.
 
 *******************************************************************************
 ### Add any additional information you think we may need to validate this shim signing application.
