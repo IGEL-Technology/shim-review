@@ -37,7 +37,7 @@ Our IGEL OS is rolled out onto large numbers of customer devices. Booting it wit
 *******************************************************************************
 ### Why are you unable to reuse shim from another distro that is already signed?
 *******************************************************************************
-We roll out GRUB and kernel updates frequently, each customized by us. The Linux kernel must fulfill hardware support for most recent devices, and needs therefore be custom-built and signed by us. Hence, GRUB needs to accept out Kernel signatures for SecureBoot. GRUB is also kept up-to date with minor patches from our side, therefore is also signed by us frequently.
+We roll out GRUB and kernel updates frequently, each customized by us. The Linux kernel must fulfill hardware support for most recent devices, and needs therefore be custom-built and signed by us. Hence, GRUB needs to accept our Kernel signatures for SecureBoot. GRUB is also kept up to date and includes minor patches for IGEL OS-specific management and recovery options, therefore is also signed by us frequently.
 
 *******************************************************************************
 ### Who is the primary contact for security updates, etc.?
@@ -103,7 +103,7 @@ Mention all the external patches and build process modifications, which are used
 
  * Fix for CVE-2024-2312, by Julian Andres Klode
  * Bump SBAT level to 4
- * IGEL-specific change to load igelx64.efi instead of grubx64.efi
+ * IGEL-specific change to load igelx64.efi instead of grubx64.efi (required to boot from IGEL USB stick - UDPocket)
 
 *******************************************************************************
 ### Do you have the NX bit set in your shim? If so, is your entire boot stack NX-compatible and what testing have you done to ensure such compatibility?
@@ -193,10 +193,14 @@ Yes. Our kernel originates from upstream and has the respective patch commits in
 *******************************************************************************
 ### Do you build your signed kernel with additional local patches? What do they do?
 *******************************************************************************
- * we apply various patches to support also the most recent hardware, e.g.
+We generally backport fixes and features from development kernels to our LTS kernels. For example, we're currently on 6.6.x but have quite a few backports from 6.8+
+
+ * We apply various patches to support also the most recent hardware, e.g.
   * MeteorLake processor generation
   * HP mt645
   * Surface tablets
+ * We have IGEL OS-specific features in the kernel
+  * IGEL Flash Driver, a kind of logical volume manager optimized for small flash memory devices providing checksum validation, encryption, etc.
 
 
 *******************************************************************************
@@ -370,13 +374,13 @@ N/A
 *******************************************************************************
 ### What is the origin and full version number of your bootloader (GRUB2 or systemd-boot or other)?
 *******************************************************************************
-GRUB2 2.06, Debian bookworm.
+GRUB2 2.06, Debian Bookworm.
 
 *******************************************************************************
 ### If your shim launches any other components apart from your bootloader, please provide further details on what is launched.
 Hint: The most common case here will be a firmware updater like fwupd.
 *******************************************************************************
-We launch fwupd.
+We launch fwupd during BIOS updates.
 
 *******************************************************************************
 ### If your GRUB2 or systemd-boot launches any other binaries that are not the Linux kernel in SecureBoot mode, please provide further details on what is launched and how it enforces Secureboot lockdown.
