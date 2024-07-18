@@ -196,11 +196,11 @@ Yes. Our kernel originates from upstream and has the respective patch commits in
 We generally backport fixes and features from development kernels to our LTS kernels. For example, we're currently on 6.6.x but have quite a few backports from 6.8+
 
  * We apply various patches to support also the most recent hardware, e.g.
-  * MeteorLake processor generation
-  * HP mt645
-  * Surface tablets
+    * MeteorLake processor generation
+    * HP mt645
+    * Surface tablets
  * We have IGEL OS-specific features in the kernel
-  * IGEL Flash Driver, a kind of logical volume manager optimized for small flash memory devices providing checksum validation, encryption, etc.
+    * IGEL Flash Driver, a kind of logical volume manager optimized for small flash memory devices providing checksum validation, encryption, etc.
 
 
 *******************************************************************************
