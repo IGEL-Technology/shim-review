@@ -207,7 +207,9 @@ We generally backport fixes and features from development kernels to our LTS ker
 ### Do you use an ephemeral key for signing kernel modules?
 ### If not, please describe how you ensure that one kernel build does not load modules built for another kernel.
 *******************************************************************************
-No. The kernel loads only modules signed off by us, the only step missing is that the key is not ephemeral yet.
+No. The kernel loads only modules signed off by us. We're not using ephemeral keys, yet, but plan to use them in the future. In the meantime, loading kernel modules built for another kernel is almost impossible because both kernel and modules are delivered in one closed system. If additional modules are provided to the system, they will be loaded from a directory matching the kernel version, thereby preventing different versions from being loaded, too.
+
+Other than that, only modules signed by us will be loaded, thus it's not possible to inject modules from other distributions.
 
 *******************************************************************************
 ### If you use vendor_db functionality of providing multiple certificates and/or hashes please briefly describe your certificate setup.
@@ -394,6 +396,7 @@ Summarize in one or two sentences, how your secure bootchain works on higher lev
 *******************************************************************************
  * GRUB2 checks the launched components and only boots into kernels signed off by us.
  * Our kernel is built with security lockdown patches, and only boots from read-only partitions also signed by us.
+ * Newer versions of IGEL OS containing the updated bootloader will have LOCKDOWN\_FORCE\_INTEGRITY enabled.
 
 *******************************************************************************
 ### Does your shim load any loaders that support loading unsigned kernels (e.g. certain GRUB2 configurations)?
@@ -403,10 +406,13 @@ No.
 *******************************************************************************
 ### What kernel are you using? Which patches and configuration does it include to enforce Secure Boot?
 *******************************************************************************
-Upstream 6.6.32. The following module configuration is present:
+Upstream 6.6.32. The following module configuration will be present in the version with the updated shim:
 ```
 CONFIG_SECURITY_LOCKDOWN_LSM=y
 CONFIG_SECURITY_LOCKDOWN_LSM_EARLY=y
+CONFIG_MODULE_SIG_FORCE=y
+CONFIG_MODULE_SIG_ALL=y
+CONFIG_LOCK_DOWN_KERNEL_FORCE_INTEGRITY=y
 ```
 
 *******************************************************************************
@@ -422,4 +428,4 @@ None so far.
 *******************************************************************************
 ### Add any additional information you think we may need to validate this shim signing application.
 *******************************************************************************
-[your text here]
+N/A.
