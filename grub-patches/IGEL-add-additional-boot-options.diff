@@ -1,0 +1,252 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -282,22 +282,123 @@ menuentry \"Please contact your admin\"
+   }
+   test_and_free(val);
+ 
+-  bootreg_get(bt_data, "mitigation-nosmt", &val);
+-  if (val != NULL && val[0] == '1') {
+-    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mitigations=auto,nosmt");
++  bootreg_get(bt_data, "mitigations", &val);
++  if (val) {
++    if (grub_strcmp (val, "auto") == 0 ||
++        grub_strcmp (val, "auto,nosmt") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mitigations=%s", val);
++    } else if (grub_strcmp (val, "off") == 0) {
++      grub_dprintf("igelfs", "Not setting mitigations=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mitigations=%s", val);
++    }
+   } else {
+-    test_and_free(val);
++    bootreg_get(bt_data, "mitigation-nosmt", &val);
++    if (val != NULL && val[0] == '1') {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mitigations=auto,nosmt");
++    }
++  }
++  test_and_free(val);
+ 
++  bootreg_get(bt_data, "l1tf", &val);
++  if (val) {
++    if (grub_strcmp (val, "full") == 0 ||
++        grub_strcmp (val, "full,force") == 0 ||
++        grub_strcmp (val, "flush") == 0 ||
++        grub_strcmp (val, "flush,nosmt") == 0 ||
++        grub_strcmp (val, "flush,nowarn") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " l1tf=%s", val);
++    } else if (grub_strcmp (val, "off") == 0) {
++      grub_dprintf("igelfs", "Not setting l1tf=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " l1tf=%s", val);
++    }
++  } else {
+     bootreg_get(bt_data, "l1tf-nosmt", &val);
+     if (val != NULL && val[0] == '1') {
+       grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " l1tf=flush,nosmt");
+     }
+-    test_and_free(val);
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "mds", &val);
++  if (val) {
++    if (grub_strcmp (val, "full") == 0 ||
++        grub_strcmp (val, "full,nosmt") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mds=%s", val);
++    } else if (grub_strcmp (val, "off") == 0) {
++      grub_dprintf("igelfs", "Not setting mds=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mds=%s", val);
++    }
++  } else {
+     bootreg_get(bt_data, "mds-nosmt", &val);
+     if (val != NULL && val[0] == '1') {
+       grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mds=full,nosmt");
+     }
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "tsx_async_abort", &val);
++  if (val) {
++    if (grub_strcmp (val, "full") == 0 ||
++        grub_strcmp (val, "full,nosmt") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " tsx_async_abort=%s", val);
++    } else if (grub_strcmp (val, "off") == 0) {
++      grub_dprintf("igelfs", "Not setting tsx_async_abort=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " tsx_async_abort=%s", val);
++    }
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "tsx", &val);
++  if (val) {
++    if (grub_strcmp (val, "off") == 0 ||
++        grub_strcmp (val, "auto") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " tsx=%s", val);
++    } else if (grub_strcmp (val, "on") == 0) {
++      grub_dprintf("igelfs", "Not setting tsx=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " tsx=%s", val);
++    }
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "srbds", &val);
++  if (val) {
++    if (grub_strcmp (val, "off") == 0) {
++      grub_dprintf("igelfs", "Not setting srbds=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " srbds=%s", val);
++    }
++  }
++  test_and_free(val);
+ 
++  bootreg_get(bt_data, "l1d_flush", &val);
++  if (val) {
++    if (grub_strcmp (val, "on") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " l1d_flush=%s", val);
++    }
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "mmio_stale_data", &val);
++  if (val) {
++    if (grub_strcmp (val, "full") == 0 ||
++        grub_strcmp (val, "full,nosmt") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mmio_stale_data=%s", val);
++    } else if (grub_strcmp (val, "off") == 0) {
++      grub_dprintf("igelfs", "Not setting mmio_stale_data=%s as this would weaken security", val);
++      //grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mmio_stale_data=%s", val);
++    }
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "retbleed", &val);
++  if (val) {
++    if (grub_strcmp (val, "off") == 0 ||
++        grub_strcmp (val, "auto") == 0 ||
++        grub_strcmp (val, "auto,nosmt") == 0 ||
++        grub_strcmp (val, "ibpb") == 0 ||
++        grub_strcmp (val, "unret") == 0 ||
++        grub_strcmp (val, "unret,nosmt") == 0) {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " retbleed=%s", val);
++    }
+   }
+   test_and_free(val);
+ 
+@@ -338,11 +439,16 @@ menuentry \"Please contact your admin\"
+   test_and_free(val);
+ 
+   bootreg_get(bt_data, "max_cstate", &val);
+-  if (val != NULL && (val[0] == '1' || val[0] == '2' || val[0] == '3' || val[0] == '4' || val[0] == '5' || val[0] == '6'))
++  if (val != NULL && (val[0] == '0' || val[0] == '1' || val[0] == '2' || val[0] == '3' || val[0] == '4' || val[0] == '5' || val[0] == '6'))
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " intel_idle.max_cstate=%c", val[0]);
+ 
+   test_and_free(val);
+ 
++  bootreg_get(bt_data, "max_proc_cstate", &val);
++  if (val != NULL && (val[0] == '1' || val[0] == '2' || val[0] == '3' || val[0] == '4' || val[0] == '5' || val[0] == '6' || val[0] == '7' || val[0] == '8' || val[0] == '9'))
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " processor.max_cstate=%c", val[0]);
++
++  test_and_free(val);
+ 
+   bootreg_get(bt_data, "iommu", &val);
+   if (val != NULL && val[0] == 'o' && val[1] == 'f' && val[2] == 'f' && val[3] == '\0')
+@@ -428,6 +534,77 @@ menuentry \"Please contact your admin\"
+ 
+   test_and_free(val);
+ 
++  bootreg_get(bt_data, "clocksource", &val);
++  if (val != NULL) {
++    if (val[0] == 'j' && val[1] == 'i' && val[2] == 'f' && val[3] == 'f' && val[4] == 'i' && val[5] == 'e' && val[6] == 's')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " clocksource=jiffies");
++    else if (val[0] == 'a' && val[1] == 'c' && val[2] == 'p' && val[3] == 'i' && val[4] == '_' && val[5] == 'p' && val[6] == 'm')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " clocksource=acpi_pm");
++    else if (val[0] == 'h' && val[1] == 'p' && val[2] == 'e' && val[3] == 't')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " clocksource=hpet");
++    else if (val[0] == 't' && val[1] == 's' && val[2] == 'c')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " clocksource=tsc");
++  }
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "irqpoll", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " irqpoll");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "nosmt", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " nosmt");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "nohz", &val);
++  if (val != NULL && val[0] == 'o' && val[1] == 'n')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " nohz=on");
++  else if (val != NULL && val[0] == 'o' && val[1] == 'f' && val[2] == 'f')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " nohz=off");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "pci", &val);
++  if (val != NULL) {
++    if (val[0] == 'c' && val[1] == 'o' && val[2] == 'n' && val[3] == 'f' && val[4] == '1')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=conf1");
++    else if (val[0] == 'c' && val[1] == 'o' && val[2] == 'n' && val[3] == 'f' && val[4] == '2')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=conf2");
++    else if (val[0] == 'n' && val[1] == 'o' && val[2] == 'd' && val[3] == 'o' && val[4] == 'm' && val[5] == 'a' && val[6] == 'i' && val[7] == 'n' && val[8] == 's')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=nodomains");
++    else if (val[0] == 'n' && val[1] == 'o' && val[2] == 'm' && val[3] == 'm' && val[4] == 'c' && val[5] == 'o' && val[6] == 'n' && val[7] == 'f')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=nommconf");
++    else if (val[0] == 'n' && val[1] == 'o' && val[2] == 'm' && val[3] == 's' && val[4] == 'i')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=nomsi");
++    else if (val[0] == 'n' && val[1] == 'o' && val[2] == 'c' && val[3] == 'r' && val[4] == 's')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=nocrs");
++    else if (val[0] == 'n' && val[1] == 'o' && val[2] == 'a' && val[3] == 'c' && val[4] == 'p' && val[5] == 'i')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=noacpi");
++    else if (val[0] == 'r' && val[1] == 'o' && val[2] == 'u' && val[3] == 't' && val[4] == 'e' && val[5] == 'i' && val[6] == 'r' && val[7] == 'q')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pci=routeirq");
++  }
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "pcie_aspm", &val);
++  if (val != NULL && val[0] == 'o' && val[1] == 'f' && val[2] == 'f')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " pcie_aspm=off");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "usb-storage_delay_use", &val);
++  if (val != NULL && val[0] >= '1' && val[0] <= '9') {
++    value = grub_strtoul (val, NULL, 10);
++    if (!grub_errno && value < 30)
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " usb-storage.delay_use=%lu", value);
++  }
++
++  test_and_free(val);
++
+   bootreg_get(bt_data, "noquiet", &val);
+   if (val != NULL && val[0] == '1'){
+     test_and_free(val);
+@@ -444,6 +621,24 @@ menuentry \"Please contact your admin\"
+     test_and_free(val);
+   }
+ 
++  bootreg_get(bt_data, "reboot", &val);
++  if (val != NULL) {
++    if (val[0] == 'b' && val[1] == 'i' && val[2] == 'o' && val[3] == 's')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " reboot=bios");
++    else if (val[0] == 't' && val[1] == 'r' && val[2] == 'i' && val[3] == 'p' && val[4] == 'l' && val[5] == 'e')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " reboot=trible");
++    else if (val[0] == 'k' && val[1] == 'b' && val[2] == 'd')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " reboot=kbd");
++    else if (val[0] == 'a' && val[1] == 'c' && val[2] == 'p' && val[3] == 'i')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " reboot=acpi");
++    else if (val[0] == 'e' && val[1] == 'f' && val[2] == 'i')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " reboot=efi");
++    else if (val[0] == 'p' && val[1] == 'c' && val[2] == 'i')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " reboot=pci");
++  }
++
++  test_and_free(val);
++
+   bootreg_get(bt_data, "use_2nd_kernel_as_default", &val);
+   if (val != NULL && val[0] == 't' && val[1] == 'r' && val[2] == 'u' && val[3] == 'e') {
+     add2 = added1;

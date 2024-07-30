@@ -1,0 +1,28 @@
+--- a/grub-core/partmap/igel.c
++++ b/grub-core/partmap/igel.c
+@@ -233,9 +233,9 @@ read_partition_header(grub_uint32_t sect
+ 
+     offset = part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN;
+     igelpart_disk_read (disk, offset, sizeof(struct igf_part_hdr), partition);
+-    if (partition->type != PTYPE_IGEL_COMPRESSED
+-    && partition->type != PTYPE_IGEL_RAW
+-    && partition->type != PTYPE_IGEL_RAW_RO)
++    if ((partition->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_COMPRESSED
++    && (partition->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW
++    && (partition->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW_RO)
+     {
+ 	grub_dprintf("partition", "The root/system partition is not of type compressed, raw or raw_ro !\n");
+ 	return 1;
+@@ -376,9 +376,9 @@ check_sys_partition_header (grub_disk_t
+ 		return 0;
+ 	}
+ 
+-	if (part.type != PTYPE_IGEL_COMPRESSED
+-        && part.type != PTYPE_IGEL_RAW
+-        && part.type != PTYPE_IGEL_RAW_RO) {
++	if ((part.type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_COMPRESSED
++        && (part.type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW
++        && (part.type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW_RO) {
+ 		grub_dprintf("partition", "wrong partition type 0x%lu for a system partition\n", (unsigned long) part.type);
+ 		return 0;
+ 	}

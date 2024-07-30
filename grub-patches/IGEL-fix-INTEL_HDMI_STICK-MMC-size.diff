@@ -1,0 +1,38 @@
+--- a/grub-core/disk/i386/pc/biosdisk.c
++++ b/grub-core/disk/i386/pc/biosdisk.c
+@@ -334,6 +334,7 @@ grub_biosdisk_open (const char *name, gr
+ {
+   grub_uint64_t total_sectors = 0;
+   int drive;
++  int workaround = 0;
+   struct grub_biosdisk_data *data;
+ 
+   drive = grub_biosdisk_get_drive (name);
+@@ -376,14 +377,24 @@ grub_biosdisk_open (const char *name, gr
+ 	    {
+ 	      data->flags = GRUB_BIOSDISK_FLAG_LBA;
+ 
+-	      if (drp->total_sectors)
+-		total_sectors = drp->total_sectors;
+-	      else
++	      if (drp->total_sectors) {
++                /* gottwald@igel.com INTEL Compute Stick MMC wrong size workaround */
++                if (version == 0x30 && drp->total_sectors == 0xa000) {
++                  workaround = 1;
++	          data->sectors = 63;
++	          data->heads = 255;
++	          data->cylinders = 0;
++                  total_sectors = GRUB_DISK_SIZE_UNKNOWN;
++                } else {
++		  total_sectors = drp->total_sectors;
++                }
++	      } else {
+                 /* Some buggy BIOSes doesn't return the total sectors
+                    correctly but returns zero. So if it is zero, compute
+                    it by C/H/S returned by the LBA BIOS call.  */
+                 total_sectors = ((grub_uint64_t) drp->cylinders)
+ 		  * drp->heads * drp->sectors;
++              }
+ 	      if (drp->bytes_per_sector
+ 		  && !(drp->bytes_per_sector & (drp->bytes_per_sector - 1))
+ 		  && drp->bytes_per_sector >= 512

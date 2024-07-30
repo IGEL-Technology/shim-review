@@ -1,0 +1,13 @@
+--- a/grub-core/kern/efi/sb.c
++++ b/grub-core/kern/efi/sb.c
+@@ -164,6 +164,10 @@ shim_lock_verifier_init (grub_file_t io
+       *flags = GRUB_VERIFY_FLAGS_SKIP_VERIFICATION;
+       return GRUB_ERR_NONE;
+ 
++    case GRUB_FILE_TYPE_FONT:
++      *flags = GRUB_VERIFY_FLAGS_DEFER_AUTH;
++      return GRUB_ERR_NONE;
++
+     /* Other files. */
+     default:
+       return grub_error (GRUB_ERR_ACCESS_DENIED, N_("prohibited by secure boot policy"));

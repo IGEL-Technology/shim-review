@@ -1,0 +1,90 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -194,7 +194,7 @@ grub_igelconfig_bootreg_to_config(unsign
+   bootreg_data* bt_data = (bootreg_data*) grub_zalloc(sizeof(bootreg_data)); //Use this to wrapper new libbottreg functions, TODO HEap malloc???
+   bt_data->mode = BOOTREG_RDONLY;
+   bt_data->page = (char *) buf;
+-  char kernel1[] = "", kernel2[] = " (2nd kernel)", added1[] = "", added2[] = "-2nd";
++  char kernel1[] = "", kernel2[] = " (2nd kernel)", added1[] = "", added2[] = "-2nd", std[30];
+   char *kern1, *kern2, *add1, *add2;
+   int def=0;
+ 
+@@ -207,6 +207,8 @@ grub_igelconfig_bootreg_to_config(unsign
+   add1 = added1;
+   add2 = added2;
+ 
++  grub_memset(std, 0, sizeof(std));
++  grub_snprintf((char *) std, sizeof(std), "igel_syslog=quiet quiet");
+   grub_memset(cmdline, 0, 4097);
+ 
+   bootreg_type = bootreg_validate_header(bt_data);
+@@ -426,15 +428,21 @@ menuentry \"Please contact your admin\"
+ 
+   test_and_free(val);
+ 
+-  bootreg_get(bt_data, "splash", &val);
+-  if (val != NULL && val[0] == '1')
+-    grub_snprintf(splash, 100, "splash=277");
+-
+-  custom_splash = grub_env_get ("custom_splash");
+-  if (custom_splash[0] == 't' && custom_splash[1] == 'r' && custom_splash[2] == 'u' && custom_splash[3] == 'e')
+-    grub_snprintf(&splash[grub_strlen(splash)], 100 - grub_strlen(splash), " custom_splash=true");
+-
+-  test_and_free(val);
++  bootreg_get(bt_data, "noquiet", &val);
++  if (val != NULL && val[0] == '1'){
++    test_and_free(val);
++    grub_memset(std, 0, sizeof(std));
++    grub_snprintf((char *) std, sizeof(std), "igel_syslog=verbose");
++  } else {
++    bootreg_get(bt_data, "splash", &val);
++    if (val != NULL && val[0] == '1')
++      grub_snprintf(splash, 100, "splash=277");
++
++    custom_splash = grub_env_get ("custom_splash");
++    if (custom_splash[0] == 't' && custom_splash[1] == 'r' && custom_splash[2] == 'u' && custom_splash[3] == 'e')
++      grub_snprintf(&splash[grub_strlen(splash)], 100 - grub_strlen(splash), " custom_splash=true");
++    test_and_free(val);
++  }
+ 
+   bootreg_get(bt_data, "use_2nd_kernel_as_default", &val);
+   if (val != NULL && val[0] == 't' && val[1] == 'r' && val[2] == 'u' && val[3] == 'e') {
+@@ -496,6 +504,8 @@ set kernel1_name=\"%s\"\n\
+ set kernel2=\"$device/vmlinuz%s\"\n\
+ set kernel2_name=\"%s\"\n\
+ \n\
++set default_opts=\"%s\"\n\
++\n\
+ if [ ! -f $kernel1 ]; then\n\
+ 	if [ -f $kernel2 ]; then\n\
+ 		set kernel=\"$kernel2\"\n\
+@@ -521,9 +531,9 @@ if [ -f $kernel ]; then\n\
+ 	menuentry \"Quiet boot$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+-		linux $kernel igel_syslog=quiet quiet %s %s\n\
++		linux $kernel $default_opts %s %s\n\
+ 	}\n\
+-	\n\
++\n\
+ 	menuentry \"Verbose boot$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+@@ -535,7 +545,7 @@ if [ -f $kernel2 ]; then\n\
+ 	menuentry \"Quiet boot$kernel2_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+-		linux $kernel2 igel_syslog=quiet quiet %s %s\n\
++		linux $kernel2 $default_opts %s %s\n\
+ 	}\n\
+ 	\n\
+ 	menuentry \"Verbose boot$kernel2_name\" {\n\
+@@ -576,7 +586,7 @@ if [ -f $kernel ]; then\n\
+ 		insmod part_igel\n\
+ 		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 	}\n\
+-fi\n", add1, kern1, add2, kern2, def, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++fi\n", add1, kern1, add2, kern2, std, def, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
+ 
+   if(val != NULL){
+     if(val == empty){

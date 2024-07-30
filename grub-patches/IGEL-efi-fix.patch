@@ -1,0 +1,27 @@
+--- a/grub-core/video/efi_gop.c
++++ b/grub-core/video/efi_gop.c
+@@ -370,8 +370,9 @@ grub_video_gop_setup (unsigned int width
+       err = grub_gop_get_preferred_mode (&preferred_width, &preferred_height);
+       if (err || preferred_width >= 4096 || preferred_height >= 4096)
+ 	{
+-	  preferred_width = 800;
+-	  preferred_height = 600;
++	  /* lang@igel: instead of 800x600 use 1024x768 for fall back */
++	  preferred_width = 1024;
++	  preferred_height = 768;
+ 	  grub_errno = GRUB_ERR_NONE;
+ 	}
+     }
+--- a/grub-core/video/efi_uga.c
++++ b/grub-core/video/efi_uga.c
+@@ -236,8 +236,9 @@ grub_video_uga_setup (unsigned int width
+     grub_uint32_t d;
+     grub_uint32_t r;
+ 
++    /* with gfxmode=auto use only modes with width > 800 */
+     if ((! efi_call_5 (uga->get_mode, uga, &w, &h, &d, &r)) &&
+-	((! width) || (width == w)) &&
++	((! width && w > 800) || (width == w)) &&
+ 	((! height) || (height == h)) &&
+ 	((! depth) || (depth == d)))
+       {

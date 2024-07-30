@@ -1,0 +1,1025 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -39,6 +39,8 @@ static const grub_uint64_t end_section =
+ extern grub_uint32_t sys_first_section; /* Defined and set in partmap/igel.c */
+ extern grub_uint32_t bspl_first_section; /* Defined and set in partmap/igel.c */
+ extern grub_uint32_t cbspl_first_section; /* Defined and set in partmap/igel.c */
++extern grub_uint32_t sys_minor;  /* Defined and set in partmap/igel.c */
++extern grub_uint32_t bspl_minor; /* Defined and set in partmap/igel.c */
+ void test_and_free(void* ptr);
+ enum { NONE, KERNEL, SPLASH, CONFIG };
+ 
+@@ -124,12 +126,14 @@ static grub_uint32_t * get_igelfs_sectio
+ 
+ 	sect_offset[0]=0;
+ 
+-        switch(sh.partition_minor) {
+-                case 1:   first_sect = sys_first_section;  break;
+-                case 23:  first_sect = bspl_first_section;  break;
+-                case 252: first_sect = cbspl_first_section; break;
+-                default:  first_sect = end_section; break;
+-        }
++	first_sect = end_section;
++	if (sys_minor != 0 && sh.partition_minor == sys_minor) {
++		first_sect = sys_first_section;
++	} else if (bspl_minor != 0 && sh.partition_minor == bspl_minor) {
++		first_sect = bspl_first_section;
++	} else if (sh.partition_minor == 252) {
++		first_sect = cbspl_first_section;
++	}
+ 
+ 	if (first_sect == end_section)
+ 		return NULL;
+@@ -179,6 +183,56 @@ void test_and_free(void* ptr){
+   }
+ }
+ 
++static grub_err_t
++grub_igelconfig_bootreg_to_minor_hints(unsigned char *buf, unsigned char **content)
++{
++  char sys_minor_hints[50], bspl_minor_hints[50];
++  char *val = NULL;
++  bootreg_data* bt_data = (bootreg_data*) grub_zalloc(sizeof(bootreg_data));
++  bt_data->mode = BOOTREG_RDONLY;
++  bt_data->page = (char *) buf;
++  int content_size = 0;
++  int bootreg_type = -1;
++
++  grub_dprintf("igelfs", "entering bootreg to minor_hints, bootreg_type at 0x%lx, bootreg_data at 0x%lx, ptr 0x%lx\n", (unsigned long)&bootreg_type, (unsigned long)(bt_data), (unsigned long)(&bt_data));
++
++  grub_memset(sys_minor_hints, 0, sizeof(sys_minor_hints));
++  grub_memset(bspl_minor_hints, 0, sizeof(bspl_minor_hints));
++
++  bootreg_type = bootreg_validate_header(bt_data);
++  grub_dprintf("igelfs", "validate_header returned type %d\n", bootreg_type);
++
++  if(bootreg_type <= 0){
++    return 1;
++  }
++
++  bootreg_get(bt_data, "sys_minor", &val);
++  if (val != NULL){
++    grub_snprintf(sys_minor_hints, sizeof(sys_minor_hints), "set sys_minor_hint=%s\n", val);
++    grub_env_set("sys_minor_hint", val);
++    content_size += grub_strlen(sys_minor_hints);
++    test_and_free(val);
++  }
++  bootreg_get(bt_data, "bspl_minor", &val);
++  if (val != NULL){
++    grub_snprintf(bspl_minor_hints, sizeof(bspl_minor_hints), "set bspl_minor_hint=%s\n", val);
++    grub_env_set("bspl_minor_hint", val);
++    content_size += grub_strlen(bspl_minor_hints);
++    test_and_free(val);
++  }
++  if (content_size == 0)
++    return 1;
++
++  *content = (unsigned char *) grub_zalloc (content_size + 2);
++
++  if (!content) {
++    return 1;
++  }
++
++  grub_snprintf((char *) *content, content_size, "%s%s", sys_minor_hints, bspl_minor_hints);
++
++  return 0;
++}
+ 
+ static grub_err_t
+ grub_igelconfig_bootreg_to_config(unsigned char *buf, unsigned char **content)
+@@ -268,6 +322,14 @@ menuentry \"Please contact your admin\"
+     test_and_free(val); //avoid memleak from read_key (boot_id), free is necessary after each read_key call!!!
+   }
+ 
++  if (sys_minor != 0 && sys_minor != 1) {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " sys_minor=%u", sys_minor);
++  }
++
++  if (bspl_minor != 0 && bspl_minor != 23) {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " bspl_minor=%u", bspl_minor);
++  }
++
+   grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " bootversion=%d", BOOTVERSION);
+ 
+   bootreg_get(bt_data, "noapic", &val);
+@@ -692,11 +754,13 @@ set timeout_style=hidden\n\
+ insmod regexp\n\
+ \n\
+ regexp --set=0:dev '(\\(hd[0-9]{1,},)' $cmdpath\n\
+-set device=\"${dev}igel1)\"\n\
++set device=\"${dev}igel%u)\"\n\
+ set igel_part_check=false\n\
+-set kernel1=\"$device/vmlinuz%s\"\n\
+-set kernel1_name=\"%s\"\n\
+-set kernel2=\"$device/vmlinuz%s\"\n\
++set kernel1_file=\"vmlinuz%s\"\n\
++set kernel1=\"$device/${kernel1_file}\"\n\
++set kernel1_file=\"vmlinuz%s\"\n\
++set kernel2_suffix=\"%s\"\n\
++set kernel2=\"$device/${kernel2_file}\"\n\
+ set kernel2_name=\"%s\"\n\
+ \n\
+ set default_opts=\"%s\"\n\
+@@ -704,15 +768,19 @@ set default_opts=\"%s\"\n\
+ if [ ! -f $kernel1 ]; then\n\
+ 	if [ -f $kernel2 ]; then\n\
+ 		set kernel=\"$kernel2\"\n\
++		set kernel_file=\"$kernel2_file\"\n\
+ 		set kernel_name=\"$kernel2_name\"\n\
+ 		set kernel2=\"$kernel1\"\n\
++		set kernel_file=\"$kernel1_file\"\n\
+ 		set kernel2_name=\"$kernel1_name\"\n\
+ 	else\n\
+ 		set kernel=\"$kernel1\"\n\
++		set kernel_file=\"$kernel1_file\"\n\
+ 		set kernel_name=\"$kernel1_name\"\n\
+ 	fi\n\
+ else\n\
+ 	set kernel=\"$kernel1\"\n\
++	set kernel_file=\"$kernel1_file\"\n\
+ 	set kernel_name=\"$kernel1_name\"\n\
+ fi\n\
+ \n\
+@@ -764,10 +832,12 @@ if [ -f $kernel ]; then\n\
+ 	}\n\
+ 	\n\
+ 	menuentry \"Failsafe boot with CRC check$kernel_name\" {\n\
++		set igel_part_check=true\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+-		set igel_part_check=true\n\
+-		linux $kernel igel_syslog=quiet failsafe %s\n\
++		ls ${dev}igel*)\n\
++		set failsafe_kernel=\"${dev}igel${sys_minor})/${kernel_file}\"\n\
++		linux $failsafe_kernel igel_syslog=quiet failsafe %s\n\
+ 	}\n\
+ 	\n\
+ 	menuentry \"Reset to factory defaults$kernel_name\" {\n\
+@@ -781,7 +851,7 @@ if [ -f $kernel ]; then\n\
+ 		insmod part_igel\n\
+ 		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 	}\n\
+-fi\n", add1, kern1, add2, kern2, std, def, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++fi\n", sys_minor, add1, kern1, add2, kern2, std, def, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
+ 
+   if(val != NULL){
+     if(val == empty){
+@@ -809,6 +879,8 @@ struct grub_igelfs_data
+   grub_off_t size_kernel;
+   grub_off_t size_ramdisk;
+   grub_off_t size_2nd_kernel;
++  grub_off_t size_content;
++  grub_off_t size_minor_hints;
+   grub_uint8_t end;
+   grub_uint8_t kernel_type_end;
+   grub_uint8_t kernel_fsnum;
+@@ -816,6 +888,7 @@ struct grub_igelfs_data
+   grub_uint8_t ramdisk_fsnum;
+   grub_uint8_t noval[3]; // pointer align for content 64 bit
+   unsigned char *content;
++  unsigned char *minor_hints;
+   grub_int32_t type;
+ };
+ 
+@@ -862,14 +935,25 @@ grub_igelfs_find_file (struct grub_arche
+ 
+ 
+   } else if  (data->igelfs->type == SPLASH || data->igelfs->type == CONFIG) {
+-    if (data->igelfs->end) {
+-      return GRUB_ERR_NONE;
+-    }
++
+ 
+     if  (data->igelfs->type == SPLASH) {
++      if (data->igelfs->end) {
++        return GRUB_ERR_NONE;
++      }
+       *name = grub_strdup("splash.png");
+     } else {
+-      *name = grub_strdup("igel.conf");
++      if (data->igelfs->end == 0) {
++        *name = grub_strdup("igel.conf");
++	data->dofs = 0;
++	data->size = data->igelfs->size_content;
++      } else if (data->igelfs->end == 1 && data->igelfs->minor_hints) {
++        *name = grub_strdup("minor-hints.conf");
++	data->dofs = data->igelfs->size_content;
++	data->size = data->igelfs->size_minor_hints;
++      } else {
++        return GRUB_ERR_NONE;
++      }
+     }
+   }
+   (void) mtime;
+@@ -949,16 +1033,29 @@ grub_igelfs_mount (grub_disk_t disk)
+     if (grub_igelconfig_bootreg_to_config(bootreg_buf, &data->igelfs->content) != 0) {
+       goto fail;
+     }
++
+     grub_dprintf ("igelfs", "got bootreg config\n");
+ 
+-    grub_free(bootreg_buf);
++    if (grub_igelconfig_bootreg_to_minor_hints(bootreg_buf, &data->igelfs->minor_hints) == 0) {
++      grub_dprintf ("igelfs", "got minor hints config\n");
++    }
+ 
+-    data->size = grub_strlen((char *) data->igelfs->content);
++    grub_free(bootreg_buf);
+ 
+     data->igelfs->end = 0;
+ 
+     data->igelfs->type = CONFIG;
+ 
++    data->igelfs->size_content = grub_strlen((char *) data->igelfs->content);
++
++    if (data->igelfs->minor_hints) {
++      data->igelfs->size_minor_hints = grub_strlen((char *) data->igelfs->minor_hints);
++    } else {
++      data->igelfs->size_minor_hints = 0;
++    }
++
++    data->size = data->igelfs->size_content + data->igelfs->size_minor_hints;
++
+     grub_dprintf ("igelfs", "returning data\n");
+     return data;
+   }
+@@ -970,12 +1067,12 @@ grub_igelfs_mount (grub_disk_t disk)
+ 
+   grub_dprintf ("igelfs", "search for igel splash/kernel partition\n");
+ 
+-  /* kernel is only present in partition number 0 */
++  /* kernel is only present in partition number sys_minor - 1*/
+ 
+-  if (disk->partition->number == 0) {
++  if (disk->partition->number == (int)sys_minor - 1) {
+     type = KERNEL;
+-  /* splash is only present in partition number 22 (igf23) or number 251 (igf252) */
+-  } else if (disk->partition->number == 22 || disk->partition->number == 251 ) {
++  /* splash is only present in partition number bspl_minor - 1 (igf<bspl_minor>) or number 251 (igf252) */
++  } else if (disk->partition->number == (int)(bspl_minor - 1) || disk->partition->number == 251 ) {
+     type = SPLASH;
+   } else {
+     goto fail;
+@@ -1073,7 +1170,10 @@ grub_igelfs_mount (grub_disk_t disk)
+   data->igelfs->offset_blocks = part_hdr.offset_blocktable;
+   data->igelfs->end = 0;
+   data->igelfs->type = type;
++  data->igelfs->size_content = 0;
++  data->igelfs->size_minor_hints = 0;
+   data->igelfs->content = NULL;
++  data->igelfs->minor_hints = NULL;
+   data->igelfs->kernel_type_end = kernel_type_end;
+   data->igelfs->kernel_fsnum = kernel_fsnum;
+   data->igelfs->kernel_2nd_fsnum = kernel_2nd_fsnum;
+@@ -1201,6 +1301,10 @@ fail:
+         grub_free(data->igelfs->content);
+         data->igelfs->content = NULL;
+       }
++      if (data->igelfs->minor_hints) {
++        grub_free(data->igelfs->minor_hints);
++        data->igelfs->minor_hints = NULL;
++      }
+       grub_free(data->igelfs);
+       data->igelfs = NULL;
+     }
+@@ -1235,6 +1339,10 @@ grub_igelfs_dir (grub_device_t device, c
+         grub_free(data->igelfs->content);
+         data->igelfs->content = NULL;
+       }
++      if (data->igelfs->minor_hints) {
++        grub_free(data->igelfs->minor_hints);
++        data->igelfs->minor_hints = NULL;
++      }
+       grub_free(data->igelfs);
+       data->igelfs = NULL;
+     }
+@@ -1269,6 +1377,10 @@ grub_igelfs_open (grub_file_t file, cons
+           grub_free(data->igelfs->content);
+           data->igelfs->content = NULL;
+         }
++        if (data->igelfs->minor_hints) {
++          grub_free(data->igelfs->minor_hints);
++          data->igelfs->minor_hints = NULL;
++        }
+         grub_free(data->igelfs);
+         data->igelfs = NULL;
+       }
+@@ -1314,8 +1426,22 @@ grub_igelfs_read (grub_file_t file, char
+   // config case is a really simple one
+ 
+   if (data->igelfs->type == CONFIG) {
+-    grub_memcpy (buf, &data->igelfs->content[file->offset], len);
+-    return len;
++    read = len;
++    if (data->dofs == data->igelfs->size_content) {
++      if (! data->igelfs->minor_hints) {
++	return -1;
++      }
++      read = data->igelfs->size_minor_hints - file->offset;
++      if (len < (grub_size_t)read)
++        read = len;
++      grub_memcpy(buf, &data->igelfs->minor_hints[file->offset], read);
++    } else {
++      read = data->igelfs->size_content - file->offset;
++      if (len < (grub_size_t)read)
++        read = len;
++      grub_memcpy (buf, &data->igelfs->content[file->offset], read);
++    }
++    return read;
+   }
+ 
+   data->disk->read_hook = file->read_hook;
+--- a/grub-core/partmap/igel.c
++++ b/grub-core/partmap/igel.c
+@@ -50,10 +50,14 @@ grub_uint32_t sys_first_section = 0xffff
+ grub_uint32_t bspl_first_section = 0xffffffffffffffff >> ((8 - sizeof(sh.next_section)) * 8);
+ /* Used in fs/igelfs.c to find first section of the IGEL custom bootsplash partition */
+ grub_uint32_t cbspl_first_section = 0xffffffffffffffff >> ((8 - sizeof(sh.next_section)) * 8);
++/* Used in fs/igelfs.c to know which minor is used for sys */
++grub_uint32_t sys_minor = 0;
++/* Used in fs/igelfs.c to know which minor is used for bspl */
++grub_uint32_t bspl_minor = 0;
+ 
+ /* function prototypes */
+ 
+-int read_partition_header(grub_uint32_t section, grub_disk_t disk, grub_uint64_t part_offset, struct igf_part_hdr *partition);
++int read_sect_partition_header(grub_uint32_t section, grub_disk_t disk, grub_uint64_t part_offset, struct igf_part_hdr *part_hdr, struct igf_sect_hdr *sect_hdr, struct partition_extents *ext_hdrs);
+ int find_root_partition_secure(grub_disk_t disk, grub_uint64_t part_offset, grub_uint32_t max_sections);
+ static int check_chain_of_sections(grub_disk_t disk, grub_uint64_t part_offset, uint32_t part, grub_uint32_t first_sect, grub_uint32_t max_sections, grub_uint32_t *bad_chain);
+ 
+@@ -107,11 +111,13 @@ grub_err_t igelpart_disk_read (grub_disk
+        return ret;
+ }
+ 
++/* Not used currently but may change in near future */
++#if 0
+ static grub_err_t igel_disk_write (grub_disk_t disk, grub_uint64_t offset, grub_size_t size, void *buf)
+ {
+ 	return  grub_disk_write (disk, offset >> GRUB_DISK_SECTOR_BITS, offset & (((grub_size_t)1<<GRUB_DISK_SECTOR_BITS)-1), size, buf);
+ }
+-
++#endif
+ 
+ /*****************************************************************************
+  * CRC functions block
+@@ -181,40 +187,39 @@ void makecrc(void)
+  *****************************************************************************/
+ 
+ /*
+- * find_root_partition_by_directory
++ * find_partition_by_directory
++ *
++ * Find a partition with a given minor number in the partition directory.
+  *
+- * Find a partition with minor number 1 and the highest version number.
+- * (A parition is a linked list of sections with valid CRC checksums.)
++ * returns the start section of the found partition.
+  *
+- * Method: Check whether a valid directory exists and whether it contains
+- *         a partition #1. The directory contains everything needed to
+- *         access the partition's payload. The consistency of the
+- *         partition data is not checked.
+  */
+ 
+-static int find_root_partition_by_directory(struct directory *dir1)
++static grub_uint32_t find_partition_by_directory(struct directory *dir1, int minor, grub_uint32_t *n_sects)
+ {
+   int i;
+   struct partition_descriptor *p;
+-  p = &(dir1->partition[1]);
++  grub_uint32_t found_section = end_section;
+ 
+-  if (p->n_fragments <= 0)
+-  {
+-    /* no root partition - this should never happen */
+-    grub_dprintf("partition", "The directory doesn't contain a root partition !\n");
+-    return(-1);
+-  }
++  found_section = get_physical_section(dir1, minor, 0);
+ 
+-  /*
+-   * Calculate the length of partition #1 in sections.
+-   * This information is not explicitly contained in the directory.
+-   */
+-
+-  n_sections = 0;
+-  for (i=p->first_fragment; i<p->first_fragment+p->n_fragments; i++)
+-    n_sections += dir1->fragment[i].length;
++  if (n_sects) {
++    if (found_section != end_section) {
++      /*
++       * Calculate the length of partition minor in sections.
++       * This information is not explicitly contained in the directory.
++       */
++
++      *n_sects = 0;
++      p = &(dir1->partition[minor]);
++      for (i=p->first_fragment; i<p->first_fragment+p->n_fragments; i++)
++        *n_sects += dir1->fragment[i].length;
++    } else {
++        *n_sects = 0;
++    }
++  }
+ 
+-  return(0);
++  return found_section;
+ }
+ 
+ /*----------------------------------------------------------------------
+@@ -223,30 +228,55 @@ static int find_root_partition_by_direct
+ 
+ /*
+  * Read the header of the partition that has been located
+- * by find_root_partition_xxx() before.
++ * by find_partition_xxx() before.
+  */
+ 
+ int
+-read_partition_header(grub_uint32_t section, grub_disk_t disk, grub_uint64_t part_offset, struct igf_part_hdr *partition)
++read_sect_partition_header(grub_uint32_t section, grub_disk_t disk, grub_uint64_t part_offset, struct igf_part_hdr *part_hdr, struct igf_sect_hdr *sect_hdr, struct partition_extents *ext_hdrs)
+ {
+     grub_uint64_t offset;
++    grub_uint8_t buf[512];
++    struct igf_part_hdr *php;
++    struct igf_sect_hdr *shd;
++
++    offset = part_offset + START_OF_SECTION(section);
++    if (igelpart_disk_read (disk, offset, 512, buf)) {
++        return 1;
++    }
++    php = (struct igf_part_hdr *)(buf + IGF_SECT_HDR_LEN);
++    shd = (struct igf_sect_hdr *)buf;
++
++    /* one can not read a partition header from a sections which is not section_in_minor == 0 */
++    if (shd->partition_minor == 0 || shd->section_in_minor != 0) {
++	return 2;
++    }
++
++    if (part_hdr) {
++	grub_memcpy((grub_uint8_t *) part_hdr, (grub_uint8_t *) php, sizeof(struct igf_part_hdr));
++        if ((part_hdr->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_COMPRESSED
++        && (part_hdr->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW_RO)
++        {
++	    grub_dprintf("partition", "The root/system or bspl partition is not of type compressed or raw_ro !\n");
++	    return 1;
++        }
++
++        grub_dprintf("partition", "igf_part_hdr: type 0x%x, hdrlen 0x%x, partlen 0x%llx, n_blocks 0x%llx\n"
++                     , part_hdr->type, part_hdr->hdrlen, (unsigned long long)part_hdr->partlen, (unsigned long long)part_hdr->n_blocks);
++        grub_dprintf("partition", "igf_part_hdr: n_extents 0x%x, offset_blocktable 0x%llx, offset_blocks 0x%llx\n"
++                     , part_hdr->n_extents, (unsigned long long)part_hdr->offset_blocktable, (unsigned long long)part_hdr->offset_blocks);
++        grub_dprintf("partition", "igf_part_hdr: n_clusters 0x%x, cluster_shift 0x%x\n"
++                     , part_hdr->n_clusters, part_hdr->cluster_shift);
++    }
+ 
+-    offset = part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN;
+-    igelpart_disk_read (disk, offset, sizeof(struct igf_part_hdr), partition);
+-    if ((partition->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_COMPRESSED
+-    && (partition->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW
+-    && (partition->type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW_RO)
+-    {
+-	grub_dprintf("partition", "The root/system partition is not of type compressed, raw or raw_ro !\n");
+-	return 1;
+-    }
+-
+-    grub_dprintf("partition", "igf_part_hdr: type 0x%x, hdrlen 0x%x, partlen 0x%llx, n_blocks 0x%llx\n"
+-                 , partition->type, partition->hdrlen, (unsigned long long)partition->partlen, (unsigned long long)partition->n_blocks);
+-    grub_dprintf("partition", "igf_part_hdr: n_extents 0x%x, offset_blocktable 0x%llx, offset_blocks 0x%llx\n"
+-                 , partition->n_extents, (unsigned long long)partition->offset_blocktable, (unsigned long long)partition->offset_blocks);
+-    grub_dprintf("partition", "igf_part_hdr: n_clusters 0x%x, cluster_shift 0x%x\n"
+-                 , partition->n_clusters, partition->cluster_shift);
++    if (sect_hdr) {
++	grub_memcpy((grub_uint8_t *)sect_hdr, buf, sizeof(struct igf_sect_hdr));
++    }
++
++    if (ext_hdrs) {
++	grub_memset((grub_uint8_t *)ext_hdrs, 0, sizeof(struct partition_extents));
++	ext_hdrs->n_extents = php->n_extents;
++        grub_memcpy((grub_uint8_t *)ext_hdrs->extent, buf + IGF_SECT_HDR_LEN + sizeof(struct igf_part_hdr), ext_hdrs->n_extents * sizeof(struct igf_partition_extent));
++    }
+ 
+     return 0;
+ }
+@@ -282,8 +312,6 @@ check_chain_of_sections(grub_disk_t disk
+ 	n_sections = 1;
+ 	grub_printf("CRC check partition %d generation %d: ", part, version);
+ 
+-	sys_sect = first_sect;
+-
+ 	while ((sect = sh.next_section) != end_section)
+ 	{
+ 		if ((sect == end_section) || (sect >= max_sections))
+@@ -360,84 +388,165 @@ check_chain_of_sections(grub_disk_t disk
+ 	return 1;	/* chain is ok */
+ }
+ 
+-/* function checks sys partition header for errors and return 0 if error was detected and 1 if not */
++/*
++ * function checks sys or bspl partition header in given section
++ * return 0 if error was detected
++ * return 1 for sys partition
++ * return 2 for bspl partition
++ *
++ */
+ 
+ static int
+-check_sys_partition_header (grub_disk_t disk, grub_uint64_t part_offset, grub_uint32_t sect)
++check_sys_bspl_partition_header (grub_disk_t disk, grub_uint64_t part_offset, grub_uint32_t sect, grub_uint16_t *gen_array, grub_uint32_t *sect_minor)
+ {
+ 	struct igf_part_hdr part;
+-	struct igf_partition_extent extent;
++	struct igf_sect_hdr sect_hdr;
++	struct partition_extents extents;
+ 	grub_uint8_t ext;
++	grub_uint32_t diff;
++	grub_uint16_t *generation = NULL;
+ 	int ret = 0;
++	unsigned char *buffer = NULL;
++	grub_uint64_t offset = 0;
++	grub_uint32_t crc = 0;
++	/* crc offsets for section and directory header */
++	static const grub_uint32_t crc_sh_offset = (grub_uint32_t) ((grub_addr_t)&(sh.crc) - (grub_addr_t)&sh + sizeof(sh.crc));
++
++	if (sect_minor)
++		*sect_minor = 0;
+ 
++	if (gen_array)
++		*gen_array = 0;
+ 
+-	if (read_partition_header(sect, disk, part_offset, &part) != 0) {
+-		grub_dprintf("partition", "read_partition_header failed for sys partition\n");
++	part.type = 0;
++	ret = read_sect_partition_header(sect, disk, part_offset, &part, &sect_hdr, &extents);
++	if (ret != 0) {
++		if (ret != 2)
++			grub_dprintf("partition", "read_sect_partition_header failed for sys/bspl partition\n");
++		return 0;
++	}
++
++	/* not first sector in minor return 0 */
++
++	if (sect_hdr.section_in_minor != 0) {
+ 		return 0;
+ 	}
+ 
+ 	if ((part.type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_COMPRESSED
+-        && (part.type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW
+         && (part.type & (~PFLAG_HAS_IGEL_HASH)) != PTYPE_IGEL_RAW_RO) {
+-		grub_dprintf("partition", "wrong partition type 0x%lu for a system partition\n", (unsigned long) part.type);
++		grub_dprintf("partition", "wrong partition type 0x%lu for a system/bspl partition\n", (unsigned long) part.type);
+ 		return 0;
+ 	}
+-
+-	if (part.n_extents != 0) {
+-		for (ext=0;ext<part.n_extents;ext++) {
+-			igelpart_disk_read (disk,
+-					part_offset + START_OF_SECTION(sect) + IGF_SECT_HDR_LEN
+-					+ sizeof(struct igf_part_hdr) + ext * sizeof(struct igf_partition_extent),
+-					sizeof(struct igf_partition_extent), &extent);
+-			if (extent.type == EXTENT_TYPE_KERNEL
+-			|| extent.type == EXTENT_TYPE_RAMDISK
+-			|| extent.type == EXTENT_TYPE_SPLASH) {
+-				if (extent.offset >= part.offset_blocktable) {
++	if (extents.n_extents != 0) {
++		for (ext=0;ext<extents.n_extents;ext++) {
++			if (extents.extent[ext].type == EXTENT_TYPE_KERNEL
++			|| extents.extent[ext].type == EXTENT_TYPE_RAMDISK
++			|| extents.extent[ext].type == EXTENT_TYPE_SPLASH) {
++				if (extents.extent[ext].offset >= part.offset_blocktable) {
+ 					grub_dprintf("partition", "Error: offset of extent collides with offset_blocktable -> extents header invalid\n");
+ 					ret = 0;
+ 					break;
+ 				}
+ 			}
+-			if (extent.type == EXTENT_TYPE_KERNEL) {
++			if (extents.extent[ext].type == EXTENT_TYPE_KERNEL) {
+ 				grub_dprintf("partition", "Found valid extent of type KERNEL\n");
++				generation = gen_array;
+ 				ret = 1;
++			} else if (ret != 1 && extents.extent[ext].type == EXTENT_TYPE_SPLASH) {
++				grub_dprintf("partition", "Found valid extent of type SPLASH\n");
++				if (gen_array) {
++					generation = gen_array + 1;
++				}
++				ret = 2;
+ 			}
+ 		}
+ 	}
+ 
++	if (ret != 0 && sect_minor) {
++		*sect_minor = sect_hdr.partition_minor;
++	}
++
++	/* check generation number is higher then the one before */
++
++	if (ret != 0 && generation) {
++		if (sect_hdr.generation > *generation)
++			diff = sect_hdr.generation - *generation;
++		else
++			diff = *generation - sect_hdr.generation;
++
++		grub_dprintf("partition", "RET: %d GENERATION: %u MINOR: %u SECT_GEN: %u diff: %u\n", ret, *generation, sect_hdr.partition_minor, sect_hdr.generation, diff);
++		if (diff >= 65534) {
++			if (*generation == 1) {
++				ret = 0;
++			} else if (sect_hdr.generation == 1) {
++				*generation = 1;
++			} else if (sect_hdr.generation > *generation) {
++				*generation = sect_hdr.generation;
++			} else {
++				ret = 0;
++			}
++		} else if (sect_hdr.generation > *generation) {
++			*generation = sect_hdr.generation;
++		} else {
++			ret = 0;
++		}
++		grub_dprintf("partition", "RET: %d GENERATION: %u MINOR: %u SECT_GEN: %u diff: %u\n", ret, *generation, sect_hdr.partition_minor, sect_hdr.generation, diff);
++	}
++
++	/* check CRC of section 0 */
++	if (ret != 0) {
++		if ((buffer = grub_malloc(IGF_SECTION_SIZE)) == NULL) {
++			grub_printf("\n\nError could not allocate %llu bytes of memory to do CRC check!\n", (unsigned long long) IGF_SECTION_SIZE);
++			return 0;
++		}
++
++		makecrc();	/* build the crc lookup table */
++		offset = part_offset + START_OF_SECTION(sect);
++		igelpart_disk_read (disk, offset, IGF_SECTION_SIZE, buffer);
++		updcrc(NULL, 0);
++		crc = updcrc(buffer + crc_sh_offset, IGF_SECTION_SIZE - crc_sh_offset);
++		if (crc != sect_hdr.crc)
++		{
++			grub_dprintf("partition", "CRC of section 0 of minor %u is invalid ignore this partition (calced: 0x%x should be: 0x%x).\n", sect_hdr.partition_minor, crc, sect_hdr.crc);
++			ret = 0;
++		}
++		grub_free(buffer);
++	}
++
+ 	return ret;
+ }
+ 
+ /*
+  * find_root_partition_secure
+  *
+- * Find a partition with minor number 1 and the highest version number.
++ * Find a partition with kernel extent and the highest version number.
+  * (A partition is a linked list of sections with valid CRC checksums.)
+  *
+  * Method: Look at the section headers and find a complete chain
+- *         belonging to partition #1 with the highest version number.
+- *         Then test the crc checksum of each section.
++ *         belonging to partition with kernel extent with the highest version
++ *         number. Then test the crc checksum of each section.
+  */
+ 
+ int
+ find_root_partition_secure(grub_disk_t disk, grub_uint64_t part_offset, grub_uint32_t max_sections)
+ {
+ 	grub_uint32_t sect;
+-	grub_uint32_t first_sect = 0;
+-	grub_uint32_t invalidate_sect = 0;
+-	grub_uint32_t alternate_first_sect = 0;
++	grub_uint32_t first_sect = 0, first_minor = 0;
++	grub_uint32_t alternate_first_sect = 0, alternate_first_minor = 0;
+ 	grub_uint32_t bad_chain = 0;
++	grub_uint32_t sect_minor = 0;
+ 	int done = 0;
+ 	int number_of_bad_chains = 0;
+ 	unsigned int diff;
+-	grub_uint16_t version;
++	grub_uint16_t version, sect_generation[2] = {0, 0};
+ 
+ 	/* prevent grub2 to do the search and CRC check several times, use found_secure_sys_sect
+ 	 * if present and valid */
+ 
+ 	if (found_secure_sys_sect != 0) {
+-        	if (check_sys_partition_header (disk, part_offset, found_secure_sys_sect) != 0) {
++        	if (check_sys_bspl_partition_header (disk, part_offset, found_secure_sys_sect, NULL, &sect_minor) == 1) {
+ 			sys_sect = found_secure_sys_sect;
++			sys_minor = sect_minor;
+ 			return 0;
+ 		}
+ 		found_secure_sys_sect = 0;
+@@ -452,16 +561,16 @@ find_root_partition_secure(grub_disk_t d
+ 				grub_printf("%d/%d (%d%%) \r",
+ 				       sect, max_sections, (sect + 16) * 100 / max_sections);
+ 
+-			igelpart_disk_read (disk, part_offset + START_OF_SECTION(sect), sizeof(struct igf_sect_hdr), &sh);
+-			if ((sh.partition_minor == 1) && (sh.section_in_minor == 0))
+-			{
++			/* setting sect_generation[0] = 0 disables the generation check in check_sys_bspl_partition_header */
++			sect_generation[0] = 0;
++			if (check_sys_bspl_partition_header(disk, part_offset, sect, sect_generation, &sect_minor) == 1) {
+ 				if (sect == bad_chain)
+ 					continue;
+ 				/* version difference gives a hint about wrap arounds */
+-				if (sh.generation > version)
+-					diff = sh.generation - version;
++				if (sect_generation[0] > version)
++					diff = sect_generation[0] - version;
+ 				else
+-					diff = version - sh.generation;
++					diff = version - sect_generation[0];
+ 
+ 				if (diff >= 65534)
+ 				{
+@@ -473,27 +582,27 @@ find_root_partition_secure(grub_disk_t d
+ 					if (version == 1)
+ 						continue;
+ 					/* a wrap around too, but the 1 has to be stored */
+-					if (sh.generation == 1)
++					if (sect_generation[0] == 1)
+ 					{
+-						version = sh.generation;
++						version = sect_generation[0];
+ 						alternate_first_sect = first_sect;
++						alternate_first_minor = first_minor;
+ 						first_sect = sect;
++						first_minor = sect_minor;
+ 						continue;
+ 					}
+ 				}
+ 				/* the default case */
+-				if (sh.generation > version)
++				if (sect_generation[0] > version)
+ 				{
+-					if (check_sys_partition_header(disk, part_offset, sect) == 0) {
+-						invalidate_sect = sect;
+-					} else {
+-						version = sh.generation;
+-						alternate_first_sect = first_sect;
+-						first_sect = sect;
+-						grub_printf("                   "
+-						       "partition 1 generation %d at section %lu  \r",
+-						       version, (unsigned long) first_sect);
+-					}
++					version = sect_generation[0];
++					alternate_first_sect = first_sect;
++					alternate_first_minor = first_minor;
++					first_sect = sect;
++					first_minor = sect_minor;
++					grub_printf("                   "
++					       "partition 1 generation %d at section %lu  \r",
++					       version, (unsigned long) first_sect);
+ 				}
+ 			}
+ 		}
+@@ -504,17 +613,11 @@ find_root_partition_secure(grub_disk_t d
+ 			return(1);
+ 		}
+ 
+-		/* invalidate sys partition if partition header is corrupted and there is a other sys partition present */
+-
+-		if (invalidate_sect != 0 && first_sect != 0) {
+-			igelpart_disk_read (disk, part_offset + START_OF_SECTION(invalidate_sect), sizeof(struct igf_sect_hdr), &sh);
+-			sh.generation = 0;
+-			igel_disk_write (disk, part_offset + START_OF_SECTION(invalidate_sect), sizeof(struct igf_sect_hdr), &sh);
+-		}
+-
+-		done = check_chain_of_sections(disk, part_offset, 1, first_sect, max_sections, &bad_chain);
++		done = check_chain_of_sections(disk, part_offset, first_minor, first_sect, max_sections, &bad_chain);
+ 		if (done) {
+-			found_secure_sys_sect = sys_sect;
++			found_secure_sys_sect = first_sect;
++			sys_sect = first_sect;
++			sys_minor = first_minor;
+ 			return(0);
+ 		}
+ 
+@@ -527,10 +630,12 @@ find_root_partition_secure(grub_disk_t d
+ 			return(1);
+ 		}
+ 		if (alternate_first_sect > 0) {
+-			done = check_chain_of_sections(disk, part_offset, 1, alternate_first_sect,
++			done = check_chain_of_sections(disk, part_offset, alternate_first_minor, alternate_first_sect,
+ 			                               max_sections, &bad_chain);
+ 			if (done) {
+-				found_secure_sys_sect = sys_sect;
++				found_secure_sys_sect = alternate_first_sect;
++				sys_sect = alternate_first_sect;
++				sys_minor = alternate_first_minor;
+ 				return(0);
+ 			} else
+ 				return(1);
+@@ -546,18 +651,23 @@ iterate_real (grub_disk_t disk, const gr
+ {
+   grub_uint32_t pdir_magic;
+   grub_uint64_t bootreg_magic;
+-  struct igf_part_hdr php;
+   struct directory pdir;
+   struct grub_partition p;
+   grub_uint32_t section;
+   grub_uint64_t part_offset = partition->start << GRUB_DISK_SECTOR_BITS;
+   int number_of_sections;
+-  int directory_present = 0, secure_boot = 0;
++  int directory_present = 0, secure_boot = 0, sect_check = 0;
+   grub_int32_t i = 0;
+   const char *part_check;
+   grub_uint8_t found = 0;
+   const char *arg;
+   char *args[1];
++  static grub_uint32_t n_sects;
++  grub_uint16_t generation[2] = {0, 0};
++  char string[32];
++  const char *sys_minor_hint = NULL, *bspl_minor_hint = NULL;
++  const char *sys_generation = NULL, *bspl_generation = NULL;
++  grub_uint8_t sys_hint_found = 0, bspl_hint_found = 0;
+ 
+   /* Read the possible IGEL labels (PDIR and BOOTREG).  */
+   if (found == 0) {
+@@ -599,24 +709,104 @@ iterate_real (grub_disk_t disk, const gr
+     }
+   }
+ 
++  /* generation for sys partition */
++  generation[0] = 0;
++  /* generation for bspl partition */
++  generation[1] = 0;
++  /* get old generation settings from grub environment */
++  sys_generation = grub_env_get ("sys_generation");
++  if (sys_generation) {
++    generation[0] = (grub_uint16_t)grub_strtoul(sys_generation,NULL,10);
++  }
++  bspl_generation = grub_env_get ("bspl_generation");
++  if (bspl_generation) {
++    generation[1] = (grub_uint16_t)grub_strtoul(bspl_generation,NULL,10);
++  }
++
+   if (secure_boot == 0) {
+     /* check directory */
+     if (read_directory(&pdir, disk, part_offset) > 0) {
+       directory_present = 1;
+       grub_dprintf("partition", "read_directory succeded\n");
+-      if (find_root_partition_by_directory(&pdir) == 0) {
+-        section = get_physical_section(&pdir, 1, 0);
+-	/* check if partition header is valid, if not set section = -1 */
+-        if (check_sys_partition_header (disk, part_offset, section) == 0)
+-          section = end_section;
+-      } else {
+-        grub_dprintf("partition", "find_root_partition_section failed\n");
++      /* use minor hints for sys and bspl if available */
++      sys_minor_hint = grub_env_get ("sys_minor_hint");
++      if (sys_minor_hint) {
++        i = (int)grub_strtol(sys_minor_hint,NULL,10);
++        if (i > 0 && i < DIR_MAX_MINORS) {
++          section = find_partition_by_directory(&pdir, i, &n_sects);
++          if (section != end_section) {
++	    if (check_sys_bspl_partition_header (disk, part_offset, section, generation, NULL) == 1) {
++              sys_first_section = section;
++              n_sections = n_sects;
++              sys_minor = i;
++	      grub_snprintf(string, sizeof(string), "%u", sys_minor);
++              grub_env_set("sys_minor", string);
++	      sys_hint_found = 1;
++	      grub_dprintf("partition", "Found sys minor %u with hint\n", sys_minor);
++	    }
++	  }
++	}
++      }
++      bspl_minor_hint = grub_env_get ("bspl_minor_hint");
++      if (bspl_minor_hint) {
++        i = (int)grub_strtol(bspl_minor_hint,NULL,10);
++        if (i > 0 && i < DIR_MAX_MINORS) {
++          section = find_partition_by_directory(&pdir, i, &n_sects);
++          if (section != end_section) {
++	    if (check_sys_bspl_partition_header (disk, part_offset, section, generation, NULL) == 2) {
++	      bspl_first_section = section;
++	      bspl_minor = i;
++	      grub_snprintf(string, sizeof(string), "%u", bspl_minor);
++              grub_env_set("bspl_minor", string);
++	      bspl_hint_found = 1;
++	      grub_dprintf("partition", "Found bspl minor %u with hint\n", bspl_minor);
++	    }
++	  }
++	}
++      }
++      for (i = 1; i < DIR_MAX_MINORS; i++) {
++        section = find_partition_by_directory(&pdir, i, &n_sects);
++        if (section == end_section)
++	  continue;
++	if (sys_hint_found == 0 || bspl_hint_found == 0) {
++	  sect_check = check_sys_bspl_partition_header (disk, part_offset, section, generation, NULL);
++          if (sect_check == 1 && sys_hint_found == 0) {
++            sys_first_section = section;
++            n_sections = n_sects;
++            sys_minor = i;
++	    grub_snprintf(string, sizeof(string), "%u", sys_minor);
++            grub_env_set("sys_minor", string);
++	    grub_snprintf(string, sizeof(string), "%u", generation[0]);
++            grub_env_set("sys_generation", string);
++          } else if (sect_check == 2 && bspl_hint_found == 0) {
++	    bspl_first_section = section;
++	    bspl_minor = i;
++	    grub_snprintf(string, sizeof(string), "%u", bspl_minor);
++            grub_env_set("bspl_minor", string);
++	    grub_snprintf(string, sizeof(string), "%u", generation[1]);
++            grub_env_set("bspl_generation", string);
++	  }
++	}
++        if (i == 252)
++	  cbspl_first_section = section;
++
++        p.number = i - 1;
++        p.offset = (part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN) / GRUB_DISK_SECTOR_SIZE;
++        p.index = (part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN) % GRUB_DISK_SECTOR_SIZE;
++        p.start = p.offset;
++        p.len = (grub_le_to_cpu32 (n_sects << IGF_SECTION_SHIFT) >> GRUB_DISK_SECTOR_BITS) << (disk->log_sector_size - GRUB_DISK_SECTOR_BITS);
++        p.partmap = pmap;
++        p.parent = partition;
++        grub_dprintf("partition", "partition %d: offset 0x%llx, index 0x%x, start kernel 0x%llx, len 0x%llx\n", p.number, (unsigned long long)p.offset, p.index, (unsigned long long)p.start, (unsigned long long)p.len);
++        if (hook (disk, &p, hook_data)) {
++          return grub_errno;
++	}
+       }
+     }
+   }
+ 
+   /* if section is still unknown use secure root find function */
+-  if (section == end_section) {
++  if (secure_boot != 0 || sys_first_section == end_section) {
+     /* switch to console mode, so the grub_printf are displayed */
+     arg = grub_strdup("console");
+     args[0] = (char *)arg;
+@@ -628,13 +818,29 @@ iterate_real (grub_disk_t disk, const gr
+     } else {
+       grub_printf("Searching system partition (failsafe boot):\n");
+     }
+-    if (find_root_partition_secure(disk, part_offset, number_of_sections) == 0)
+-      section = sys_sect;
++    if (find_root_partition_secure(disk, part_offset, number_of_sections) == 0) {
++      sys_first_section = sys_sect;
++      grub_snprintf(string, sizeof(string), "%u", sys_minor);
++      grub_env_set("sys_minor", string);
++      p.number = sys_minor - 1;
++      p.offset = (part_offset + START_OF_SECTION(sys_first_section) + IGF_SECT_HDR_LEN) / GRUB_DISK_SECTOR_SIZE;
++      p.index = (part_offset + START_OF_SECTION(sys_first_section) + IGF_SECT_HDR_LEN) % GRUB_DISK_SECTOR_SIZE;
++      p.start = p.offset;
++      //p.start = p.offset + (grub_le_to_cpu32 (php.offset_kernel) << (disk->log_sector_size - GRUB_DISK_SECTOR_BITS));
++      p.len = (grub_le_to_cpu32 (n_sections << IGF_SECTION_SHIFT) >> GRUB_DISK_SECTOR_BITS) << (disk->log_sector_size - GRUB_DISK_SECTOR_BITS);
++      p.partmap = pmap;
++      p.parent = partition;
++
++      grub_dprintf("partition", "partition %d: offset 0x%llx, index 0x%x, start kernel 0x%llx, len 0x%llx\n", p.number, (unsigned long long)p.offset, p.index, (unsigned long long)p.start, (unsigned long long)p.len);
++
++      if (hook (disk, &p, hook_data))
++        return grub_errno;
++    }
+   }
+ 
+-  grub_dprintf("partition", "section with root partition 0x%x\n", section);
++  grub_dprintf("partition", "section with root partition 0x%x\n", sys_first_section);
+ 
+-  if (section == end_section) {
++  if (sys_first_section == end_section) {
+     grub_command_execute ("clear", 0, NULL);
+     grub_printf("Couldn't find valid IGEL partition. Please contact our support (service area on www.igel.com) to recover the system.");
+     arg = grub_strdup("360");
+@@ -646,46 +852,6 @@ iterate_real (grub_disk_t disk, const gr
+     return grub_errno;
+   }
+ 
+-  sys_first_section = section; /* Used in fs/igelfs.c */
+-
+-  grub_dprintf("partition", "start reading partition header\n");
+-  read_partition_header(section, disk, part_offset, &php);
+-
+-  p.number = 0;
+-  p.offset = (part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN) / GRUB_DISK_SECTOR_SIZE;
+-  p.index = (part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN) % GRUB_DISK_SECTOR_SIZE;
+-  p.start = p.offset;
+-  //p.start = p.offset + (grub_le_to_cpu32 (php.offset_kernel) << (disk->log_sector_size - GRUB_DISK_SECTOR_BITS));
+-  p.len = (grub_le_to_cpu32 (n_sections << IGF_SECTION_SHIFT) >> GRUB_DISK_SECTOR_BITS) << (disk->log_sector_size - GRUB_DISK_SECTOR_BITS);
+-  p.partmap = pmap;
+-  p.parent = partition;
+-
+-  grub_dprintf("partition", "partition %d: offset 0x%llx, index 0x%x, start kernel 0x%llx, len 0x%llx\n", p.number, (unsigned long long)p.offset, p.index, (unsigned long long)p.start, (unsigned long long)p.len);
+-
+-  if (hook (disk, &p, hook_data))
+-    return grub_errno;
+-
+-  if (directory_present == 1) {
+-    for (i=2;i<IGF_MAX_MINORS;i++) {
+-      section = get_physical_section(&pdir, i, 0);
+-      if (section == end_section)
+-        continue;
+-      if (i == 23)  bspl_first_section = section;
+-      if (i == 252) cbspl_first_section = section;
+-      read_partition_header(section, disk, part_offset, &php);
+-      p.number = i - 1;
+-      p.offset = (part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN) / GRUB_DISK_SECTOR_SIZE;
+-      p.index = (part_offset + START_OF_SECTION(section) + IGF_SECT_HDR_LEN) % GRUB_DISK_SECTOR_SIZE;
+-      p.start = p.offset;
+-      //p.start = p.offset + (grub_le_to_cpu32 (php.offset_blocktable) << (disk->log_sector_size - GRUB_DISK_SECTOR_BITS));
+-      p.len = php.partlen >> GRUB_DISK_SECTOR_BITS;
+-      p.partmap = pmap;
+-      p.parent = partition;
+-      grub_dprintf("partition", "partition %d: offset 0x%llx, index 0x%x, start kernel 0x%llx, len 0x%llx\n", p.number, (unsigned long long)p.offset, p.index, (unsigned long long)p.start, (unsigned long long)p.len);
+-      if (hook (disk, &p, hook_data))
+-        return grub_errno;
+-    }
+-  }
+   return GRUB_ERR_NONE;
+ }
+ 

@@ -1,0 +1,28 @@
+--- a/grub-core/normal/menu.c
++++ b/grub-core/normal/menu.c
+@@ -683,7 +683,9 @@ run_menu (grub_menu_t menu, int nested,
+ 
+   current_entry = default_entry;
+ 
++#ifdef IGEL_DEBUG
+  refresh:
++#endif
+   menu_init (current_entry, menu, nested);
+ 
+   /* Initialize the time.  */
+@@ -787,6 +789,7 @@ run_menu (grub_menu_t menu, int nested,
+               *auto_boot = 0;
+ 	      return current_entry;
+ 
++#ifdef IGEL_DEBUG
+ 	    case GRUB_TERM_ESC:
+ 	      if (nested)
+ 		{
+@@ -808,6 +811,7 @@ run_menu (grub_menu_t menu, int nested,
+ 		    grub_menu_entry_run (e);
+ 		}
+ 	      goto refresh;
++#endif
+ 
+ 	    default:
+ 	      {

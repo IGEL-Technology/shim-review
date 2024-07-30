@@ -1,0 +1,29 @@
+Description: grub2 terminal-box patch by IGEL
+This patch stretches the terminal-box to the size of the screen. This allows us
+to 'hide' the terminal box by setting the boot menu background and terminal background
+identical.
+Author: Eduard Göbl, IGEL Technology GmbH
+Origin: vendor, www.igel.com
+Last-Update: 2016-11-03
+Index: igelworkdir/grub-core/gfxmenu/view.c
+===================================================================
+--- igelworkdir.orig/grub-core/gfxmenu/view.c
++++ igelworkdir/grub-core/gfxmenu/view.c
+@@ -72,10 +72,13 @@ grub_gfxmenu_view_new (const char *theme
+   view->screen.width = width;
+   view->screen.height = height;
+ 
+-  view->need_to_check_sanity = 1;
+-  view->terminal_border = 3;
+-  view->terminal_rect.width = view->screen.width * 7 / 10;
+-  view->terminal_rect.height = view->screen.height * 7 / 10;
++  /* goebl@igel.com: Don't place the big black terminal box on top of the grub2 boot menu
++   * We simply hide it by making it as big as the screen and setting the wallpaper as the
++   * terminal background */
++  view->need_to_check_sanity = 0;
++  view->terminal_border = 0;
++  view->terminal_rect.width = view->screen.width;
++  view->terminal_rect.height = view->screen.height;
+   view->terminal_rect.x = view->screen.x + (view->screen.width
+                                             - view->terminal_rect.width) / 2;
+   view->terminal_rect.y = view->screen.y + (view->screen.height

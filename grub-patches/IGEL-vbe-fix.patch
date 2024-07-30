@@ -1,0 +1,34 @@
+--- a/grub-core/video/i386/pc/vbe.c
++++ b/grub-core/video/i386/pc/vbe.c
+@@ -964,7 +964,8 @@ grub_video_vbe_iterate (int (*hook) (con
+         {
+           /* Could not retrieve mode info, retreat.  */
+           grub_errno = GRUB_ERR_NONE;
+-          break;
++          /* lang@igel: fix for buggy vbe: ignore wrong entries */
++          continue;
+         }
+ 
+       vbe2videoinfo (*p, &vbe_mode_info, &mode_info);
+@@ -1001,8 +1002,9 @@ grub_video_vbe_setup (unsigned int width
+ 	     mode supported by the graphics card may not be safe for the
+ 	     display device.  */
+ 	  grub_errno = GRUB_ERR_NONE;
+-	  width = 640;
+-	  height = 480;
++	  /* lang@igel: instead of 640x480 use 1024x768 for fall back */
++	  width = 1024;
++	  height = 768;
+ 	}
+     }
+ 
+@@ -1016,7 +1018,8 @@ grub_video_vbe_setup (unsigned int width
+         {
+           /* Could not retrieve mode info, retreat.  */
+           grub_errno = GRUB_ERR_NONE;
+-          break;
++          /* lang@igel: fix for buggy vbe: ignore wrong entries */
++          continue;
+         }
+ 
+       if ((vbe_mode_info.mode_attributes & GRUB_VBE_MODEATTR_SUPPORTED) == 0)

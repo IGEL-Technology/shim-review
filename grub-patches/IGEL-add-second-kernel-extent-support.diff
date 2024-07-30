@@ -1,0 +1,396 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -94,6 +94,7 @@ static grub_err_t igelfs_disk_read (grub
+ static grub_uint32_t * get_igelfs_section_offset (grub_disk_t disk, grub_off_t data_size, grub_int32_t type)
+ {
+ 	grub_uint32_t sect;
++	grub_uint32_t sect_count = MAX_KERNEL_SYS_SECTIONS;
+ 	grub_uint32_t first_sect;
+ 	grub_uint32_t i = 1;
+         static grub_uint32_t sect_kernel_offset[MAX_KERNEL_SYS_SECTIONS+1];
+@@ -135,9 +136,13 @@ static grub_uint32_t * get_igelfs_sectio
+ 
+         grub_dprintf ("igelfs", "sect_hdr: magic: 0x%x crc: 0x%x partition_minor: %d sect_in_minor: %d generation: %d next: 0x%x\n", sh.magic, sh.crc, sh.partition_minor, sh.section_in_minor, sh.generation, sh.next_section - first_sect);
+ 
++	if (data_size != 0) {
++		sect_count = grub_divmod64(data_size, IGF_SECT_DATA_LEN, NULL) + 1;
++	}
++
+ 	while((sect = sh.next_section) != end_section &&
+-		   i <= (grub_uint32_t) (data_size / IGF_SECTION_SIZE) + 1 &&
+-		   i <= (grub_uint32_t)  MAX_KERNEL_SYS_SECTIONS)
++              i <= (grub_uint32_t) sect_count &&
++              i <= (grub_uint32_t)  MAX_KERNEL_SYS_SECTIONS)
+ 	{
+ 		sect_offset[i] = sect - first_sect;
+ 		igelfs_disk_read (disk, START_OF_SECTION(sect - first_sect), sizeof(struct igf_sect_hdr), &sh);
+@@ -178,7 +183,7 @@ void test_and_free(void* ptr){
+ static grub_err_t
+ grub_igelconfig_bootreg_to_config(unsigned char *buf, unsigned char **content)
+ {
+-  int size_params = 0;
++  int size_params = 0, content_size = 4096;
+   char *cmdline = (char *) grub_zalloc(4097); //allocate to heap to avoid unaligned pointer problem
+   char splash[100];
+   char *val = NULL;
+@@ -189,11 +194,18 @@ grub_igelconfig_bootreg_to_config(unsign
+   bootreg_data* bt_data = (bootreg_data*) grub_zalloc(sizeof(bootreg_data)); //Use this to wrapper new libbottreg functions, TODO HEap malloc???
+   bt_data->mode = BOOTREG_RDONLY;
+   bt_data->page = (char *) buf;
++  char kernel1[] = "", kernel2[] = " (2nd kernel)", added1[] = "", added2[] = "-2nd";
++  char *kern1, *kern2, *add1, *add2;
++  int def=0;
+ 
+   grub_dprintf("igelfs", "entering bootreg to config, bootreg_type at 0x%lx, bootreg_data at 0x%lx, ptr 0x%lx\n", (unsigned long)&bootreg_type, (unsigned long)(bt_data), (unsigned long)(&bt_data));
+   grub_dprintf("igelfs", "cmdline at 0x%lx, splash at 0x%lx, empty at 0x%lx\n", (unsigned long) cmdline, (unsigned long) splash, (unsigned long)empty);
+ 
+   splash[0]='\0';
++  kern1 = kernel1;
++  kern2 = kernel2;
++  add1 = added1;
++  add2 = added2;
+ 
+   grub_memset(cmdline, 0, 4097);
+ 
+@@ -209,12 +221,12 @@ grub_igelconfig_bootreg_to_config(unsign
+     /* check if new header has LOCK flag set, if true show only a message and stop boot process */
+     if( bootreg_get_flags(buf) & BOOTREG_FLAG_LOCK ) {
+ 
+-      *content = (unsigned char *) grub_zalloc (1600);
++      *content = (unsigned char *) grub_zalloc (content_size);
+       if (!content) {
+         return 1;
+       }
+ 
+-      grub_snprintf((char *) *content, 1600, "\
++      grub_snprintf((char *) *content, content_size, "\
+ set timeout=99999\n\
+ set timeout_style=menu\n\
+ set default=0\n\
+@@ -388,6 +400,18 @@ menuentry \"Please contact your admin\"
+ 
+   test_and_free(val);
+ 
++  bootreg_get(bt_data, "use_2nd_kernel_as_default", &val);
++  if (val != NULL && val[0] == 't' && val[1] == 'r' && val[2] == 'u' && val[3] == 'e') {
++    add2 = added1;
++    add1 = added2;
++    kern2 = kernel1;
++    kern1 = kernel2;
++  } else {
++    bootreg_get(bt_data, "use_2nd_kernel", &val);
++    if (val != NULL && val[0] == 't' && val[1] == 'r' && val[2] == 'u' && val[3] == 'e')
++      def = 2;
++  }
++
+   bootreg_get(bt_data, "boot_cmd", &val);
+   if (val == NULL) {
+     val = empty;
+@@ -397,7 +421,11 @@ menuentry \"Please contact your admin\"
+ 
+   size_params = grub_strlen(cmdline) + grub_strlen(val) + 2;
+ 
+-  *content = (unsigned char *) grub_zalloc (1600 + (5 * size_params));
++  if ((size_params * 9 + 3000) > content_size) {
++	  content_size = (size_params * 9 + 3000);
++  }
++
++  *content = (unsigned char *) grub_zalloc (content_size);
+ 
+   grub_dprintf("igelfs", "content on 0x%lx, pointer to content on 0x%lx, size_params=%d\n", (unsigned long )*content, (unsigned long)content, size_params);
+ 
+@@ -417,58 +445,100 @@ menuentry \"Please contact your admin\"
+   grub_dprintf("igelfs", "writing the config\n");
+ 
+ 
+-  grub_snprintf((char *) *content, 1600 + (5 * size_params), "set timeout=1\n\
++  grub_snprintf((char *) *content, content_size, "set timeout=1\n\
+ set timeout_style=hidden\n\
+-set default=0\n\
+ \n\
+ insmod regexp\n\
+ \n\
+ regexp --set=0:dev '(\\(hd[0-9]{1,},)' $cmdpath\n\
+ set device=\"${dev}igel1)\"\n\
+ set igel_part_check=false\n\
+-\n\
+-menuentry \"Quiet boot\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	linux	$device/vmlinuz igel_syslog=quiet quiet %s %s\n\
+-}\n\
+-\n\
+-menuentry \"Verbose boot\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	linux	$device/vmlinuz systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
+-}\n\
+-\n\
+-menuentry \"VESA only boot\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	linux	$device/vmlinuz nomodeset igel_syslog=quiet %s %s\n\
+-}\n\
+-\n\
+-menuentry \"Emergency boot (setup only)\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	linux	$device/vmlinuz systemd.unit=igel-emergency-boot.target igel_syslog=emergency quiet %s %s\n\
+-}\n\
+-\n\
+-menuentry \"Failsafe boot with CRC check\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	set igel_part_check=true\n\
+-	linux	$device/vmlinuz igel_syslog=quiet failsafe %s\n\
+-}\n\
+-\n\
+-menuentry \"Reset to factory defaults\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	linux	$device/vmlinuz systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
+-}\n\
+-\n\
+-menuentry \"Custom boot command\" {\n\
+-	set gfxpayload=keep\n\
+-	insmod part_igel\n\
+-	linux	$device/vmlinuz igel_syslog=quiet quiet %s %s %s\n\
+-}\n", cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++set kernel1=\"$device/vmlinuz%s\"\n\
++set kernel1_name=\"%s\"\n\
++set kernel2=\"$device/vmlinuz%s\"\n\
++set kernel2_name=\"%s\"\n\
++\n\
++if [ ! -f $kernel1 ]; then\n\
++	if [ -f $kernel2 ]; then\n\
++		set kernel=\"$kernel2\"\n\
++		set kernel_name=\"$kernel2_name\"\n\
++		set kernel2=\"$kernel1\"\n\
++		set kernel2_name=\"$kernel1_name\"\n\
++	else\n\
++		set kernel=\"$kernel1\"\n\
++		set kernel_name=\"$kernel1_name\"\n\
++	fi\n\
++else\n\
++	set kernel=\"$kernel1\"\n\
++	set kernel_name=\"$kernel1_name\"\n\
++fi\n\
++\n\
++if [ -f $kernel2 ]; then\n\
++	set default=%d\n\
++else\n\
++	set default=0\n\
++fi\n\
++\n\
++if [ -f $kernel ]; then\n\
++	menuentry \"Quiet boot$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel igel_syslog=quiet quiet %s %s\n\
++	}\n\
++	\n\
++	menuentry \"Verbose boot$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
++	}\n\
++fi\n\
++\n\
++if [ -f $kernel2 ]; then\n\
++	menuentry \"Quiet boot$kernel2_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel2 igel_syslog=quiet quiet %s %s\n\
++	}\n\
++	\n\
++	menuentry \"Verbose boot$kernel2_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel2 systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
++	}\n\
++fi\n\
++\n\
++if [ -f $kernel ]; then\n\
++	menuentry \"VESA only boot$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel nomodeset igel_syslog=quiet %s %s\n\
++	}\n\
++	\n\
++	menuentry \"Emergency boot (setup only)$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel systemd.unit=igel-emergency-boot.target igel_syslog=emergency quiet %s %s\n\
++	}\n\
++	\n\
++	menuentry \"Failsafe boot with CRC check$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		set igel_part_check=true\n\
++		linux $kernel igel_syslog=quiet failsafe %s\n\
++	}\n\
++	\n\
++	menuentry \"Reset to factory defaults$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
++	}\n\
++	\n\
++	menuentry \"Custom boot command$kernel_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
++	}\n\
++fi\n", add1, kern1, add2, kern2, def, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
+ 
+   if(val != NULL){
+     if(val == empty){
+@@ -490,12 +560,18 @@ struct grub_igelfs_data
+ {
+   grub_uint64_t offset_kernel;
+   grub_uint64_t offset_ramdisk;
++  grub_uint64_t offset_2nd_kernel;
+   grub_uint64_t offset_blocks;
+   grub_uint64_t offset_splash;
+   grub_off_t size_kernel;
+   grub_off_t size_ramdisk;
++  grub_off_t size_2nd_kernel;
+   grub_uint8_t end;
+-  grub_uint8_t noval[7]; // pointer align for content 64 bit
++  grub_uint8_t kernel_type_end;
++  grub_uint8_t kernel_fsnum;
++  grub_uint8_t kernel_2nd_fsnum;
++  grub_uint8_t ramdisk_fsnum;
++  grub_uint8_t noval[3]; // pointer align for content 64 bit
+   unsigned char *content;
+   grub_int32_t type;
+ };
+@@ -521,22 +597,24 @@ grub_igelfs_find_file (struct grub_arche
+     return GRUB_ERR_NONE;
+ 
+   if (data->igelfs->type == KERNEL) {
+-    if (data->igelfs->end == 1 && (data->igelfs->offset_ramdisk == 0
+-    || data->igelfs->offset_ramdisk == data->igelfs->offset_blocks
+-    || data->igelfs->offset_ramdisk == data->igelfs->offset_kernel) ) {
+-      return GRUB_ERR_NONE;
+-    } else if (data->igelfs->end >= 2) {
++    if (data->igelfs->end >= data->igelfs->kernel_type_end) {
+       return GRUB_ERR_NONE;
+     }
+ 
+-    if (data->igelfs->end == 1) {
++    if (data->igelfs->end + 1 == data->igelfs->ramdisk_fsnum) {
+       *name = grub_strdup("initramfs.img");
+       data->dofs = data->igelfs->offset_ramdisk;
+       data->size = data->igelfs->size_ramdisk;
+-    } else {
++    } else if (data->igelfs->end + 1 == data->igelfs->kernel_2nd_fsnum) {
++      *name = grub_strdup("vmlinuz-2nd");
++      data->dofs = data->igelfs->offset_2nd_kernel;
++      data->size = data->igelfs->size_2nd_kernel;
++    } else if (data->igelfs->end + 1 == data->igelfs->kernel_fsnum) {
+       *name = grub_strdup("vmlinuz");
+       data->dofs = data->igelfs->offset_kernel;
+       data->size = data->igelfs->size_kernel;
++    } else {
++      return GRUB_ERR_NONE;
+     }
+ 
+ 
+@@ -586,10 +664,15 @@ grub_igelfs_mount (grub_disk_t disk)
+   const char *splash_ident;
+   grub_uint8_t buf[9];
+   grub_uint8_t ext, sp_ext, i = 0;
+-  grub_uint64_t offset_kernel, offset_ramdisk;
+-  grub_uint64_t size_kernel = 0, size_ramdisk = 0;
++  grub_uint64_t offset_kernel, offset_ramdisk, offset_2nd_kernel;
++  grub_uint64_t size_kernel = 0, size_ramdisk = 0, size_2nd_kernel = 0;
+   unsigned char *bootreg_buf = NULL;
+   grub_int32_t type = NONE;
++  grub_uint32_t *sect_offset;
++  grub_uint8_t kernel_type_end = 0;
++  grub_uint8_t kernel_fsnum = 0;
++  grub_uint8_t kernel_2nd_fsnum = 0;
++  grub_uint8_t ramdisk_fsnum = 0;
+ 
+   grub_dprintf ("igelfs", "grub_igelfs_mount was called\n");
+ 
+@@ -700,6 +783,7 @@ grub_igelfs_mount (grub_disk_t disk)
+       goto fail;
+   } else if (type == KERNEL) {
+     offset_kernel = 0;
++    offset_2nd_kernel = 0;
+     offset_ramdisk = 0;
+ 
+     /* no kernel partition if offset_kernel == offset_blocktable */
+@@ -707,11 +791,22 @@ grub_igelfs_mount (grub_disk_t disk)
+     for (ext=0;ext<part_hdr.n_extents;ext++) {
+       if (extent[ext].type == EXTENT_TYPE_KERNEL) {
+         if (extent[ext].offset != part_hdr.offset_blocktable) {
++          kernel_type_end += 1;
++	  kernel_fsnum = kernel_type_end;
+           offset_kernel = extent[ext].offset;
+           size_kernel = extent[ext].length;
+         }
++      } else if (extent[ext].type == EXTENT_TYPE_SEC_KERNEL) {
++        if (extent[ext].offset != part_hdr.offset_blocktable) {
++          kernel_type_end += 1;
++	  kernel_2nd_fsnum = kernel_type_end;
++          offset_2nd_kernel = extent[ext].offset;
++          size_2nd_kernel = extent[ext].length;
++        }
+       } else if (extent[ext].type == EXTENT_TYPE_RAMDISK) {
+         if (extent[ext].offset != part_hdr.offset_blocktable) {
++          kernel_type_end += 1;
++	  ramdisk_fsnum = kernel_type_end;
+           offset_ramdisk = extent[ext].offset;
+           size_ramdisk = extent[ext].length;
+         }
+@@ -736,12 +831,27 @@ grub_igelfs_mount (grub_disk_t disk)
+   data->igelfs->end = 0;
+   data->igelfs->type = type;
+   data->igelfs->content = NULL;
++  data->igelfs->kernel_type_end = kernel_type_end;
++  data->igelfs->kernel_fsnum = kernel_fsnum;
++  data->igelfs->kernel_2nd_fsnum = kernel_2nd_fsnum;
++  data->igelfs->ramdisk_fsnum = ramdisk_fsnum;
+ 
+   if (type == KERNEL) {
++    grub_off_t max_size;
+     data->igelfs->offset_kernel = offset_kernel;
+     data->igelfs->offset_ramdisk = offset_ramdisk;
++    data->igelfs->offset_2nd_kernel = offset_2nd_kernel;
+     data->igelfs->size_kernel = size_kernel;
+-    data->igelfs->size_ramdisk = size_kernel;
++    data->igelfs->size_ramdisk = size_ramdisk;
++    data->igelfs->size_2nd_kernel = size_2nd_kernel;
++    max_size = offset_kernel + size_kernel;
++    if (offset_2nd_kernel + size_2nd_kernel > max_size)
++      max_size = offset_2nd_kernel + size_2nd_kernel;
++    if (offset_ramdisk + size_ramdisk)
++      max_size = offset_ramdisk + size_ramdisk;
++
++    /* init section offset correctly */
++    sect_offset = get_igelfs_section_offset (disk, max_size, type);
+ 
+     return data;
+   } else if (type == SPLASH) {
+@@ -749,6 +859,9 @@ grub_igelfs_mount (grub_disk_t disk)
+     data->size = extent[ext].length;
+     data->dofs = extent[ext].offset;
+ 
++    /* init section offset correctly */
++    sect_offset = get_igelfs_section_offset (disk, data->size + data->dofs, type);
++
+     /* check if there is a PNG header, if so the splash was found */
+ 
+     if (splash_hdr.magic[0] == 0x89 && splash_hdr.magic[1] == 0x50
+@@ -978,7 +1091,7 @@ grub_igelfs_read (grub_file_t file, char
+ 
+   // get offset array
+ 
+-  sect_offset = get_igelfs_section_offset (data->disk, data->size, data->igelfs->type);
++  sect_offset = get_igelfs_section_offset (data->disk, 0, data->igelfs->type);
+ 
+   if (sect_offset == NULL)
+     return -1;

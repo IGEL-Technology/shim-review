@@ -1,0 +1,3550 @@
+From 9a957d45181accbfad70a3993399ce1cf302374c Mon Sep 17 00:00:00 2001
+From: Alexander Kulow <kulow@igel.com>
+Date: Wed, 19 Feb 2020 14:42:23 +0100
+Subject: [PATCH] Apply changes to patch
+
+---
+ grub-core/Makefile.core.am  |  214 ++++-
+ grub-core/Makefile.core.def |   12 +
+ grub-core/fs/bootregfs.c    | 1816 +++++++++++++++++++++++++++++++++++
+ grub-core/fs/igelfs.c       | 1074 +++++++++++++++++++++
+ include/grub/bootregfs.h    |  233 +++++
+ 5 files changed, 3340 insertions(+), 9 deletions(-)
+ create mode 100644 grub-core/fs/bootregfs.c
+ create mode 100644 grub-core/fs/igelfs.c
+ create mode 100644 include/grub/bootregfs.h
+
+--- a/grub-core/Makefile.core.am
++++ b/grub-core/Makefile.core.am
+@@ -7200,6 +7200,29 @@ CLEANFILES += hexdump.marker
+ hexdump.marker: $(hexdump_module_SOURCES) $(nodist_hexdump_module_SOURCES)
+ 	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hexdump_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
+ 	grep 'MARKER' $@.new > $@; rm -f $@.new
++
++if COND_i386_pc
++platform_PROGRAMS += hwmatch.module
++MODULE_FILES += hwmatch.module$(EXEEXT)
++hwmatch_module_SOURCES  = commands/i386/pc/hwmatch.c  ## platform sources
++nodist_hwmatch_module_SOURCES  =  ## platform nodist sources
++hwmatch_module_LDADD  = 
++hwmatch_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) $(CFLAGS_POSIX) $(CFLAGS_GNULIB) 
++hwmatch_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
++hwmatch_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) $(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) 
++hwmatch_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
++hwmatch_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_hwmatch_module_SOURCES)
++CLEANFILES += $(nodist_hwmatch_module_SOURCES)
++MOD_FILES += hwmatch.mod
++MARKER_FILES += hwmatch.marker
++CLEANFILES += hwmatch.marker
++
++hwmatch.marker: $(hwmatch_module_SOURCES) $(nodist_hwmatch_module_SOURCES)
++	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hwmatch_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
++	grep 'MARKER' $@.new > $@; rm -f $@.new
++endif
+ platform_PROGRAMS += keystatus.module
+ MODULE_FILES += keystatus.module$(EXEEXT)
+ keystatus_module_SOURCES  = commands/keystatus.c  ## platform sources
+@@ -11833,6 +11856,26 @@ CLEANFILES += xfs.marker
+ xfs.marker: $(xfs_module_SOURCES) $(nodist_xfs_module_SOURCES)
+ 	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xfs_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
+ 	grep 'MARKER' $@.new > $@; rm -f $@.new
++platform_PROGRAMS += igelfs.module
++MODULE_FILES += igelfs.module$(EXEEXT)
++igelfs_module_SOURCES  = fs/igelfs.c fs/bootregfs.c  ## platform sources
++nodist_igelfs_module_SOURCES  =  ## platform nodist sources
++igelfs_module_LDADD  = 
++igelfs_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
++igelfs_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
++igelfs_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
++igelfs_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
++igelfs_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_igelfs_module_SOURCES)
++CLEANFILES += $(nodist_igelfs_module_SOURCES)
++MOD_FILES += igelfs.mod
++MARKER_FILES += igelfs.marker
++CLEANFILES += igelfs.marker
++
++igelfs.marker: $(igelfs_module_SOURCES) $(nodist_igelfs_module_SOURCES)
++	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(igelfs_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
++	grep 'MARKER' $@.new > $@; rm -f $@.new
+ platform_PROGRAMS += zfs.module
+ MODULE_FILES += zfs.module$(EXEEXT)
+ zfs_module_SOURCES  = fs/zfs/zfs.c fs/zfs/zfs_lzjb.c fs/zfs/zfs_lz4.c fs/zfs/zfs_sha256.c fs/zfs/zfs_fletcher.c  ## platform sources
+@@ -12583,7 +12626,7 @@ endif
+ if COND_i386_efi
+ platform_PROGRAMS += relocator.module
+ MODULE_FILES += relocator.module$(EXEEXT)
+-relocator_module_SOURCES  = lib/i386/relocator_asm.S lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/efi/relocator.c lib/relocator.c  ## platform sources
++relocator_module_SOURCES  = lib/i386/relocator_asm.S lib/efi/relocator.c lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/relocator.c  ## platform sources
+ nodist_relocator_module_SOURCES  =  ## platform nodist sources
+ relocator_module_LDADD  = 
+ relocator_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
+@@ -12698,7 +12741,7 @@ endif
+ if COND_x86_64_efi
+ platform_PROGRAMS += relocator.module
+ MODULE_FILES += relocator.module$(EXEEXT)
+-relocator_module_SOURCES  = lib/x86_64/efi/relocator.c lib/x86_64/relocator_asm.S lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/efi/relocator.c lib/relocator.c  ## platform sources
++relocator_module_SOURCES  = lib/x86_64/efi/relocator.c lib/x86_64/relocator_asm.S lib/efi/relocator.c lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/relocator.c  ## platform sources
+ nodist_relocator_module_SOURCES  =  ## platform nodist sources
+ relocator_module_LDADD  = 
+ relocator_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
+@@ -15403,6 +15446,52 @@ appleldr.marker: $(appleldr_module_SOURC
+ 	grep 'MARKER' $@.new > $@; rm -f $@.new
+ endif
+ 
++if COND_i386_efi
++platform_PROGRAMS += linuxefi.module
++MODULE_FILES += linuxefi.module$(EXEEXT)
++linuxefi_module_SOURCES  = loader/i386/efi/linux.c  ## platform sources
++nodist_linuxefi_module_SOURCES  =  ## platform nodist sources
++linuxefi_module_LDADD  = 
++linuxefi_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
++linuxefi_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
++linuxefi_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
++linuxefi_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
++linuxefi_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_linuxefi_module_SOURCES)
++CLEANFILES += $(nodist_linuxefi_module_SOURCES)
++MOD_FILES += linuxefi.mod
++MARKER_FILES += linuxefi.marker
++CLEANFILES += linuxefi.marker
++
++linuxefi.marker: $(linuxefi_module_SOURCES) $(nodist_linuxefi_module_SOURCES)
++	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(linuxefi_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
++	grep 'MARKER' $@.new > $@; rm -f $@.new
++endif
++
++if COND_x86_64_efi
++platform_PROGRAMS += linuxefi.module
++MODULE_FILES += linuxefi.module$(EXEEXT)
++linuxefi_module_SOURCES  = loader/i386/efi/linux.c  ## platform sources
++nodist_linuxefi_module_SOURCES  =  ## platform nodist sources
++linuxefi_module_LDADD  = 
++linuxefi_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
++linuxefi_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
++linuxefi_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
++linuxefi_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
++linuxefi_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_linuxefi_module_SOURCES)
++CLEANFILES += $(nodist_linuxefi_module_SOURCES)
++MOD_FILES += linuxefi.mod
++MARKER_FILES += linuxefi.marker
++CLEANFILES += linuxefi.marker
++
++linuxefi.marker: $(linuxefi_module_SOURCES) $(nodist_linuxefi_module_SOURCES)
++	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(linuxefi_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
++	grep 'MARKER' $@.new > $@; rm -f $@.new
++endif
++
+ if COND_i386_pc
+ platform_PROGRAMS += chain.module
+ MODULE_FILES += chain.module$(EXEEXT)
+@@ -15636,7 +15725,7 @@ endif
+ if COND_i386_efi
+ platform_PROGRAMS += mmap.module
+ MODULE_FILES += mmap.module$(EXEEXT)
+-mmap_module_SOURCES  = mmap/i386/uppermem.c mmap/i386/mmap.c mmap/efi/mmap.c mmap/mmap.c  ## platform sources
++mmap_module_SOURCES  = mmap/efi/mmap.c mmap/i386/uppermem.c mmap/i386/mmap.c mmap/mmap.c  ## platform sources
+ nodist_mmap_module_SOURCES  =  ## platform nodist sources
+ mmap_module_LDADD  = 
+ mmap_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
+@@ -15751,7 +15840,7 @@ endif
+ if COND_x86_64_efi
+ platform_PROGRAMS += mmap.module
+ MODULE_FILES += mmap.module$(EXEEXT)
+-mmap_module_SOURCES  = mmap/i386/uppermem.c mmap/i386/mmap.c mmap/efi/mmap.c mmap/mmap.c  ## platform sources
++mmap_module_SOURCES  = mmap/efi/mmap.c mmap/i386/uppermem.c mmap/i386/mmap.c mmap/mmap.c  ## platform sources
+ nodist_mmap_module_SOURCES  =  ## platform nodist sources
+ mmap_module_LDADD  = 
+ mmap_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
+@@ -16177,6 +16266,26 @@ CLEANFILES += part_bsd.marker
+ part_bsd.marker: $(part_bsd_module_SOURCES) $(nodist_part_bsd_module_SOURCES)
+ 	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(part_bsd_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
+ 	grep 'MARKER' $@.new > $@; rm -f $@.new
++platform_PROGRAMS += part_igel.module
++MODULE_FILES += part_igel.module$(EXEEXT)
++part_igel_module_SOURCES  = partmap/igel.c partmap/directory.c  ## platform sources
++nodist_part_igel_module_SOURCES  =  ## platform nodist sources
++part_igel_module_LDADD  = 
++part_igel_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
++part_igel_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
++part_igel_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
++part_igel_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
++part_igel_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_part_igel_module_SOURCES)
++CLEANFILES += $(nodist_part_igel_module_SOURCES)
++MOD_FILES += part_igel.mod
++MARKER_FILES += part_igel.marker
++CLEANFILES += part_igel.marker
++
++part_igel.marker: $(part_igel_module_SOURCES) $(nodist_part_igel_module_SOURCES)
++	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(part_igel_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
++	grep 'MARKER' $@.new > $@; rm -f $@.new
+ platform_PROGRAMS += part_sunpc.module
+ MODULE_FILES += part_sunpc.module$(EXEEXT)
+ part_sunpc_module_SOURCES  = partmap/sunpc.c  ## platform sources
+@@ -16905,7 +17014,7 @@ endif
+ if COND_i386_efi
+ platform_PROGRAMS += serial.module
+ MODULE_FILES += serial.module$(EXEEXT)
+-serial_module_SOURCES  = term/ns8250.c term/efi/serial.c term/serial.c  ## platform sources
++serial_module_SOURCES  = term/efi/serial.c term/ns8250.c term/serial.c  ## platform sources
+ nodist_serial_module_SOURCES  =  ## platform nodist sources
+ serial_module_LDADD  = 
+ serial_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
+@@ -17020,7 +17129,7 @@ endif
+ if COND_x86_64_efi
+ platform_PROGRAMS += serial.module
+ MODULE_FILES += serial.module$(EXEEXT)
+-serial_module_SOURCES  = term/ns8250.c term/efi/serial.c term/serial.c  ## platform sources
++serial_module_SOURCES  = term/efi/serial.c term/ns8250.c term/serial.c  ## platform sources
+ nodist_serial_module_SOURCES  =  ## platform nodist sources
+ serial_module_LDADD  = 
+ serial_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
+@@ -22782,6 +22891,29 @@ gcry_whirlpool.marker: $(gcry_whirlpool_
+ 	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(gcry_whirlpool_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
+ 	grep 'MARKER' $@.new > $@; rm -f $@.new
+ 
++if COND_i386_pc
++platform_PROGRAMS += 915resolution.module
++MODULE_FILES += 915resolution.module$(EXEEXT)
++915resolution_module_SOURCES  = contrib/915resolution/915resolution.c  ## platform sources
++nodist_915resolution_module_SOURCES  =  ## platform nodist sources
++915resolution_module_LDADD  = 
++915resolution_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
++915resolution_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
++915resolution_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
++915resolution_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
++915resolution_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_915resolution_module_SOURCES)
++CLEANFILES += $(nodist_915resolution_module_SOURCES)
++MOD_FILES += 915resolution.mod
++MARKER_FILES += 915resolution.marker
++CLEANFILES += 915resolution.marker
++
++915resolution.marker: $(915resolution_module_SOURCES) $(nodist_915resolution_module_SOURCES)
++	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(915resolution_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
++	grep 'MARKER' $@.new > $@; rm -f $@.new
++endif
++
+ if COND_emu
+ platform_PROGRAMS += kernel.exec
+ kernel_exec_SOURCES  = 
+@@ -22829,7 +22961,7 @@ endif
+ if COND_i386_efi
+ platform_PROGRAMS += kernel.exec
+ kernel_exec_SOURCES  = kern/i386/efi/startup.S 
+-kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/i386/efi/init.c bus/pci.c kern/i386/dl.c kern/i386/tsc.c kern/i386/tsc_pit.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c 
++kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/i386/efi/init.c bus/pci.c kern/i386/dl.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/i386/tsc.c kern/i386/tsc_pit.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c  
+ nodist_kernel_exec_SOURCES  = symlist.c  ## platform nodist sources
+ kernel_exec_LDADD  = 
+ kernel_exec_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_KERNEL) 
+@@ -22939,7 +23071,7 @@ endif
+ if COND_x86_64_efi
+ platform_PROGRAMS += kernel.exec
+ kernel_exec_SOURCES  = kern/x86_64/efi/startup.S 
+-kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/x86_64/efi/callwrap.S kern/i386/efi/init.c bus/pci.c kern/x86_64/dl.c kern/i386/tsc.c kern/i386/tsc_pit.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c 
++kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/x86_64/efi/callwrap.S kern/i386/efi/init.c bus/pci.c kern/x86_64/dl.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/i386/tsc.c kern/i386/tsc_pit.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c 
+ nodist_kernel_exec_SOURCES  = symlist.c  ## platform nodist sources
+ kernel_exec_LDADD  = 
+ kernel_exec_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_KERNEL) 
+@@ -23687,6 +23819,69 @@ fwstart_fuloong2f.img: fwstart_fuloong2f
+ 	
+ endif
+ 
++if COND_i386_pc
++platform_PROGRAMS += g2hdr.image
++g2hdr_image_SOURCES  = contrib/ntldr-img/g2hdr.S 
++nodist_g2hdr_image_SOURCES  = ## platform nodist sources
++g2hdr_image_LDADD  = 
++g2hdr_image_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_IMAGE) 
++g2hdr_image_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_IMAGE) $(TARGET_IMG_LDFLAGS) $(TARGET_IMG_BASE_LDOPT),0x0 
++g2hdr_image_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_IMAGE) 
++g2hdr_image_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_IMAGE) 
++g2hdr_image_OBJCOPYFLAGS  = $(OBJCOPYFLAGS_IMAGE) -O binary 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_g2hdr_image_SOURCES)
++CLEANFILES += $(nodist_g2hdr_image_SOURCES)
++platform_DATA += g2hdr.img
++CLEANFILES += g2hdr.img
++
++g2hdr.img: g2hdr.image$(EXEEXT)
++	if test x$(TARGET_APPLE_LINKER) = x1; then   $(MACHO2IMG) $< $@; else   $(TARGET_OBJCOPY) $(g2hdr_image_OBJCOPYFLAGS) --strip-unneeded -R .note -R .comment -R .note.gnu.build-id -R .MIPS.abiflags -R .reginfo -R .rel.dyn -R .note.gnu.gold-version -R .ARM.exidx $< $@; fi
++	
++endif
++
++if COND_i386_pc
++platform_PROGRAMS += grldr.image
++grldr_image_SOURCES  = contrib/ntldr-img/grldrstart.S contrib/ntldr-img/ntfsbs.S 
++nodist_grldr_image_SOURCES  = ## platform nodist sources
++grldr_image_LDADD  = 
++grldr_image_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_IMAGE) 
++grldr_image_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_IMAGE) $(TARGET_IMG_LDFLAGS) $(TARGET_IMG_BASE_LDOPT),0x7c00 
++grldr_image_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_IMAGE) 
++grldr_image_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_IMAGE) -DGRLDR_MBR 
++grldr_image_OBJCOPYFLAGS  = $(OBJCOPYFLAGS_IMAGE) -O binary 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_grldr_image_SOURCES)
++CLEANFILES += $(nodist_grldr_image_SOURCES)
++platform_DATA += grldr.img
++CLEANFILES += grldr.img
++
++grldr.img: grldr.image$(EXEEXT)
++	if test x$(TARGET_APPLE_LINKER) = x1; then   $(MACHO2IMG) $< $@; else   $(TARGET_OBJCOPY) $(grldr_image_OBJCOPYFLAGS) --strip-unneeded -R .note -R .comment -R .note.gnu.build-id -R .MIPS.abiflags -R .reginfo -R .rel.dyn -R .note.gnu.gold-version -R .ARM.exidx $< $@; fi
++	
++endif
++
++if COND_i386_pc
++platform_PROGRAMS += g2ldr.image
++g2ldr_image_SOURCES  = contrib/ntldr-img/grldrstart.S contrib/ntldr-img/ntfsbs.S 
++nodist_g2ldr_image_SOURCES  = ## platform nodist sources
++g2ldr_image_LDADD  = 
++g2ldr_image_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_IMAGE) 
++g2ldr_image_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_IMAGE) $(TARGET_IMG_LDFLAGS) $(TARGET_IMG_BASE_LDOPT),0x7c00 
++g2ldr_image_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_IMAGE) 
++g2ldr_image_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_IMAGE) -DGRLDR_MBR -DBOOTGRUB2 
++g2ldr_image_OBJCOPYFLAGS  = $(OBJCOPYFLAGS_IMAGE) -O binary 
++dist_noinst_DATA += 
++BUILT_SOURCES += $(nodist_g2ldr_image_SOURCES)
++CLEANFILES += $(nodist_g2ldr_image_SOURCES)
++platform_DATA += g2ldr.img
++CLEANFILES += g2ldr.img
++
++g2ldr.img: g2ldr.image$(EXEEXT)
++	if test x$(TARGET_APPLE_LINKER) = x1; then   $(MACHO2IMG) $< $@; else   $(TARGET_OBJCOPY) $(g2ldr_image_OBJCOPYFLAGS) --strip-unneeded -R .note -R .comment -R .note.gnu.build-id -R .MIPS.abiflags -R .reginfo -R .rel.dyn -R .note.gnu.gold-version -R .ARM.exidx $< $@; fi
++	
++endif
++
+ if COND_emu
+ bin_PROGRAMS += grub-emu
+ if COND_MAN_PAGES
+@@ -23792,3 +23987,4 @@ CLEANFILES += bootinfo.txt
+ EXTRA_DIST += 
+ dist_noinst_DATA += boot/powerpc/bootinfo.txt.in 
+ endif
++include contrib/ntldr-img/Makefile.core.common
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -1559,6 +1559,12 @@ module = {
+ };
+ 
+ module = {
++  name = igelfs;
++  common = fs/igelfs.c;
++  common = fs/bootregfs.c;
++};
++
++module = {
+   name = zfs;
+   common = fs/zfs/zfs.c;
+   common = fs/zfs/zfs_lzjb.c;
+@@ -2018,6 +2024,12 @@ module = {
+ };
+ 
+ module = {
++  name = part_igel;
++  common = partmap/igel.c;
++  common = partmap/directory.c;
++};
++
++module = {
+   name = part_sunpc;
+   common = partmap/sunpc.c;
+ };
+--- /dev/null
++++ b/grub-core/fs/bootregfs.c
+@@ -0,0 +1,1874 @@
++/* vim:set softtabstop=0 shiftwidth=4 tabstop=4 expandtab autoindent: */
++#define _LARGEFILE64_SOURCE
++#define _LARGEFILE_SOURCE
++
++#ifdef GRUB_MACHINE
++#include <grub/bootregfs.h>
++#include <grub/misc.h>
++#else
++#include "bootregfs.h"
++#endif
++#define BOOTREG_EOF "EOF"
++
++
++/* logging macro */
++static BOOTREG_LOG_LEVEL g_bootreg_log_lvl = BOOTREG_LOG_NONE;
++
++#if 1
++#define LOG_FILENAME (GWRAP_STRRCHR(__FILE__, '/') ? GWRAP_STRRCHR(__FILE__, '/') + 1 : __FILE__)
++#define _logging_macro(lvl, format, ...) \
++	bootreg_log(lvl, LOG_FILENAME, __PRETTY_FUNCTION__, __LINE__, format, ##__VA_ARGS__);
++
++static const char* bootreg_log_to_txt(BOOTREG_LOG_LEVEL lvl)
++{
++	switch (lvl) {
++	case BOOTREG_LOG_DEBUG:
++		return "Debug";
++	case BOOTREG_LOG_INFO:
++		return "Info";
++	case BOOTREG_LOG_ERROR:
++		return "Error";
++	default:
++		return "";
++	}
++	return "";
++}
++
++__attribute__((format(printf, 5, 6)))
++static void bootreg_log(BOOTREG_LOG_LEVEL lvl, const char *filename, const char *function, size_t line, const char *const format, ...)
++{
++	char buffer[1024];
++	va_list args;
++
++	if(g_bootreg_log_lvl < lvl)
++		return;
++
++	va_start(args, format);
++	GWRAP_VSNPRINTF(buffer, sizeof(buffer)-1, format, args);
++#ifdef DEBUG
++	GWRAP_FPRINTF(stderr, "[%s] (%s) %s (%zu): %s", bootreg_log_to_txt(lvl), filename, function, line, buffer);
++#else
++	(void) filename; // tell compiler that variables are not used intentionally
++	(void) line;
++	GWRAP_FPRINTF(stderr, "[%s] %s: %s", bootreg_log_to_txt(lvl), function, buffer);
++#endif
++	va_end(args);
++}
++#else
++#define _logging_macro(chan, format, args...) (void)0
++#endif // ENABLELOG
++
++/* Logging macros, if ENABLELOG is not active nothing will be inserted in code */
++#define bLogErr(format, ...)       \
++	do                                      \
++	{                                       \
++		_logging_macro(BOOTREG_LOG_ERROR, format, ##__VA_ARGS__) \
++	} while (0)
++#define bLogInfo(format, ...)       \
++	do                                      \
++	{                                       \
++		_logging_macro(BOOTREG_LOG_INFO, format, ##__VA_ARGS__) \
++	} while (0)
++#define bLogDebug(format, ...)       \
++	do                                      \
++	{                                       \
++		_logging_macro(BOOTREG_LOG_DEBUG, format, ##__VA_ARGS__) \
++	} while (0)
++
++
++extern char* __gpurpose_strtok(char* input, const char* delim, char** rest_str, uint8_t sep){
++	static char* gpurp_internal_ptr = NULL;
++	char* ptr_backup = NULL;
++	char* token = NULL;
++	int i,j;
++	if(sep == 1){
++		ptr_backup = gpurp_internal_ptr;
++	}
++	if(input != NULL)
++	{
++		gpurp_internal_ptr = input;
++	}
++	if(delim == NULL || gpurp_internal_ptr == NULL){
++		*rest_str = NULL;
++		return NULL;
++	}
++
++	i = 0;
++	while(gpurp_internal_ptr[i] != '\0')
++	{
++		j = 0;
++		while(delim[j] != '\0'){
++			if(gpurp_internal_ptr[i] == delim[j]) // found token
++			{
++				gpurp_internal_ptr[i] = '\0';
++				if(i == 0 && gpurp_internal_ptr[i+1] != '\0'){
++					gpurp_internal_ptr++;
++					i--;
++					break;
++				}
++				else if(gpurp_internal_ptr[i+1] != '\0'){
++					token = gpurp_internal_ptr;
++					gpurp_internal_ptr = gpurp_internal_ptr+i+1;
++					*rest_str = gpurp_internal_ptr;
++				}
++				else{
++					gpurp_internal_ptr = NULL;
++				}
++				if(sep == 1){
++					gpurp_internal_ptr = ptr_backup;
++				}
++				return token;
++			}
++			j++;
++		}
++		i++;
++	}
++	token = gpurp_internal_ptr;
++	gpurp_internal_ptr = NULL;
++	*rest_str = gpurp_internal_ptr;
++	if(sep == 1){
++		gpurp_internal_ptr = ptr_backup;
++	}
++	return token;
++}
++#ifdef GRUB_MACHINE
++char* GWRAP_STRTOK(char* input, const char* delim){
++	void* unused;
++	return __gpurpose_strtok(input, delim, (char**)&unused, 0);
++}
++
++char* GWRAP_STRSEP(char** str, const char* delim){
++	char* rest_str=NULL;
++	char* token;
++	if(*str != NULL){
++		token = __gpurpose_strtok(*str, delim, &rest_str, 1);
++		*str = rest_str;
++		return token;
++	}
++	else
++		return NULL;
++}
++
++#endif
++
++/* helper functions */
++static uint8_t block_is_dir(struct igel_bootreg_header *hdr, int16_t block);
++#ifndef GRUB_MACHINE
++static uint8_t block_is_used(struct igel_bootreg_header *hdr, int16_t block);
++static void unset_dir(struct igel_bootreg_header *hdr, int16_t block);
++static void set_dir(struct igel_bootreg_header *hdr, uint8_t len, int16_t block);
++static void mark_unused(struct igel_bootreg_header *hdr, int16_t block);
++static void mark_used(struct igel_bootreg_header *hdr, int16_t block);
++static void use_block(struct igel_bootreg_header *hdr, int16_t block);
++static void free_block(struct igel_bootreg_header *hdr, int16_t block);
++static int reserve_free_blocks(struct igel_bootreg_header *hdr, int16_t *index, int16_t blocks);
++static int16_t find_free_block(struct igel_bootreg_header *hdr, int16_t *index, int16_t blocks);
++static void free_entries(struct igel_bootreg_header *hdr, int16_t index);
++#endif
++static char *get_key_from_index(struct igel_bootreg_header *hdr, int16_t index);
++static char *read_entry(struct igel_bootreg_header *hdr, int16_t index);
++static int16_t search_key(struct igel_bootreg_header *hdr, const char *key, int cleanup);
++static char *read_key(struct igel_bootreg_header *hdr, const char *key);
++static void free_key_values(bootreg_keyval_list_t *list);
++#ifndef GRUB_MACHINE
++static int print_entry(struct igel_bootreg_header *hdr, int16_t index);
++static int dir_indexes(struct igel_bootreg_header *hdr, int16_t block, int16_t **blocks);
++#endif
++/*
++ * function to print out bootreg data and some internal structs for debugging
++ */
++#ifndef GRUB_MACHINE
++static void debug_hdr(struct igel_bootreg_header *hdr)
++{
++	int16_t i;
++	uint8_t used;
++	int16_t *blocks = NULL;
++	int count, c;
++	char *key = NULL;
++
++	assert(hdr);
++
++	GWRAP_PRINTF("Bootreg Lock: %s\n", (hdr->flags & BOOTREG_FLAG_LOCK) ? "true" : "false");
++
++	for (i = 0; i < IGEL_BOOTREG_ENTRY_LEN; i++)
++	{
++		used = block_is_used(hdr, i);
++		if (used == 1)
++		{
++			GWRAP_PRINTF("index %3.3d : is marked as nonfree WARN: but not as used or dir\n", (int)i);
++		}
++		else if (used > 1)
++		{
++			GWRAP_PRINTF("index %3.3d : ", (int)i);
++			if (used & 0x4)
++			{
++				if ((used & 0x2) && (used & 0x1))
++				{
++					GWRAP_PRINTF("is the start of a entry and probably marked as nonfree and used\n");
++				}
++				else if (!(used & 0x2) && (used & 0x1))
++				{
++					GWRAP_PRINTF("is the start of a entry and probably marked as nonfree WARN: but not as used\n");
++				}
++				else if ((used & 0x2) && !(used & 0x1))
++				{
++					GWRAP_PRINTF("is the start of a entry and probably marked as used WARN: but not as nonfree\n");
++				}
++				key = get_key_from_index(hdr, i);
++				count = dir_indexes(hdr, i, &blocks);
++				if (count == 1)
++				{
++					if (key)
++					{
++						GWRAP_PRINTF("            entry %s only uses one data block.\n", key);
++					}
++					else
++					{
++						GWRAP_PRINTF("            entry ? only uses one data block.\n");
++					}
++				}
++				else if (count > 1)
++				{
++					if (key)
++					{
++						GWRAP_PRINTF("            entry %s uses %d additional data blocks (", key, (int)(count - 1));
++					}
++					else
++					{
++						GWRAP_PRINTF("            entry ? only uses %d additional data block (", (int)(count - 1));
++					}
++					for (c = 0; c < count; c++)
++					{
++						if (i != blocks[c])
++						{
++							GWRAP_PRINTF("%3.3d", blocks[c]);
++							if ((c + 1) < count)
++							{
++								GWRAP_PRINTF(", ");
++							}
++							else
++							{
++								GWRAP_PRINTF(")\n");
++							}
++						}
++					}
++				}
++				if (count > 0 && blocks)
++				{
++					GWRAP_FREE(blocks);
++					blocks = NULL;
++				}
++				GWRAP_PRINTF("            %s = \"", key);
++				print_entry(hdr, i);
++				GWRAP_PRINTF("\"\n");
++				if (key)
++				{
++					GWRAP_FREE(key);
++					key = NULL;
++				}
++			}
++			else if (used & 0x2)
++			{
++				if (used & 0x1)
++				{
++					GWRAP_PRINTF("is marked as used and nonfree\n");
++				}
++				else
++				{
++					GWRAP_PRINTF("is marked as used WARN: but not as nonfree\n");
++				}
++			}
++		}
++	}
++}
++
++
++/*
++ * function will return number of indexes used by a dir entry and fills a int16_t ** array with the indexes
++ */
++static int dir_indexes(struct igel_bootreg_header *hdr, int16_t block, int16_t **blocks)
++{
++	int16_t i = 0, t = 0, count = 0 , *mem = NULL;
++
++	*blocks = NULL;
++	assert(hdr);
++
++	if (block >= IGEL_BOOTREG_ENTRY_LEN || block < 0)
++	{
++		bLogErr("Given index %d exeeds limits (0 - 503).\n", (int)block);
++		return -1;
++	}
++
++	if (!block_is_dir(hdr, block))
++	{
++		bLogErr("Given block %d is not a index containing the start of a entry.\n", (int)block);
++		return -1;
++	}
++
++	count = 0;
++	i = (int16_t)block;
++	while (i >= 0)
++	{
++		if (hdr->entry[i].flag & 0x0040)
++		{
++			t = hdr->entry[i].flag >> 7;
++		}
++		else
++		{
++			t = -1;
++		}
++		count++;
++		i = t;
++	}
++
++	mem = GWRAP_MALLOC(count * sizeof(int16_t));
++	if (!mem)
++	{
++		bLogErr("Failed to allocate %lu bytes of memory.\n", (unsigned long)(count * sizeof(int16_t)));
++		return -ENOMEM;
++	}
++	count = 0;
++	i = (int16_t)block;
++	mem[count] = i;
++
++	while (i >= 0)
++	{
++		if (hdr->entry[i].flag & 0x0040)
++		{
++			t = hdr->entry[i].flag >> 7;
++		}
++		else
++		{
++			t = -1;
++		}
++		count++;
++		i = t;
++		if (i > 0)
++			mem[count] = i;
++	}
++
++	*blocks = mem;
++
++	return count;
++}
++#endif // no debug/alloc feature in GRUB, read-only!
++
++#ifndef GRUB_MACHINE
++/*
++ * create a empty bootreg
++ */
++static int create_bootreg(char *data, uint8_t encryptionAlgo)
++{
++	struct igel_bootreg_header *hdr;
++
++	if (!data)
++	{
++		return -1;
++	}
++
++	GWRAP_MEMSET(data, 0, 0x8000);
++
++	hdr = (struct igel_bootreg_header *)data;
++
++	GWRAP_MEMCPY(hdr->ident_legacy, BOOTREG_IDENT, 17);
++	GWRAP_MEMCPY(hdr->magic, BOOTREG_MAGIC, 4);
++	GWRAP_MEMSET(hdr->free, 0xff, 64);
++	hdr->hdr_version = 0x01;
++	hdr->enc_alg = encryptionAlgo;
++	msync(data, 0x8000, MS_SYNC);
++	return 0;
++}
++
++static void lock_hdr(struct igel_bootreg_header *hdr)
++{
++	hdr->flags = BOOTREG_FLAG_LOCK;
++}
++
++static void unlock_hdr(struct igel_bootreg_header *hdr)
++{
++	hdr->flags &= ~BOOTREG_FLAG_LOCK;
++}
++
++static int reserve_free_blocks(struct igel_bootreg_header *hdr, int16_t *index, int16_t blocks)
++{
++	for (int i = 0; i < blocks; i++)
++	{
++		index[i] = find_free_block(hdr, index, blocks);
++
++		if (index[i] < 0)
++		{
++			bLogErr("No free block in bootreg available anymore.\n");
++			return -1;
++		}
++		use_block(hdr, index[i]);
++	}
++
++	return 0;
++}
++
++static int check_reserved_block(int16_t *index, int16_t blocks, int16_t block)
++{
++	for (int i = 0; i < blocks; i++)
++	{
++		if (index[i] == block)
++		{
++			bLogDebug("block already used %d\n", block);
++			return -1; // already reserved
++		}
++	}
++	return 0;
++}
++
++/*
++ * function to get free blocks where new keys could be saved to
++ * if the free bitmap has no free blocks it is tried to cleanup to get new free blocks
++ *
++ * function will return the index of the igel_bootreg_entry or -1 if no free entry is available
++ */
++static int16_t find_free_block(struct igel_bootreg_header *hdr, int16_t *index, int16_t blocks)
++{
++	int16_t i = 0, v = 0, f = 0;
++	uint8_t t = 0;
++	char *key = NULL;
++
++	assert(hdr);
++
++	for (i = 0; i < 64; i++)
++	{
++		if (hdr->free[i] == 0x00)
++			continue;
++		v = i << 3;
++		t = 0x80;
++		while ((!(hdr->free[i] & t)) && t > 0)
++		{
++			v++;
++			t = t >> 1;
++		}
++
++		if (v >= IGEL_BOOTREG_ENTRY_LEN)
++			break;
++
++		/* Note that whole blocks of 8 slots are skipped if evaluates to true! */
++		if (t != 0 && check_reserved_block(index, blocks, v) == 0)
++			return v;
++	}
++
++	/* if no free blocks are available try to cleanup */
++
++	f = -1;
++	for (i = 0; i < 64; i++)
++	{
++		if (hdr->used[i] == 0xFF)
++			continue;
++		v = i << 3;
++		t = 0x80;
++		while (((hdr->used[i] & t) ||
++				((v & 0x1) && (hdr->dir[v >> 1] & 0x0f)) ||
++				(!(v & 0x1) && (hdr->dir[v >> 1] & 0xf0))) &&
++			   t > 0)
++		{
++			v++;
++			t = t >> 1;
++		}
++
++		if (v >= IGEL_BOOTREG_ENTRY_LEN)
++			break;
++
++		if (t != 0 && check_reserved_block(index, blocks, v) == 0)
++		{
++			if (f < 0)
++			{
++				f = v;
++			}
++			free_block(hdr, v);
++		}
++	}
++
++	/* still no free blocks, try to remove double key entries */
++
++	if (f < 0)
++	{
++		for (i = 0; i < IGEL_BOOTREG_ENTRY_LEN; i++)
++		{
++			if (block_is_dir(hdr, i))
++			{
++				key = get_key_from_index(hdr, i);
++				if (key == NULL)
++				{
++					if (-1 == check_reserved_block(index, blocks, i << 3))
++						continue;
++					free_entries(hdr, i);
++					if (f < 0)
++					{
++						f = i << 3;
++					}
++				}
++				else
++				{
++					t = search_key(hdr, key, 1);
++					GWRAP_FREE(key);
++					key = NULL;
++				}
++			}
++		}
++		if (f > 0)
++		{
++			return f;
++		}
++
++		for (i = 0; i < IGEL_BOOTREG_ENTRY_LEN; i++)
++		{
++			if (-1 == check_reserved_block(index, blocks, i << 3))
++				continue;
++			if (!block_is_used(hdr, i))
++			{
++				return i;
++			}
++		}
++	}
++
++	return f;
++}
++#endif
++
++/*
++ * dump all keys with values out of the bootregistry
++ */
++static bootreg_keyval_list_t *dump_all_keys(struct igel_bootreg_header *hdr, uint8_t dump)
++{
++	int16_t i;
++	char *key = NULL, *value = NULL;
++	bootreg_keyval_list_t *key_value_list = NULL;
++	bootreg_keyval_list_t *prev_key_value = NULL;
++	bootreg_keyval_list_t *this_key_value;
++
++	assert(hdr);
++
++	if (dump)
++	{
++		/* Create new key/value pair */
++		this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++		if (!this_key_value)
++		{
++			free_key_values(key_value_list);
++			return NULL;
++		}
++		this_key_value->key = GWRAP_STRDUP(hdr->ident_legacy);
++		this_key_value->value = NULL;
++		this_key_value->next = NULL;
++		if (!key_value_list)
++			key_value_list = this_key_value;
++		if (prev_key_value)
++			prev_key_value->next = this_key_value;
++		prev_key_value = this_key_value;
++	}
++
++	/* Create new key/value pair */
++	this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++	if (!this_key_value)
++	{
++		free_key_values(key_value_list);
++		return NULL;
++	}
++	this_key_value->key = GWRAP_STRDUP("boot_id");
++	this_key_value->value = GWRAP_STRDUP(hdr->boot_id);
++	this_key_value->next = NULL;
++	if (!key_value_list)
++		key_value_list = this_key_value;
++	if (prev_key_value)
++		prev_key_value->next = this_key_value;
++	prev_key_value = this_key_value;
++
++	for (i = 0; i < IGEL_BOOTREG_ENTRY_LEN; i++)
++	{
++		if (block_is_dir(hdr, i))
++		{
++			key = get_key_from_index(hdr, i);
++			if (key)
++			{
++				value = read_entry(hdr, i);
++
++				this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++				if (!this_key_value)
++				{
++					free_key_values(key_value_list);
++					return NULL;
++				}
++				this_key_value->key = key;
++				this_key_value->value = value;
++				this_key_value->next = NULL;
++				if (!key_value_list)
++					key_value_list = this_key_value;
++				if (prev_key_value)
++					prev_key_value->next = this_key_value;
++				prev_key_value = this_key_value;
++			}
++		}
++	}
++	if (dump)
++	{
++		/* Create new key/value pair */
++		this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++		if (!this_key_value)
++		{
++			free_key_values(key_value_list);
++			return NULL;
++		}
++		this_key_value->key = GWRAP_STRDUP(BOOTREG_EOF);
++		this_key_value->value = NULL;
++		this_key_value->next = NULL;
++		if (!key_value_list)
++			key_value_list = this_key_value;
++		if (prev_key_value)
++			prev_key_value->next = this_key_value;
++	}
++
++	return key_value_list;
++}
++
++/*
++ * Helper function to handle the bitmaps, not needed for GRUB
++ */
++#ifndef GRUB_MACHINE
++static void free_block(struct igel_bootreg_header *hdr, int16_t block)
++{
++	uint8_t t;
++
++	assert(hdr);
++
++	t = 0x80 >> (block % 8);
++
++	hdr->free[block >> 3] |= t;
++	msync((char *)&(hdr->free), 64, MS_ASYNC);
++}
++
++static void use_block(struct igel_bootreg_header *hdr, int16_t block)
++{
++	uint8_t t;
++
++	assert(hdr);
++
++	t = 0x80 >> (block % 8);
++
++	hdr->free[block >> 3] &= ~(t);
++	msync((char *)&(hdr->free), 64, MS_ASYNC);
++}
++
++static void mark_used(struct igel_bootreg_header *hdr, int16_t block)
++{
++	uint8_t t;
++
++	assert(hdr);
++
++	t = 0x80 >> (block % 8);
++
++	hdr->used[block >> 3] |= t;
++	msync((char *)&(hdr->used), 64, MS_ASYNC);
++}
++
++static void mark_unused(struct igel_bootreg_header *hdr, int16_t block)
++{
++	uint8_t t;
++
++	assert(hdr);
++
++	t = 0x80 >> (block % 8);
++
++	hdr->used[block >> 3] &= ~(t);
++	msync((char *)&(hdr->used), 64, MS_ASYNC);
++}
++
++static void set_dir(struct igel_bootreg_header *hdr, uint8_t len, int16_t block)
++{
++	assert(hdr);
++	if (block & 0x1)
++		hdr->dir[block >> 1] |= (len & 0x0f);
++	else
++		hdr->dir[block >> 1] |= (len << 4);
++
++	msync((char *)&(hdr->dir[block >> 1]), 1, MS_SYNC);
++}
++
++static void unset_dir(struct igel_bootreg_header *hdr, int16_t block)
++{
++	assert(hdr);
++
++	if (block & 0x1)
++		hdr->dir[block >> 1] &= 0xf0;
++	else
++		hdr->dir[block >> 1] &= 0x0f;
++
++	msync((char *)&(hdr->dir[block >> 1]), 1, MS_SYNC);
++}
++
++// end non-GRUB functions
++
++
++
++static uint8_t block_is_used(struct igel_bootreg_header *hdr, int16_t block)
++{
++	uint8_t ret, t;
++
++	assert(hdr);
++
++	ret = 0;
++
++	t = 0x80 >> (block % 8);
++
++	if (!(hdr->free[block >> 3] & t))
++	{
++		ret |= 0x01;
++	}
++
++	if (hdr->used[block >> 3] & t)
++	{
++		ret |= 0x02;
++	}
++
++	if (block_is_dir(hdr, block))
++	{
++		ret |= 0x04;
++	}
++
++	return ret;
++}
++#endif
++
++static uint8_t block_is_dir(struct igel_bootreg_header *hdr, int16_t block)
++{
++	assert(hdr);
++
++	if (block & 0x1)
++	{
++		if (hdr->dir[block >> 1] & 0x0f)
++			return 1;
++	}
++	else
++	{
++		if (hdr->dir[block >> 1] & 0xf0)
++			return 1;
++	}
++
++	return 0;
++}
++
++static void free_key_values(bootreg_keyval_list_t *list)
++{
++	bootreg_keyval_list_t *this_key_value;
++
++	if (list == NULL)
++		return;
++
++	do
++	{
++		this_key_value = list->next;
++		if (list->key)
++			GWRAP_FREE(list->key);
++		if (list->value)
++			GWRAP_FREE(list->value);
++		if (list)
++			GWRAP_FREE(list);
++		list = this_key_value;
++	} while ((this_key_value != NULL));
++}
++
++/*
++ * legacy function to read read all key values from page
++ */
++static bootreg_keyval_list_t *read_key_values(const char *page, uint8_t dump)
++{
++	char *line = NULL;
++	char delimiter[] = "\n";
++	char *s;
++	char *this_key;
++	char *this_value;
++	bootreg_keyval_list_t *key_value_list = NULL;
++	bootreg_keyval_list_t *prev_key_value = NULL;
++	bootreg_keyval_list_t *this_key_value;
++
++	char *ptr = GWRAP_STRDUP(page);
++	if (ptr == NULL)
++		return NULL;
++
++	line = GWRAP_STRTOK(ptr, delimiter);
++
++	if (GWRAP_STRCMP(line, BOOTREG_IDENT) != 0)
++	{
++		GWRAP_FREE(ptr);
++		return NULL;
++	}
++
++	if (dump)
++	{
++		/* Create new key/value pair */
++		this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++		if (!this_key_value)
++		{
++			free_key_values(key_value_list);
++			return NULL;
++		}
++		this_key_value->key = GWRAP_STRDUP(line);
++		this_key_value->value = NULL;
++		this_key_value->next = NULL;
++		if (!key_value_list)
++			key_value_list = this_key_value;
++		if (prev_key_value)
++			prev_key_value->next = this_key_value;
++		prev_key_value = this_key_value;
++	}
++
++	while (line != NULL)
++	{
++		line = GWRAP_STRTOK(NULL, delimiter);
++		if (line == NULL)
++		{
++			GWRAP_PRINTF("End\n");
++			break;
++		}
++		/* Check for end of boot registry */
++		if (line[0] == '\0')
++		{ /* ASCII Zero delimits our bootreg area */
++			break;
++		}
++		/* Check if we've reached the EOF mark */
++		if (GWRAP_STRCMP(line, BOOTREG_EOF) == 0)
++		{
++			if (dump)
++			{
++				/* Create new key/value pair */
++				this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++				if (!this_key_value)
++				{
++					free_key_values(key_value_list);
++					return NULL;
++				}
++				this_key_value->key = GWRAP_STRDUP(line);
++				this_key_value->value = NULL;
++				this_key_value->next = NULL;
++				if (!key_value_list)
++					key_value_list = this_key_value;
++				if (prev_key_value)
++					prev_key_value->next = this_key_value;
++			}
++			break;
++		}
++		/* Seperate key and value */
++		s = line;
++
++		this_key = GWRAP_STRSEP(&s, "=\n");
++		if (!this_key)
++		{
++			continue;
++		}
++		this_value = GWRAP_STRSEP(&s, "\n");
++		if (!this_value)
++		{
++			continue;
++		}
++
++		/* Create and append new key/value pair */
++		this_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++		if (!this_key_value)
++		{
++			GWRAP_FREE(ptr);
++			free_key_values(key_value_list);
++			return NULL;
++		}
++		this_key_value->key = GWRAP_STRDUP(this_key);
++		this_key_value->value = GWRAP_STRDUP(this_value);
++		this_key_value->next = NULL;
++		if (!key_value_list)
++			key_value_list = this_key_value;
++		if (prev_key_value)
++			prev_key_value->next = this_key_value;
++		prev_key_value = this_key_value;
++	}
++
++	GWRAP_FREE(ptr);
++	return key_value_list;
++}
++
++#ifndef GRUB_MACHINE
++/*
++ * legacy function to write all key values to page
++ */
++static int write_key_values(char *page, bootreg_keyval_list_t *key_values)
++{
++
++	ssize_t pos = 0;
++	size_t len = 0;
++	bootreg_keyval_list_t *current_key_value;
++	pos += GWRAP_SNPRINTF(page, GWRAP_STRLEN(BOOTREG_IDENT) + 2, "%s\n", BOOTREG_IDENT);
++
++	current_key_value = key_values;
++	while (current_key_value)
++	{
++		len = GWRAP_STRLEN(current_key_value->key) + GWRAP_STRLEN(current_key_value->value) + 2; // 2^= "=\n"
++		if (pos + len >= IGEL_BOOTREG_SIZE)
++		{
++			return -1;
++		}
++		pos += GWRAP_SNPRINTF(&page[pos], len + 1, "%s=%s\n", current_key_value->key, current_key_value->value);
++		current_key_value = current_key_value->next;
++	}
++
++	if (pos + GWRAP_STRLEN(BOOTREG_EOF) + 2 >= IGEL_BOOTREG_SIZE)
++	{
++		return -1;
++	}
++
++	pos += GWRAP_SNPRINTF(&page[pos], GWRAP_STRLEN(BOOTREG_EOF) + 2, "%s\n", BOOTREG_EOF);
++	page[pos] = '\0'; /* mark as end */
++
++	msync(page, pos, MS_SYNC);
++
++	return 0;
++}
++
++static int write_value_legacy(char *page, const char *key, const char *value)
++{
++	bootreg_keyval_list_t *key_values;
++	bootreg_keyval_list_t *prev_key_value = NULL;
++	bootreg_keyval_list_t *current_key_value;
++	int ret;
++
++	/* Read all keys to a list */
++	key_values = read_key_values(page, 0);
++	/* Check if the key already exists */
++	prev_key_value = NULL;
++	current_key_value = key_values;
++	while (current_key_value)
++	{
++		if ((GWRAP_STRNCMP(key, "boot_id", 7) == 0) && (GWRAP_STRNCMP(current_key_value->key, "boot_id", 7) == 0) && (GWRAP_STRCMP(current_key_value->value, "INVALID") != 0)) /* boot_id is write once */
++		{
++			bLogErr("Key boot_id exists and cannot be written.\n");
++			return -1;
++		}
++		if (GWRAP_STRCMP(key, "installation_date") == 0 && GWRAP_STRCMP(current_key_value->key, "installation_date") == 0) /* installation_date is write once */
++		{
++			bLogErr("Key installation_date exists and cannot be written.\n");
++			return -1;
++		}
++		if (GWRAP_STRCMP(current_key_value->key, key) == 0)
++		{
++			/* Key is found, so replace the existing value with the new one */
++			GWRAP_FREE(current_key_value->value);
++			current_key_value->value = GWRAP_STRDUP(value);
++			break;
++		}
++		prev_key_value = current_key_value;
++		current_key_value = current_key_value->next;
++	}
++	/* If the key does not exist, append a new one */
++	if (!current_key_value)
++	{
++		/* Create and append new key/value pair */
++		current_key_value = GWRAP_MALLOC(sizeof(bootreg_keyval_list_t));
++		if (!current_key_value)
++		{
++			free_key_values(key_values);
++			return -1;
++		}
++		current_key_value->key = GWRAP_STRDUP(key);
++		current_key_value->value = GWRAP_STRDUP(value);
++		current_key_value->next = NULL;
++		if (!key_values)
++			key_values = current_key_value;
++		if (prev_key_value)
++			prev_key_value->next = current_key_value;
++	}
++
++	/* Write out the modified key/value list */
++	ret = write_key_values(page, key_values);
++	free_key_values(key_values);
++	return ret;
++}
++
++/*
++ * Write a new bootreg value, this use a "copy" on write scheme which means the old value is left where it is
++ * and the after the new entry was written will get deleted so there is always a valid value present.
++ *
++ * return 0 if successful
++ */
++static int write_value(struct igel_bootreg_header *hdr, const char *key, const char *value)
++{
++	uint32_t len = 0;
++	char *buf = NULL;
++	int16_t *ind = NULL;
++	int blk_to_use = 0, i = 0;
++	int16_t old_key = 0;
++	uint8_t key_len = 0;
++	char empty[21];
++	char invalid[21];
++
++	assert(hdr);
++
++	GWRAP_MEMSET(empty, 0x0 , sizeof(empty) );
++	GWRAP_MEMSET(invalid, '\0', sizeof(invalid));
++	strcpy(invalid, "INVALID");
++
++	key_len = (uint8_t)(GWRAP_STRLEN(key) & 0x3f);
++	if (key_len > 61)
++	{
++		bLogErr("Key is to long only up to 61 characters are allowed (len is %u)\n", (unsigned)key_len);
++		return -1;
++	}
++	else if (key_len == 0)
++	{
++		bLogErr("Given key is empty.\n");
++		return -1;
++	}
++
++	if (key_len == 7 && GWRAP_STRNCMP(key, "boot_id", 7) == 0)
++	{
++		if (memcmp(empty, hdr->boot_id, 21) != 0 && GWRAP_STRCMP(invalid, hdr->boot_id) != 0)
++		{
++			bLogErr("The key boot_id is write protected if it was set already, write is disallowed.\n");
++			return -1;
++		}
++		GWRAP_MEMCPY(hdr->boot_id, value, 21);
++		msync(&(hdr->boot_id), 21, MS_SYNC);
++		return 0;
++	}
++	if (key_len == 17 && GWRAP_STRNCMP(key, "installation_date", 17) == 0)
++	{
++		buf = read_key(hdr,key);
++		if (buf != NULL && GWRAP_STRCMP(buf, "") != 0)
++		{
++			bLogErr("The key installation_date is write protected if it was set already, write is disallowed.\n");
++			if (buf != NULL){
++				GWRAP_FREE(buf);
++			}
++			return -1;
++		}
++		if (buf != NULL){
++			GWRAP_FREE(buf);
++		}
++	}
++
++	blk_to_use = (key_len + GWRAP_STRLEN(value) + 1 + 61) / 62;
++	len = blk_to_use * 62;
++	buf = GWRAP_MALLOC(len * sizeof(char));
++	if (!buf)
++	{
++		bLogErr("Failed to allocate %u bytes.\n", len);
++		return -ENOMEM;
++	}
++	ind = (int16_t *)GWRAP_MALLOC(blk_to_use * sizeof(int16_t));
++
++	if (!ind)
++	{
++		GWRAP_FREE(buf);
++		bLogErr("Failed to allocate %zu bytes.\n", blk_to_use * sizeof(int16_t));
++		return -ENOMEM;
++	}
++	GWRAP_MEMSET(buf, 0x0, len);
++	/* Set index as non used -> -1, otherwise, check_reserved_block assumes used block */
++	GWRAP_MEMSET(ind, -1, blk_to_use * sizeof(int16_t));
++
++	GWRAP_SNPRINTF(buf, len, "%s%s", key, value);
++
++	
++	old_key = search_key(hdr, key, 1);
++
++	if (0 != reserve_free_blocks(hdr, ind, blk_to_use))
++	{
++		GWRAP_FREE(buf);
++		GWRAP_FREE(ind);
++		bLogErr("No free block in bootreg available anymore.\n");
++		return -1;
++	}
++
++	for (i = 0; i < blk_to_use; i++)
++	{
++		if (i > 0)
++		{
++			hdr->entry[ind[i - 1]].flag |= (ind[i] << 7 | 0x40);
++			hdr->entry[ind[i]].flag = 0;
++		}
++		else
++		{
++			if (key_len > 62)
++			{
++				hdr->entry[ind[i]].flag = 0x3f;
++			}
++			else
++			{
++				hdr->entry[ind[i]].flag = 0 | (key_len & 0x3f);
++			}
++		}
++		GWRAP_MEMCPY(hdr->entry[ind[i]].data, buf + (uintptr_t)(i * 62), 62);
++	}
++
++	for (i = 0; i < blk_to_use; i++)
++	{
++		msync((char *)&(hdr->entry[ind[i]]), 64, MS_SYNC);
++		mark_used(hdr, ind[i]);
++	}
++
++	set_dir(hdr, key_len, ind[0]);
++
++	if (old_key >= 0)
++		free_entries(hdr, old_key);
++
++	GWRAP_FREE(ind);
++	GWRAP_FREE(buf);
++	return 0;
++}
++
++static int del_key_legacy(char *page, const char *key)
++{
++	bootreg_keyval_list_t *key_values;
++	bootreg_keyval_list_t *prev_key_value = NULL;
++	bootreg_keyval_list_t *current_key_value;
++
++	/* Read all keys to a list */
++	key_values = read_key_values(page, 0);
++	/* Check if the key already exists */
++	prev_key_value = NULL;
++	current_key_value = key_values;
++	while (current_key_value)
++	{
++		if ((GWRAP_STRNCMP(key, "boot_id", 7) == 0)) /* boot_id is write once */
++		{
++			bLogErr("Key boot_id exists and cannot be deleted.\n");
++			return -1;
++		}
++		if ((GWRAP_STRNCMP(key, "installation_date", 17) == 0)) /* installation_date is write once */
++		{
++			bLogErr("Key installation_date exists and cannot be deleted.\n");
++			return -1;
++		}
++		if (GWRAP_STRCMP(current_key_value->key, key) == 0)
++		{
++			if (prev_key_value)
++			{
++				prev_key_value->next = current_key_value->next;
++			}
++			else
++			{
++				key_values = current_key_value->next;
++			}
++			/* Key is found, so delete it */
++			GWRAP_FREE(current_key_value->key);
++			GWRAP_FREE(current_key_value->value);
++			GWRAP_FREE(current_key_value);
++			break;
++		}
++		prev_key_value = current_key_value;
++		current_key_value = current_key_value->next;
++	}
++	/* Write out the modified key/value list */
++	write_key_values(page, key_values);
++
++	return 0;
++}
++
++/*
++ * delete a given key
++ */
++static int del_key(struct igel_bootreg_header *hdr, const char *key)
++{
++	int16_t ind;
++	uint8_t key_len;
++
++	assert(hdr);
++
++	key_len = (uint8_t)(GWRAP_STRLEN(key) & 0x3f);
++
++	if (key_len > 61)
++	{
++		bLogErr("Key is to long only up to 61 characters are allowed (len is %u)\n", (unsigned)key_len);
++		return -1;
++	}
++	else if (key_len == 0)
++	{
++		bLogErr("Given key is empty.\n");
++		return -1;
++	}
++
++	if (key_len == 7 && GWRAP_STRNCMP(key, "boot_id", 7) == 0)
++	{
++		bLogErr("The boot_id key is write protected so you can not delete it.\n");
++		return 0;
++	}
++	if (key_len == 17 && GWRAP_STRNCMP(key, "installation_date", 17) == 0)
++	{
++		bLogErr("The installation_date key is write protected so you can not delete it.\n");
++		return 0;
++	}
++
++	ind = search_key(hdr, key, 0);
++	if (ind < 0)
++	{
++		bLogErr("Key %s was not found.\n", key);
++		return -1;
++	}
++
++	free_entries(hdr, ind);
++	return 0;
++}
++#endif
++/*
++ * read a entry from bootreg for the given key
++ *
++ * return the value as string which must be freed later
++ * returns "" if no key was found, must be freed also
++ * returns NULL if failure or key not present
++ */
++static char *read_key_legacy(const char *page, const char *key)
++{
++	char *line = NULL;
++	char delimiter[] = "\n";
++	char *s = NULL;
++	char *this_key = NULL;
++	char *this_value = NULL;
++	char *retval = NULL;
++	size_t page_len = GWRAP_STRLEN(page);
++	char *ptr = GWRAP_MALLOC(page_len + 1);
++	if (ptr == NULL)
++		return NULL;
++
++	GWRAP_MEMSET(ptr, 0x00, page_len + 1);
++	GWRAP_MEMCPY(ptr, page, page_len + 1);
++
++	line = GWRAP_STRTOK(ptr, delimiter);
++
++	if (GWRAP_STRCMP(line, BOOTREG_IDENT) != 0)
++	{
++		GWRAP_FREE(ptr);
++		return NULL;
++	}
++	line = GWRAP_STRTOK(NULL, delimiter);
++
++	while (line != NULL)
++	{
++		if (line[0] == '\0')
++		{ /* ASCII Zero delimits our bootreg area */
++			break;
++		}
++
++		if (GWRAP_STRCMP(line, BOOTREG_EOF) == 0)
++		{
++			break;
++		}
++		s = line;
++		this_key = GWRAP_STRSEP(&s, "=\n");
++		#ifdef GRUB_MACHINE
++		grub_dprintf("igelfs", "scanning bootreg key=%s",this_key);
++		#endif
++		if (this_key && (GWRAP_STRCMP(key, this_key) == 0))
++		{
++			this_value = GWRAP_STRSEP(&s, "\n");
++			#ifdef GRUB_MACHINE
++			grub_dprintf("igelfs", "key=%s, value=%s",this_key, this_value);
++			#endif
++			if (this_value)
++			{
++				retval = GWRAP_STRDUP(this_value);
++				GWRAP_FREE(ptr);
++				return retval; /* MATCH FOUND */
++			}
++		}
++		line = GWRAP_STRTOK(NULL, delimiter);
++	}
++
++	GWRAP_FREE(ptr);
++	return NULL; /* NO MATCH FOUND */
++}
++
++/*
++ * read a entry from bootreg for the given key
++ *
++ * return the value as string which must be freed later
++ * returns "" if no key was found, must be freed also
++ * returns NULL if failure or key not present
++ */
++static char *read_key(struct igel_bootreg_header *hdr, const char *key)
++{
++	int16_t ind;
++	uint8_t key_len;
++
++	key_len = (uint8_t)(GWRAP_STRLEN(key) & 0x3f);
++
++	if (key_len > 61)
++	{
++		bLogErr("Key is to long only up to 61 characters are allowed (len is %u)\n", (unsigned)key_len);
++		return NULL;
++	}
++	else if (key_len == 0)
++	{
++		bLogErr("Given key is empty.\n");
++		return NULL;
++	}
++
++	if (key_len == 7 && GWRAP_STRNCMP(key, "boot_id", 7) == 0)
++	{
++		return GWRAP_STRNDUP(hdr->boot_id, 21);
++	}
++
++	ind = search_key(hdr, key, 0);
++	if (ind < 0)
++	{
++		bLogErr("Key %s was not found.\n", key);
++		return NULL;
++	}
++	return read_entry(hdr, ind);
++}
++
++/*
++ * get the key name for a given index
++ *
++ * returns the key name which must be freed
++ */
++static char *get_key_from_index(struct igel_bootreg_header *hdr, int16_t index)
++{
++	char buf[63];
++	uint8_t key_len;
++
++	assert(hdr);
++
++	if (index >= IGEL_BOOTREG_ENTRY_LEN || index < 0)
++	{
++		bLogErr("Given index %d exeeds limits (0 - 503).\n", (int)index);
++		return NULL;
++	}
++
++	key_len = (uint8_t)(hdr->entry[index].flag & 0x3f);
++	if (key_len > 62)
++	{
++		bLogErr("Key len %u is bigger then max key len 62, data is invalid.\n", (unsigned)key_len);
++		return NULL;
++	}
++	else if (key_len == 0)
++	{
++		bLogErr("Given index %d is not a valid entry.\n", (int)index);
++		return NULL;
++	}
++
++	GWRAP_MEMSET(buf, 0, sizeof(buf));
++	GWRAP_MEMCPY(buf, hdr->entry[index].data, key_len);
++
++	return GWRAP_STRDUP(buf);
++}
++
++/*
++ * print the entry value for given index
++ */
++#ifndef GRUB_MACHINE
++static int print_entry(struct igel_bootreg_header *hdr, int16_t index)
++{
++	uint32_t len;
++	uint16_t i;
++	char buf[63] = {0}, *p;
++	uint8_t key_len;
++
++	assert(hdr);
++
++	if (index >= IGEL_BOOTREG_ENTRY_LEN || index < 0)
++	{
++		bLogErr("Given index %d exeeds limits (0 - 503).\n", (int)index);
++		return -1;
++	}
++
++	key_len = (uint8_t)(hdr->entry[index].flag & 0x3f);
++	if (key_len > 62)
++	{
++		bLogErr("Key len %u is bigger then max key len 62, data is invalid.\n", (unsigned)key_len);
++		return -1;
++	}
++	else if (key_len == 0)
++	{
++		bLogErr("Given index %d is not a valid entry.\n", (int)index);
++		return -1;
++	}
++	p = (char *)hdr->entry[index].data + (uintptr_t)key_len;
++	len = 62 - key_len;
++	strncpy(buf, p, len);
++	if (!(hdr->entry[index].flag & 0x0040))
++	{
++		if (len == 0)
++		{
++			GWRAP_PRINTF("%s", "");
++			return 0;
++		}
++		GWRAP_PRINTF("%.62s", buf);
++		return 0;
++	}
++
++	GWRAP_PRINTF("%.62s", buf);
++	i = hdr->entry[index].flag >> 7;
++	do
++	{
++		GWRAP_PRINTF("%.62s", hdr->entry[i].data);
++		if (!(hdr->entry[i].flag & 0x0040))
++			break;
++		i = hdr->entry[i].flag >> 7;
++	} while (hdr->entry[i].flag & 0x0040);
++
++	return 0;
++}
++#endif
++
++/*
++ * read entry value for given index
++ *
++ * returns a pointer which must be freed
++ */
++static char *read_entry(struct igel_bootreg_header *hdr, int16_t index)
++{
++	uint32_t len, str_len;
++	int16_t i, o;
++	char *p, *buf;
++	uint8_t key_len;
++
++	assert(hdr);
++
++	if (index >= IGEL_BOOTREG_ENTRY_LEN || index < 0)
++	{
++		bLogErr("Given index %d exeeds limits (0 - 503).\n", (int)index);
++		return NULL;
++	}
++
++	key_len = (uint8_t)(hdr->entry[index].flag & 0x3f);
++	if (key_len > 62)
++	{
++		bLogErr("Key len %u is bigger then max key len 62, data is invalid.\n", (unsigned)key_len);
++		return NULL;
++	}
++	else if (key_len == 0)
++	{
++		bLogErr("Given index %d is not a valid entry.\n", (int)index);
++		return NULL;
++	}
++	p = (char *)hdr->entry[index].data + (uintptr_t)key_len;
++	len = str_len = 62 - key_len;
++	if (!(hdr->entry[index].flag & 0x0040))
++	{
++		if (len == 0)
++		{
++			return GWRAP_STRDUP("");
++		}
++		return GWRAP_STRNDUP(p, 62);
++	}
++
++	i = hdr->entry[index].flag >> 7;
++
++	do
++	{
++		if (hdr->entry[i].data[61] != '\0')
++		{
++			len += 62;
++		}
++		else
++		{
++			len += GWRAP_STRLEN((char *)hdr->entry[i].data);
++			break;
++		}
++		o = i;
++		i = hdr->entry[i].flag >> 7;
++	} while (hdr->entry[o].flag & 0x0040);
++
++	buf = GWRAP_MALLOC((len + 1) * sizeof(char));
++	if (!buf)
++	{
++		bLogErr("Error failed to allocate %d bytes memory.\n", (int)len + 1);
++		return NULL;
++	}
++	GWRAP_MEMSET(buf, 0, len + 1);
++	GWRAP_MEMCPY(buf, p, str_len);
++
++	len -= str_len;
++	i = hdr->entry[index].flag >> 7;
++
++	do
++	{
++		if (len > 62)
++		{
++			GWRAP_MEMCPY(buf + (uintptr_t)str_len, hdr->entry[i].data, 62);
++			str_len += 62;
++			len -= 62;
++		}
++		else
++		{
++			GWRAP_MEMCPY(buf + (uintptr_t)str_len, hdr->entry[i].data, len);
++			str_len += len;
++			len = 0;
++		}
++		i = hdr->entry[i].flag >> 7;
++	} while (len != 0);
++
++	return buf;
++}
++
++/*
++ * search for a given key in the bootregistry
++ *
++ * if cleanup is != 0 an the key is present more then one time all further entries will get cleared
++ *
++ * returns -1 if no key was found or if key is in the bootreg header
++ * returns the bootreg entry index for searched key otherwise
++ */
++static int16_t search_key(struct igel_bootreg_header *hdr, const char *key, int cleanup)
++{
++	uint16_t i;
++	int16_t ind, old_ind;
++	uint8_t key_len;
++
++	assert(hdr);
++
++	key_len = (GWRAP_STRLEN(key) & 0x3f);
++	if (key_len > 61)
++	{
++		bLogErr("Key is to long only up to 61 characters are allowed (len is %u)\n", (unsigned)key_len);
++		return -1;
++	}
++
++	if (key_len == 0)
++	{
++		bLogErr("Key is empty\n");
++		return -1;
++	}
++
++	if ((key_len == 7 && GWRAP_STRNCMP(key, "boot_id", 7) == 0))
++	{
++		return -1;
++	}
++
++	old_ind = ind = -1;
++	for (i = 0; i < 252; i++)
++	{
++		if ((hdr->entry[i].flag & 0x3f) != key_len)
++			continue;
++
++		if (GWRAP_STRNCMP((char *)hdr->entry[i].data, key, key_len) == 0)
++		{
++			#ifndef GRUB_MACHINE // on GRUB, we cannot modify/clean up entries
++			if (cleanup == 0)
++				return i;
++			if (old_ind != -1 && ind != i)
++			{
++				free_entries(hdr, i);
++			}
++			else
++			{
++				old_ind = ind = i;
++			}
++			#else
++				(void) cleanup; // Tell compiler that cleanup is unused intentionally
++				return i;
++			#endif
++		}
++	}
++
++	return ind;
++}
++#ifndef GRUB_MACHINE
++/*
++ * free entries
++ */
++static void free_entries(struct igel_bootreg_header *hdr, int16_t index)
++{
++	int16_t i, t = -1;
++
++	assert(hdr);
++
++	if (index >= IGEL_BOOTREG_ENTRY_LEN || index < 0)
++	{
++		bLogErr("Given index %d exeeds limits (0 - 503).\n", (int)index);
++		return;
++	}
++
++	i = (int16_t)index;
++	while (i >= 0)
++	{
++		unset_dir(hdr, i);
++		mark_unused(hdr, i);
++		if (hdr->entry[i].flag & 0x0040)
++		{
++			t = hdr->entry[i].flag >> 7;
++		}
++		else
++		{
++			t = -1;
++		}
++		GWRAP_MEMSET(&(hdr->entry[i]), 0, 64);
++		msync((char *)&(hdr->entry[i]), 64, MS_ASYNC);
++		free_block(hdr, i);
++		i = t;
++	}
++}
++
++extern bootreg_data *bootreg_init(const char *filename, BOOTREG_PROT readonly, BOOTREG_LOG_LEVEL loglvl)
++{
++	bootreg_data *hndl = NULL;
++
++	hndl = GWRAP_MALLOC(sizeof(struct _bootreg_data));
++	if (hndl == NULL)
++		return NULL;
++	GWRAP_MEMSET(hndl, 0, sizeof(struct _bootreg_data));
++
++	hndl->mode = readonly;
++	g_bootreg_log_lvl = loglvl;
++
++	hndl->fd = open(filename, readonly ? O_RDONLY : O_RDWR);
++	if (hndl->fd < 0)
++	{
++		GWRAP_FREE(hndl);
++		return NULL;
++	}
++
++	hndl->page = mmap(NULL,
++					  IGEL_BOOTREG_SIZE, 
++					  readonly ? PROT_READ : PROT_WRITE | PROT_READ,
++					  MAP_SHARED, //TODO MAP_SHARED_VALIDATE | MAP_SYNC with kernel 4.15+ available, maybe only on kernel
++					  hndl->fd,
++					  0);
++	if (hndl->page == MAP_FAILED)
++	{
++		close(hndl->fd);
++		GWRAP_FREE(hndl);
++		return NULL;
++	}
++
++	return hndl;
++}
++
++extern void bootreg_deinit(bootreg_data **hndl)
++{
++	if (hndl == NULL || *hndl == NULL)
++		return;
++
++	bootreg_data *h = *hndl;
++
++	if (h->page != NULL)
++		munmap(h->page, IGEL_BOOTREG_SIZE);
++
++	if (h->fd >= 0)
++	{
++		fsync(h->fd);
++		close(h->fd);
++	}
++
++	GWRAP_FREE(*hndl);
++	*hndl = NULL;
++}
++#endif
++
++extern int bootreg_validate_header(bootreg_data *hndl)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return -1;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (GWRAP_STRNCMP(hdr->ident_legacy, BOOTREG_IDENT, 17) != 0)
++		return 0; /* no bootreg detected */
++
++	if (GWRAP_STRNCMP(hdr->magic, BOOTREG_MAGIC, 4) != 0)
++		return 2; /* old bootreg detected */
++
++	return 1; /* new bootreg detected */
++}
++#ifndef GRUB_MACHINE
++extern int bootreg_reset_header(bootreg_data *hndl, uint8_t encryptionAlgo)
++{
++	if (NULL == hndl || NULL == hndl->page)
++		return -1;
++
++	return create_bootreg(hndl->page, encryptionAlgo);
++}
++
++extern int bootreg_lock_boot(bootreg_data *hndl)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return -1;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (hndl->mode == BOOTREG_RDONLY)
++		return -1;
++
++	if (bootreg_validate_header(hndl) == 1)
++	{
++		if ((hdr->flags & BOOTREG_FLAG_LOCK))
++			return 1;
++		lock_hdr(hdr);
++		return 0;
++	}
++
++	return 1; /* TODO discuss return value, old header version does not support this feature */
++}
++
++extern int bootreg_unlock_boot(bootreg_data *hndl)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return -1;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (hndl->mode == BOOTREG_RDONLY)
++		return -1;
++
++	if (bootreg_validate_header(hndl) == 1)
++	{
++		if (!(hdr->flags & BOOTREG_FLAG_LOCK))
++			return 1;
++		unlock_hdr(hdr);
++		return 0;
++	}
++
++	return 1; /* TODO discuss return value, old header version does not support this feature */
++}
++#endif
++
++extern int bootreg_get(bootreg_data *hndl, const char *key, char **value)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page || NULL == value)
++		return -1;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++	*value = NULL;
++
++	if (bootreg_validate_header(hndl) == 2)
++	{
++		*value = read_key_legacy(hndl->page, key);
++	}
++	else if (bootreg_validate_header(hndl) == 1)
++	{
++		*value = read_key(hdr, key);
++	}
++	else
++	{
++		return -1;
++	}
++
++	if (NULL == *value)
++		return -1;
++
++	return 0;
++}
++#ifndef GRUB_MACHINE
++extern int bootreg_set(bootreg_data *hndl, const char *key, const char *value)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return -1;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (hndl->mode == BOOTREG_RDONLY)
++		return -1;
++
++	if (bootreg_validate_header(hndl) == 2)
++	{
++		if (0 != write_value_legacy(hndl->page, key, value))
++			return -1;
++	}
++	else if (bootreg_validate_header(hndl) == 1)
++	{
++		if (0 != write_value(hdr, key, value))
++			return -1;
++	}
++	else
++		return -1;
++
++	return 0;
++}
++
++extern int bootreg_delete(bootreg_data *hndl, const char *key)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return -1;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (hndl->mode == BOOTREG_RDONLY)
++		return -1;
++
++	if (bootreg_validate_header(hndl) == 2)
++	{
++		if (0 != del_key_legacy(hndl->page, key))
++			return -1;
++	}
++	else if (bootreg_validate_header(hndl) == 1)
++	{
++		if (0 != del_key(hdr, key))
++			return -1;
++	}
++	else
++		return -1;
++
++	return 0;
++}
++
++extern void bootreg_list_free(bootreg_keyval_list_t *list)
++{
++	if (list == NULL)
++		return;
++
++	free_key_values(list);
++}
++#endif
++
++extern bootreg_keyval_list_t *bootreg_list(bootreg_data *hndl, int dump)
++{
++	struct igel_bootreg_header *hdr = NULL;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return NULL;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (bootreg_validate_header(hndl) == 2)
++		return read_key_values(hndl->page, dump); // TODO add dump function BOOTREG+EOF as key
++	else if (bootreg_validate_header(hndl) == 1)
++		return dump_all_keys(hdr, dump);
++
++	return NULL;
++}
++
++
++#ifndef GRUB_MACHINE
++extern void bootreg_debug_output(bootreg_data *hndl)
++{
++	struct igel_bootreg_header *hdr = NULL;
++	bootreg_keyval_list_t *list;
++
++	if (NULL == hndl || NULL == hndl->page)
++		return;
++
++	hdr = (struct igel_bootreg_header *)hndl->page;
++
++	if (bootreg_validate_header(hndl) == 2)
++	{
++		GWRAP_PRINTF("Found Legacy Header, only!\n\n");
++		list = read_key_values(hndl->page, 1);
++		if (list == NULL)
++			return;
++		for (bootreg_keyval_list_t *iter = list; iter != NULL; iter = iter->next)
++		{
++			if (iter->value != NULL)
++				GWRAP_PRINTF("%s=%s\n", iter->key, iter->value);
++			else
++				GWRAP_PRINTF("%s\n", iter->key);
++		}
++		bootreg_list_free(list);
++	}
++	else
++	{
++		debug_hdr(hdr);
++	}
++}
++#endif
+--- /dev/null
++++ b/grub-core/fs/igelfs.c
+@@ -0,0 +1,1074 @@
++/* igelfs.c - igelfs (kernel, splash and config) pseudo filesystem.  */
++/*
++ *  GRUB  --  GRand Unified Bootloader
++ *  Copyright (C) 2007,2008,2009,2013 Free Software Foundation, Inc.
++ *
++ *  This program is free software: you can redistribute it and/or modify
++ *  it under the terms of the GNU General Public License as published by
++ *  the Free Software Foundation, either version 3 of the License, or
++ *  (at your option) any later version.
++ *
++ *  This program is distributed in the hope that it will be useful,
++ *  but WITHOUT ANY WARRANTY; without even the implied warranty of
++ *  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
++ *  GNU General Public License for more details.
++ *
++ *  You should have received a copy of the GNU General Public License
++ *  along with this program.  If not, see <http://www.gnu.org/licenses/>.
++ */
++
++#include <grub/misc.h>
++#include <grub/disk.h>
++#include <grub/archelp.h>
++#include <grub/env.h>
++#include <grub/file.h>
++#include <grub/mm.h>
++#include <grub/dl.h>
++#include <grub/i18n.h>
++#include <grub/partition.h>
++#include <grub/igel_partition.h>
++
++#include <grub/bootregfs.h>
++
++#define  BOOTVERSION 1113
++
++GRUB_MOD_LICENSE ("GPLv3+");
++
++static struct igf_sect_hdr sh;
++static const grub_uint64_t end_section = 0xffffffffffffffff >> ((8 - sizeof(sh.next_section)) * 8);
++extern grub_uint32_t sys_first_section; /* Defined and set in partmap/igel.c */
++extern grub_uint32_t bspl_first_section; /* Defined and set in partmap/igel.c */
++extern grub_uint32_t cbspl_first_section; /* Defined and set in partmap/igel.c */
++void test_and_free(void* ptr);
++enum { NONE, KERNEL, SPLASH, CONFIG };
++
++static grub_err_t igelfs_disk_read (grub_disk_t disk, grub_uint64_t offset, grub_size_t size, void *buf)
++{
++       grub_size_t len, read;
++       grub_err_t ret = 0;
++       grub_uint8_t *buffer;
++       grub_partition_t part = NULL;
++
++       /* Need to access the whole disk (IGEL DOS partition) */
++       /* Therefore we null out the partition infos here from the given disk. */
++       /* Otherwise the grub_disk_read() function might detect an access beyond the end of the device, */
++       /* if the IGEL system partition is fragmented across the IGELs DOS partition. */
++       if(disk->partition) {
++             offset += disk->partition->start << GRUB_DISK_SECTOR_BITS; /* Convert the offset to be disk-relative */
++             part = disk->partition; /* Save the current partition info */
++             disk->partition = NULL; /* Clear the disks partition info temporarily */
++       }
++
++       buffer = (grub_uint8_t *)buf;
++       read = 0;
++       len = size & ~(((grub_size_t)1<<GRUB_DISK_SECTOR_BITS)-1);
++       if (len > 0) {
++           /* it is ridiculus but efidisk seems to have problems if one reads bigger blocks as 32k */
++           while (read < len)
++           {
++               if (len - read > 0x8000) {
++                   ret = grub_disk_read (disk, (offset + read) >> GRUB_DISK_SECTOR_BITS, (offset + read) & ((1<<GRUB_DISK_SECTOR_BITS)-1), 0x8000, &buffer[read]);
++                   read += 0x8000;
++               } else {
++                   ret = grub_disk_read (disk, (offset + read) >> GRUB_DISK_SECTOR_BITS, (offset + read) & ((1<<GRUB_DISK_SECTOR_BITS)-1), len - read, &buffer[read]);
++                   read += len - read;
++               }
++               if (ret < 0) {
++                   disk->partition = part; /* Restore the partition info */
++                   return ret;
++               }
++           }
++       }
++
++       if (len < size) {
++           offset += len;
++           len = size - len;
++           ret = grub_disk_read (disk, offset >> GRUB_DISK_SECTOR_BITS, offset & ((1<<GRUB_DISK_SECTOR_BITS)-1), len, &buffer[read]);
++       }
++
++       disk->partition = part; /* Restore the partition info */
++
++       return ret;
++}
++
++static grub_uint32_t * get_igelfs_section_offset (grub_disk_t disk, grub_off_t data_size, grub_int32_t type)
++{
++	grub_uint32_t sect;
++	grub_uint32_t first_sect;
++	grub_uint32_t i = 1;
++        static grub_uint32_t sect_kernel_offset[MAX_KERNEL_SYS_SECTIONS+1];
++        static grub_uint32_t sect_splash_offset[MAX_KERNEL_SYS_SECTIONS+1];
++        static grub_uint16_t sect_kernel_offset_valid = 0;
++        static grub_uint16_t sect_splash_offset_valid = 0;
++	grub_uint32_t *sect_offset;
++        grub_uint16_t *sect_offset_valid;
++
++        if (type == KERNEL) {
++          grub_dprintf ("igelfs", "kernel: grub_section_offset start\n");
++          sect_offset = (grub_uint32_t *) sect_kernel_offset;
++          if (sect_kernel_offset_valid != 0)
++            return sect_offset;
++          sect_offset_valid = (grub_uint16_t *) &sect_kernel_offset_valid;
++        } else if (type == SPLASH) {
++          grub_dprintf ("igelfs", "splash: grub_section_offset start\n");
++          sect_offset = (grub_uint32_t *) sect_splash_offset;
++          if (sect_splash_offset_valid != 0)
++            return sect_offset;
++          sect_offset_valid = (grub_uint16_t *) &sect_splash_offset_valid;
++        } else {
++          return NULL;
++        }
++
++	igelfs_disk_read (disk, 0, sizeof(struct igf_sect_hdr), &sh);
++
++	sect_offset[0]=0;
++
++        switch(sh.partition_minor) {
++                case 1:   first_sect = sys_first_section;  break;
++                case 23:  first_sect = bspl_first_section;  break;
++                case 252: first_sect = cbspl_first_section; break;
++                default:  first_sect = end_section; break;
++        }
++
++	if (first_sect == end_section)
++		return NULL;
++
++        grub_dprintf ("igelfs", "sect_hdr: magic: 0x%x crc: 0x%x partition_minor: %d sect_in_minor: %d generation: %d next: 0x%x\n", sh.magic, sh.crc, sh.partition_minor, sh.section_in_minor, sh.generation, sh.next_section - first_sect);
++
++	while((sect = sh.next_section) != end_section &&
++		   i <= (grub_uint32_t) (data_size / IGF_SECTION_SIZE) + 1 &&
++		   i <= (grub_uint32_t)  MAX_KERNEL_SYS_SECTIONS)
++	{
++		sect_offset[i] = sect - first_sect;
++		igelfs_disk_read (disk, START_OF_SECTION(sect - first_sect), sizeof(struct igf_sect_hdr), &sh);
++
++		grub_dprintf ("igelfs", "sect_hdr: magic: 0x%x crc: 0x%x partition_minor: %d sect_in_minor: %d generation: %d next: 0x%x\n", sh.magic, sh.crc, sh.partition_minor, sh.section_in_minor, sh.generation, sh.next_section - first_sect);
++
++		i++;
++	}
++
++	sect_offset[i] = end_section;
++	*sect_offset_valid = 1;
++
++        grub_dprintf ("igelfs", "grub_section_offset end\n");
++
++	return sect_offset;
++}
++
++
++
++static grub_uint32_t
++bootreg_get_flags(unsigned char *buf)
++{
++  struct igel_bootreg_header *hdr;
++
++  hdr = (struct igel_bootreg_header *)buf;
++
++  return hdr->flags;
++}
++// GRUB free does not trivially set pointers back to NULL, resulting in double free crashes, simplify program structure by using test_and_free
++void test_and_free(void* ptr){
++  if(ptr != NULL){
++    grub_free(ptr);
++    ptr = NULL;
++  }
++}
++
++
++static grub_err_t
++grub_igelconfig_bootreg_to_config(unsigned char *buf, unsigned char **content)
++{
++  int size_params = 0;
++  char *cmdline = (char *) grub_zalloc(4097); //allocate to heap to avoid unaligned pointer problem
++  char splash[100];
++  char *val = NULL;
++  char *empty = (char *) grub_zalloc(1*sizeof(char));
++  const char *custom_splash;
++  unsigned long value;
++  int bootreg_type = -1;
++  bootreg_data* bt_data = (bootreg_data*) grub_zalloc(sizeof(bootreg_data)); //Use this to wrapper new libbottreg functions, TODO HEap malloc???
++  bt_data->mode = BOOTREG_RDONLY;
++  bt_data->page = (char *) buf;
++
++  grub_dprintf("igelfs", "entering bootreg to config, bootreg_type at 0x%lx, bootreg_data at 0x%lx, ptr 0x%lx\n", (unsigned long)&bootreg_type, (unsigned long)(bt_data), (unsigned long)(&bt_data));
++  grub_dprintf("igelfs", "cmdline at 0x%lx, splash at 0x%lx, empty at 0x%lx\n", (unsigned long) cmdline, (unsigned long) splash, (unsigned long)empty);
++
++  splash[0]='\0';
++
++  grub_memset(cmdline, 0, 4097);
++
++  bootreg_type = bootreg_validate_header(bt_data);
++  grub_dprintf("igelfs", "validate_header returned type %d\n", bootreg_type);
++
++  if(bootreg_type <= 0){
++    test_and_free(cmdline);
++    test_and_free(empty);
++    return 1;
++  }
++  else if(bootreg_type == 1) {
++    /* check if new header has LOCK flag set, if true show only a message and stop boot process */
++    if( bootreg_get_flags(buf) & BOOTREG_FLAG_LOCK ) {
++
++      *content = (unsigned char *) grub_zalloc (1600);
++      if (!content) {
++        return 1;
++      }
++
++      grub_snprintf((char *) *content, 1600, "\
++set timeout=99999\n\
++set timeout_style=menu\n\
++set default=0\n\
++\n\
++menuentry \"Your system is locked!\" {\n\
++          halt\n\
++	  }\n\
++\n\
++menuentry \"Please contact your admin\" {\n\
++          halt\n\
++	  }\n\
++          ");
++      test_and_free(cmdline);
++      test_and_free(empty);
++      return 0;
++    }
++  }
++
++  bootreg_get(bt_data, "boot_id", &val);
++  if (val != NULL){
++    grub_snprintf(cmdline, 4096, " boot_id=%s", val);
++
++    if (grub_strncmp(val,"IGEL_OSC_TO", 11) == 0) {
++      grub_env_set ("splash_ident", "osc");
++    } else if (grub_strncmp(val,"IGEL_UDC_TO", 11) == 0) {
++      grub_env_set ("splash_ident", "udc");
++    } else {
++      test_and_free(val);
++      bootreg_get(bt_data, "product", &val);
++      if (val != NULL){
++        grub_env_set ("splash_ident", val);
++      }
++      else{
++        grub_env_set ("splash_ident", "ud");
++      }
++    }
++    test_and_free(val); //avoid memleak from read_key (boot_id), free is necessary after each read_key call!!!
++  }
++
++  grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " bootversion=%d", BOOTVERSION);
++
++  bootreg_get(bt_data, "noapic", &val);
++  if (val != NULL && val[0] == '1'){
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " noapic");
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "noacpi", &val);
++  if (val != NULL && val[0] == '1'){
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " noacpi");
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "mitigation-nosmt", &val);
++  if (val != NULL && val[0] == '1') {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mitigations=auto,nosmt");
++  } else {
++    test_and_free(val);
++
++    bootreg_get(bt_data, "l1tf-nosmt", &val);
++    if (val != NULL && val[0] == '1') {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " l1tf=flush,nosmt");
++    }
++    test_and_free(val);
++    bootreg_get(bt_data, "mds-nosmt", &val);
++    if (val != NULL && val[0] == '1') {
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " mds=full,nosmt");
++    }
++
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "maxcpus", &val);
++  if (val != NULL && val[0] >= '1' && val[0] <= '9') {
++    value = grub_strtoul (val, NULL, 10);
++    if (!grub_errno)
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " maxcpus=%lu", value);
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "usb-storage_quirks", &val);
++  if (val != NULL) {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " usb-storage.quirks=%s", val);
++  }
++  test_and_free(val);
++  bootreg_get(bt_data, "usbcore_quirks", &val);
++  if (val != NULL) {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " usbcore.quirks=%s", val);
++  }
++  test_and_free(val);
++  bootreg_get(bt_data, "xhci-hcd_quirks", &val);
++  if (val != NULL) {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " xhci-hcd.quirks=%s", val);
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "serial_console_debug", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " console=tty0 console=ttyUSB0,115200n8 console=ttyS0,115200n8");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "nosmp", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " nosmp");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "max_cstate", &val);
++  if (val != NULL && (val[0] == '1' || val[0] == '2' || val[0] == '3' || val[0] == '4' || val[0] == '5' || val[0] == '6'))
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " intel_idle.max_cstate=%c", val[0]);
++
++  test_and_free(val);
++
++
++  bootreg_get(bt_data, "iommu", &val);
++  if (val != NULL && val[0] == 'o' && val[1] == 'f' && val[2] == 'f' && val[3] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " iommu=%s", val);
++  else if (val != NULL && val[0] == 'p' && val[1] == 't' && val[2] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " iommu=%s", val);
++  else if (val != NULL && val[0] == 'o' && val[1] == 'n' && val[2] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " iommu=%s", val);
++  else if (val != NULL && val[0] == 'f' && val[1] == 'o' && val[2] == 'r' && val[3] == 'c' && val[4] == 'e' && val[5] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " iommu=%s", val);
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "amd_iommu", &val);
++  if (val != NULL && val[0] == 'o' && val[1] == 'f' && val[2] == 'f' && val[3] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " amd_iommu=%s", val);
++  else if (val != NULL && val[0] == 'o' && val[1] == 'n' && val[2] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " amd_iommu=%s", val);
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "intel_iommu", &val);
++  if (val != NULL && val[0] == 'o' && val[1] == 'f' && val[2] == 'f' && val[3] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " intel_iommu=%s", val);
++  else if (val != NULL && val[0] == 'o' && val[1] == 'n' && val[2] == '\0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " intel_iommu=%s", val);
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "nomodeset", &val);
++  if (val != NULL && val[0] == '1') {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " nomodeset");
++    test_and_free(val);
++    bootreg_get(bt_data, "rotation", &val);
++    if (val != NULL && val[0] == '1' && val[1] == '8' && val[2] == '0')
++    	grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " fbcon=rotate:2");
++    else if (val != NULL && val[0] == '2' && val[1] == '7' && val[2] == '0')
++    	grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " fbcon=rotate:3");
++    else if (val != NULL && val[0] == '9' && val[1] == '0')
++    	grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " fbcon=rotate:1");
++  }
++  test_and_free(val);
++
++  bootreg_get(bt_data, "use_gma500", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " igel_use_gma500");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "splash", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(splash, 100, "splash=277");
++
++  custom_splash = grub_env_get ("custom_splash");
++  if (custom_splash[0] == 't' && custom_splash[1] == 'r' && custom_splash[2] == 'u' && custom_splash[3] == 'e')
++    grub_snprintf(&splash[grub_strlen(splash)], 100 - grub_strlen(splash), " custom_splash=true");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "boot_cmd", &val);
++  if (val == NULL) {
++    val = empty;
++  }
++  
++  grub_dprintf("igelfs", "right before content malloc\n");
++
++  size_params = grub_strlen(cmdline) + grub_strlen(val) + 2;
++
++  *content = (unsigned char *) grub_zalloc (1600 + (5 * size_params));
++
++  grub_dprintf("igelfs", "content on 0x%lx, pointer to content on 0x%lx, size_params=%d\n", (unsigned long )*content, (unsigned long)content, size_params);
++
++  
++  if (!content) {
++    if(val != NULL){
++      if(val == empty){
++        empty = NULL;
++      }
++      grub_free(val);
++    }
++    test_and_free(cmdline);
++    test_and_free(empty);
++    return 1;
++  }
++
++  grub_dprintf("igelfs", "writing the config\n");
++
++
++  grub_snprintf((char *) *content, 1600 + (5 * size_params), "set timeout=1\n\
++set timeout_style=hidden\n\
++set default=0\n\
++\n\
++insmod regexp\n\
++\n\
++regexp --set=0:dev '(\\(hd[0-9]{1,},)' $cmdpath\n\
++set device=\"${dev}igel1)\"\n\
++set igel_part_check=false\n\
++\n\
++menuentry \"Quiet boot\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	linux	$device/vmlinuz igel_syslog=quiet quiet %s %s\n\
++}\n\
++\n\
++menuentry \"Verbose boot\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	linux	$device/vmlinuz systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
++}\n\
++\n\
++menuentry \"VESA only boot\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	linux	$device/vmlinuz nomodeset igel_syslog=quiet %s %s\n\
++}\n\
++\n\
++menuentry \"Emergency boot (setup only)\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	linux	$device/vmlinuz systemd.unit=igel-emergency-boot.target igel_syslog=emergency quiet %s %s\n\
++}\n\
++\n\
++menuentry \"Failsafe boot with CRC check\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	set igel_part_check=true\n\
++	linux	$device/vmlinuz igel_syslog=quiet failsafe %s\n\
++}\n\
++\n\
++menuentry \"Reset to factory defaults\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	linux	$device/vmlinuz systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
++}\n\
++\n\
++menuentry \"Custom boot command\" {\n\
++	set gfxpayload=keep\n\
++	insmod part_igel\n\
++	linux	$device/vmlinuz igel_syslog=quiet quiet %s %s %s\n\
++}\n", cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++
++  if(val != NULL){
++    if(val == empty){
++      empty = NULL;
++    }
++    grub_free(val);
++  }
++
++  grub_dprintf("igelfs", "finished config write\n");
++  test_and_free(cmdline);
++  test_and_free(empty);
++
++  grub_dprintf("igelfs", "returning from bootreg_to_config\n");
++
++  return 0;
++}
++
++struct grub_igelfs_data
++{
++  grub_uint64_t offset_kernel;
++  grub_uint64_t offset_ramdisk;
++  grub_uint64_t offset_blocks;
++  grub_uint64_t offset_splash;
++  grub_off_t size_kernel;
++  grub_off_t size_ramdisk;
++  grub_uint8_t end;
++  grub_uint8_t noval[7]; // pointer align for content 64 bit
++  unsigned char *content;
++  grub_int32_t type;
++};
++
++struct grub_archelp_data
++{
++  grub_disk_t disk;
++  grub_off_t size;
++  grub_off_t dofs;
++  struct grub_igelfs_data *igelfs;
++};
++
++static grub_err_t
++grub_igelfs_find_file (struct grub_archelp_data *data, char **name,
++		     grub_int32_t *mtime,
++		     grub_uint32_t *mode)
++{
++  grub_dprintf ("igelfs", "grub_igelfs_find_file called\n");
++
++  *mode = GRUB_ARCHELP_ATTR_END;
++
++  if (data == NULL || data->igelfs == NULL)
++    return GRUB_ERR_NONE;
++
++  if (data->igelfs->type == KERNEL) {
++    if (data->igelfs->end == 1 && (data->igelfs->offset_ramdisk == 0
++    || data->igelfs->offset_ramdisk == data->igelfs->offset_blocks
++    || data->igelfs->offset_ramdisk == data->igelfs->offset_kernel) ) {
++      return GRUB_ERR_NONE;
++    } else if (data->igelfs->end >= 2) {
++      return GRUB_ERR_NONE;
++    }
++
++    if (data->igelfs->end == 1) {
++      *name = grub_strdup("initramfs.img");
++      data->dofs = data->igelfs->offset_ramdisk;
++      data->size = data->igelfs->size_ramdisk;
++    } else {
++      *name = grub_strdup("vmlinuz");
++      data->dofs = data->igelfs->offset_kernel;
++      data->size = data->igelfs->size_kernel;
++    }
++
++
++  } else if  (data->igelfs->type == SPLASH || data->igelfs->type == CONFIG) {
++    if (data->igelfs->end) {
++      return GRUB_ERR_NONE;
++    }
++
++    if  (data->igelfs->type == SPLASH) {
++      *name = grub_strdup("splash.png");
++    } else {
++      *name = grub_strdup("igel.conf");
++    }
++  }
++  (void) mtime;
++
++  if (mode)
++    *mode = GRUB_ARCHELP_ATTR_FILE | GRUB_ARCHELP_ATTR_NOTIME;
++
++  data->igelfs->end = data->igelfs->end + 1;
++
++  return GRUB_ERR_NONE;
++}
++
++static void
++grub_igelfs_rewind (struct grub_archelp_data *data)
++{
++  grub_dprintf ("igelfs", "grub_igelfs_rewind called\n");
++  data->igelfs->end = 0;
++}
++
++static struct grub_archelp_ops igelops =
++{
++  .find_file = grub_igelfs_find_file,
++  .rewind = grub_igelfs_rewind
++};
++
++static struct grub_archelp_data *
++grub_igelfs_mount (grub_disk_t disk)
++{
++  struct igf_sect_hdr sect_hdr;
++  struct igf_part_hdr part_hdr;
++  struct grub_archelp_data *data = NULL;
++  struct igf_partition_extent *extent = NULL;
++  struct igel_bootsplash_hdr splash_hdr;
++  struct igel_splash *splash_extent = NULL;
++  const char *splash_ident;
++  grub_uint8_t buf[9];
++  grub_uint8_t ext, sp_ext, i = 0;
++  grub_uint64_t offset_kernel, offset_ramdisk;
++  grub_uint64_t size_kernel = 0, size_ramdisk = 0;
++  unsigned char *bootreg_buf = NULL;
++  grub_int32_t type = NONE;
++
++  grub_dprintf ("igelfs", "grub_igelfs_mount was called\n");
++
++  /* check for msdos and gpt partitions only */
++
++  if (disk == NULL || disk->partition == NULL || disk->partition->partmap == NULL)
++    goto fail;
++
++  if (! grub_strcmp (disk->partition->partmap->name, "msdos")
++  || ! grub_strcmp (disk->partition->partmap->name, "gpt")) {
++    grub_dprintf ("igelfs", "search for igelconfig partition\n");
++
++    bootreg_buf = (unsigned char *) grub_zalloc(IGEL_BOOTREG_SIZE);
++    if (! bootreg_buf)
++      goto fail;
++
++    if (igelfs_disk_read (disk, IGEL_BOOTREG_OFFSET, IGEL_BOOTREG_SIZE, bootreg_buf)) {
++      goto fail;
++    }
++
++    data = (struct grub_archelp_data *) grub_zalloc (sizeof (struct grub_archelp_data));
++    if (!data) {
++      goto fail;
++    }
++
++    data->igelfs = (struct grub_igelfs_data *) grub_zalloc (sizeof (struct grub_igelfs_data));
++    if (!data->igelfs) {
++      goto fail;
++    }
++
++    if (grub_igelconfig_bootreg_to_config(bootreg_buf, &data->igelfs->content) != 0) {
++      goto fail;
++    }
++    grub_dprintf ("igelfs", "got bootreg config\n");
++
++    grub_free(bootreg_buf);
++
++    data->size = grub_strlen((char *) data->igelfs->content);
++
++    data->igelfs->end = 0;
++
++    data->igelfs->type = CONFIG;
++
++    grub_dprintf ("igelfs", "returning data\n");
++    return data;
++  }
++
++  /* check for igel partitions only */
++
++  if (grub_strcmp (disk->partition->partmap->name, "igel"))
++    goto fail;
++
++  grub_dprintf ("igelfs", "search for igel splash/kernel partition\n");
++
++  /* kernel is only present in partition number 0 */
++
++  if (disk->partition->number == 0) {
++    type = KERNEL;
++  /* splash is only present in partition number 22 (igf23) or number 251 (igf252) */
++  } else if (disk->partition->number == 22 || disk->partition->number == 251 ) {
++    type = SPLASH;
++  } else {
++    goto fail;
++  }
++
++  /* read section header and check if partition number match */
++
++  if (igelfs_disk_read (disk, 0, sizeof (sect_hdr), &sect_hdr))
++    goto fail;
++
++  if (sect_hdr.partition_minor != (grub_uint32_t)disk->partition->number + 1)
++    goto fail;
++
++  if (igelfs_disk_read (disk, IGF_SECT_HDR_LEN, sizeof (part_hdr), &part_hdr))
++    goto fail;
++
++  /* if there are no extents then there is also no kernel extent */
++
++  if (part_hdr.n_extents < 1)
++    goto fail;
++
++  /* allocate extent struct an read it from disk */
++
++  extent = (struct igf_partition_extent *) grub_zalloc (part_hdr.n_extents * sizeof (struct igf_partition_extent));
++  if (!extent)
++    goto fail;
++
++  if (igelfs_disk_read (disk, IGF_SECT_HDR_LEN + sizeof (part_hdr), part_hdr.n_extents * sizeof (struct igf_partition_extent), extent))
++    goto fail;
++
++  if (type == SPLASH) {
++    /* check for extent type splash */
++
++    for (ext=0;ext<part_hdr.n_extents;ext++) {
++      if (extent[ext].type == EXTENT_TYPE_SPLASH)
++        break;
++    }
++
++    /* no splash extent found */
++    if (ext == part_hdr.n_extents)
++      goto fail;
++
++    /* no splash partition if offset_extent == offset_blocktable */
++    if (extent[ext].offset == part_hdr.offset_blocktable)
++      goto fail;
++
++    if (igelfs_disk_read(disk, extent[ext].offset + IGF_SECT_HDR_LEN, sizeof(struct igel_bootsplash_hdr), &splash_hdr))
++      goto fail;
++  } else if (type == KERNEL) {
++    offset_kernel = 0;
++    offset_ramdisk = 0;
++
++    /* no kernel partition if offset_kernel == offset_blocktable */
++
++    for (ext=0;ext<part_hdr.n_extents;ext++) {
++      if (extent[ext].type == EXTENT_TYPE_KERNEL) {
++        if (extent[ext].offset != part_hdr.offset_blocktable) {
++          offset_kernel = extent[ext].offset;
++          size_kernel = extent[ext].length;
++        }
++      } else if (extent[ext].type == EXTENT_TYPE_RAMDISK) {
++        if (extent[ext].offset != part_hdr.offset_blocktable) {
++          offset_ramdisk = extent[ext].offset;
++          size_ramdisk = extent[ext].length;
++        }
++      }
++    }
++
++    if (offset_kernel == 0)
++      goto fail;
++  }
++
++  data = (struct grub_archelp_data *) grub_zalloc (sizeof (*data));
++  if (!data)
++    goto fail;
++
++  data->igelfs = (struct grub_igelfs_data *) grub_zalloc (sizeof (struct grub_igelfs_data));
++  if (!data->igelfs) {
++    goto fail;
++  }
++
++  data->disk = disk;
++  data->igelfs->offset_blocks = part_hdr.offset_blocktable;
++  data->igelfs->end = 0;
++  data->igelfs->type = type;
++  data->igelfs->content = NULL;
++
++  if (type == KERNEL) {
++    data->igelfs->offset_kernel = offset_kernel;
++    data->igelfs->offset_ramdisk = offset_ramdisk;
++    data->igelfs->size_kernel = size_kernel;
++    data->igelfs->size_ramdisk = size_kernel;
++
++    return data;
++  } else if (type == SPLASH) {
++    data->igelfs->offset_splash = extent[ext].offset;
++    data->size = extent[ext].length;
++    data->dofs = extent[ext].offset;
++
++    /* check if there is a PNG header, if so the splash was found */
++
++    if (splash_hdr.magic[0] == 0x89 && splash_hdr.magic[1] == 0x50
++        && splash_hdr.magic[2] == 0x4E && splash_hdr.magic[3] == 0x47
++        && splash_hdr.magic[4] == 0xD && splash_hdr.magic[5] == 0xA
++        && splash_hdr.magic[6] == 0x1A && splash_hdr.magic[7] == 0xA) {
++      grub_dprintf ("igelfs", "splash size is (%llu)\n", (unsigned long long) data->size);
++      return data;
++    }
++
++    /* check if the BOOTSPLASH_MAGIC is present and if the splash count is greater
++     * then 0 if not fail */
++
++    if (grub_strncmp ((const char *)splash_hdr.magic, BOOTSPLASH_MAGIC, sizeof(splash_hdr.magic))
++        || splash_hdr.num_splashs == 0)
++      goto fail;
++
++    /* read splash "extents" */
++
++    splash_extent = (struct igel_splash *) grub_zalloc (splash_hdr.num_splashs * sizeof (struct igel_splash));
++    if (!splash_extent)
++      goto fail;
++
++    if (igelfs_disk_read(disk, extent[ext].offset + IGF_SECT_HDR_LEN + sizeof(struct igel_bootsplash_hdr), splash_hdr.num_splashs * sizeof(struct igel_splash), splash_extent))
++      goto fail;
++
++    /* try to get splash from splash_ident env variable (set by igelfs config part) */
++
++    splash_ident = grub_env_get("splash_ident");
++    sp_ext = 0xff;
++    if (splash_ident) {
++      for (i = 0; i < splash_hdr.num_splashs; i++) {
++        if (grub_strncmp(splash_ident, (const char *)splash_extent[i].ident, 8) == 0) {
++          sp_ext = i;
++          break;
++        }
++      }
++    }
++
++    /* if not splash was choosen, try variant ud */
++
++    if (sp_ext == 0xff) {
++      for (i = 0; i < splash_hdr.num_splashs; i++) {
++        if (grub_strncmp((const char *)splash_extent[i].ident, "ud", 8) == 0) {
++          sp_ext = i;
++          break;
++        }
++      }
++    }
++
++    /* if all fails, try first splash present */
++
++    if (sp_ext == 0xff || sp_ext > splash_hdr.num_splashs) {
++      sp_ext = 0;
++    }
++
++    if (igelfs_disk_read(disk, extent[ext].offset + splash_extent[sp_ext].offset + IGF_SECT_HDR_LEN, 8, &buf))
++      goto fail;
++
++    /* check PNG header */
++
++    if (buf[0] != 0x89 || buf[1] != 0x50
++        || buf[2] != 0x4E || buf[3] != 0x47
++        || buf[4] != 0xD || buf[5] != 0xA
++        || buf[6] != 0x1A || buf[7] != 0xA)
++      goto fail;
++
++    if ( splash_extent[sp_ext].length > extent[ext].length ) {
++      grub_dprintf ("igelfs", "splash_extent[sp_ext].length (%llu) > extent[ext].length (%llu) so limit size\n", (unsigned long long) splash_extent[sp_ext].length, (unsigned long long) extent[ext].length);
++      data->size = extent[ext].length;
++    } else {
++      data->size = splash_extent[sp_ext].length;
++    }
++    grub_dprintf ("igelfs", "splash size is (%llu)\n", (unsigned long long) data->size);
++
++    data->dofs = extent[ext].offset + splash_extent[sp_ext].offset;
++
++    return data;
++  }
++
++
++fail:
++  if (extent != NULL) {
++    grub_free(extent);
++    extent = NULL;
++  }
++  if (bootreg_buf != NULL) {
++    grub_free(bootreg_buf);
++    bootreg_buf = NULL;
++  }
++  if (data) {
++    if (data->igelfs) {
++      if (data->igelfs->content) {
++        grub_free(data->igelfs->content);
++        data->igelfs->content = NULL;
++      }
++      grub_free(data->igelfs);
++      data->igelfs = NULL;
++    }
++    grub_free(data);
++    data = NULL;
++  }
++  grub_error (GRUB_ERR_BAD_FS, "not a IGEL kernel, splash or config partition");
++  return NULL;
++}
++
++static grub_err_t
++grub_igelfs_dir (grub_device_t device, const char *path_in,
++	       grub_fs_dir_hook_t hook, void *hook_data)
++{
++
++  struct grub_archelp_data *data;
++  grub_err_t err;
++
++  grub_dprintf ("igelfs", "grub_igelfs_dir was called\n");
++
++  data = grub_igelfs_mount (device->disk);
++  if (!data)
++    return grub_errno;
++
++  grub_dprintf ("igelfs", "grub_igelfs_dir was called further\n");
++
++  err = grub_archelp_dir (data, &igelops,
++			  path_in, hook, hook_data);
++  if (data) {
++    if (data->igelfs) {
++      if (data->igelfs->content) {
++        grub_free(data->igelfs->content);
++        data->igelfs->content = NULL;
++      }
++      grub_free(data->igelfs);
++      data->igelfs = NULL;
++    }
++    grub_free (data);
++    data = NULL;
++  }
++
++  return err;
++}
++
++static grub_err_t
++grub_igelfs_open (grub_file_t file, const char *name_in)
++{
++  struct grub_archelp_data *data;
++  grub_err_t err = -1;
++
++  grub_dprintf ("igelfs", "grub_igelfs_open was called\n");
++
++  grub_dprintf ("igelfs", "grub_igelfs_mount (file->device->disk);\n");
++
++  data = grub_igelfs_mount (file->device->disk);
++  if (!data)
++    return grub_errno;
++
++  grub_dprintf ("igelfs", "grub_archelp_open (data, &igelops, name_in);\n");
++  err = grub_archelp_open (data, &igelops, name_in);
++  if (err)
++  {
++    if (data) {
++      if (data->igelfs) {
++        if (data->igelfs->content) {
++          grub_free(data->igelfs->content);
++          data->igelfs->content = NULL;
++        }
++        grub_free(data->igelfs);
++        data->igelfs = NULL;
++      }
++      grub_free (data);
++      data = NULL;
++    }
++  }
++  else
++  {
++    file->data = data;
++    file->size = data->size;
++  }
++
++  return err;
++}
++
++static grub_ssize_t
++grub_igelfs_read (grub_file_t file, char *buf, grub_size_t len)
++{
++  struct grub_archelp_data *data;
++  grub_ssize_t ret;
++  grub_ssize_t read = 0;
++  grub_size_t length;
++#ifdef __x86_64__
++  grub_uint64_t offset;
++  grub_uint64_t foffset;
++#else
++  grub_uint32_t offset;
++  grub_uint32_t foffset;
++#endif
++  grub_uint32_t sect;
++  grub_uint32_t *sect_offset;
++
++  grub_dprintf ("igelfs", "grub_igelfs_read (file, *buf, len = 0x%llx)\n", (unsigned long long) len);
++  data = file->data;
++
++  // if one tries to read data autoside of usable area
++
++  if (file->offset + len > data->size) {
++    return -1;
++  }
++
++  // config case is a really simple one
++
++  if (data->igelfs->type == CONFIG) {
++    grub_memcpy (buf, &data->igelfs->content[file->offset], len);
++    return len;
++  }
++
++  data->disk->read_hook = file->read_hook;
++  data->disk->read_hook_data = file->read_hook_data;
++
++  // set file read offset
++
++  foffset = (data->dofs + file->offset);
++
++  grub_dprintf ("igelfs", "grub_igelfs_read foffset 0x%llx)\n", (unsigned long long) foffset);
++
++  // check if file offset is beyond MAX_KERNEL_SYS_SECTIONS area
++
++  if (foffset / IGF_SECT_DATA_LEN >= MAX_KERNEL_SYS_SECTIONS - 1)
++    return -1;
++
++  // get offset array
++
++  sect_offset = get_igelfs_section_offset (data->disk, data->size, data->igelfs->type);
++
++  if (sect_offset == NULL)
++    return -1;
++
++  // find begin section to use
++
++  sect = foffset / IGF_SECT_DATA_LEN;
++
++  // calculate real disk/partition offset
++
++  offset = foffset % IGF_SECT_DATA_LEN + START_OF_SECTION(sect_offset[sect]);
++  // adjust read length if len is bigger then the available data in current section
++
++  if (len > (IGF_SECT_DATA_LEN - foffset % IGF_SECT_DATA_LEN)) {
++    length = (IGF_SECT_DATA_LEN - foffset % IGF_SECT_DATA_LEN);
++    grub_dprintf ("igelfs", "grub_igelfs_read foffset len > sect size -> len = 0x%llx length = 0x%llx)\n", (unsigned long long) len, (unsigned long long) length);
++  } else {
++    length = len;
++    grub_dprintf ("igelfs", "grub_igelfs_read foffset len <= sect size -> len = 0x%llx length = 0x%llx)\n", (unsigned long long) len, (unsigned long long) length);
++  }
++
++  while (read < (grub_ssize_t) len) {
++    grub_dprintf ("igelfs", "igelfs_disk_read(data->disk, offset + IGF_SECT_HDR_LEN 0x%llx, length, &buf[read(%lld)])\n", (long long)offset + IGF_SECT_HDR_LEN, (long long)read);
++
++    ret = (igelfs_disk_read(data->disk, offset + IGF_SECT_HDR_LEN, length, &buf[read])) ? -1 : (grub_ssize_t) length;
++
++    grub_dprintf ("igelfs", "ret = %lld\n", (long long) ret);
++    if (ret == -1)
++      return read;
++
++    read += ret;
++
++    if (read < (grub_ssize_t) len) {
++      sect++;
++      if (sect_offset[sect] != end_section) {
++        offset = START_OF_SECTION(sect_offset[sect]);
++      } else
++        break;
++
++      length = len - read;
++      if (length > IGF_SECT_DATA_LEN)
++        length = IGF_SECT_DATA_LEN;
++    }
++  }
++
++  data->disk->read_hook = 0;
++
++  return read;
++}
++
++static grub_err_t
++grub_igelfs_close (grub_file_t file)
++{
++  struct grub_archelp_data *data;
++
++  grub_dprintf ("igelfs", "grub_igelfs_close was called\n");
++
++  data = file->data;
++  if (data) {
++    if (data->igelfs) {
++      if (data->igelfs->content) {
++        grub_free(data->igelfs->content);
++      }
++      grub_free(data->igelfs);
++    }
++    grub_free (data);
++    data = NULL;
++  }
++
++  return grub_errno;
++}
++
++static struct grub_fs grub_igel_fs = {
++  .name = "igelfs",
++  .fs_dir = grub_igelfs_dir,
++  .fs_open = grub_igelfs_open,
++  .fs_read = grub_igelfs_read,
++  .fs_close = grub_igelfs_close,
++#ifdef GRUB_UTIL
++  .reserved_first_sector = 0,
++  .blocklist_install = 0,
++#endif
++};
++
++GRUB_MOD_INIT (igelfs)
++{
++  grub_fs_register (&grub_igel_fs);
++}
++
++GRUB_MOD_FINI (igelfs)
++{
++  grub_fs_unregister (&grub_igel_fs);
++}
+--- /dev/null
++++ b/include/grub/bootregfs.h
+@@ -0,0 +1,233 @@
++/* vim:set softtabstop=0 shiftwidth=4 tabstop=4 expandtab autoindent: */
++#ifndef BOOTREGFS_H
++#define BOOTREGFS_H
++
++
++#ifndef GRUB_MACHINE
++#include <igel.h>
++#else
++#include <grub/igel_partition.h>
++#endif
++
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++#ifdef GRUB_MACHINE
++	#include <grub/misc.h> // grub memcpy, strn*, snprintf
++	#include <grub/mm.h>
++	#include <grub/types.h>
++	
++	#define GWRAP_MEMCPY(...) grub_memcpy(__VA_ARGS__)
++	#define GWRAP_MEMSET(...) grub_memset(__VA_ARGS__)
++	#define GWRAP_MALLOC(...) grub_malloc(__VA_ARGS__)
++	#define GWRAP_FREE(...) grub_free(__VA_ARGS__)
++	#define GWRAP_STRNDUP(...) grub_strndup(__VA_ARGS__)
++	#define GWRAP_STRDUP(...) grub_strdup(__VA_ARGS__)
++	#define GWRAP_STRCMP(...) grub_strcmp(__VA_ARGS__)
++	#define GWRAP_STRNCMP(...) grub_strncmp(__VA_ARGS__)
++	#define GWRAP_STRLEN(...) grub_strlen(__VA_ARGS__)
++
++	#define GWRAP_PRINTF(...) grub_printf(__VA_ARGS__)
++	#define GWRAP_SNPRINTF(...) grub_snprintf(__VA_ARGS__)
++	#define GWRAP_VSNPRINTF(...) grub_vsnprintf(__VA_ARGS__)
++	#define GWRAP_FPRINTF(p, ...) grub_printf(__VA_ARGS__)
++	#define GWRAP_STRRCHR(...) grub_strrchr(__VA_ARGS__)
++
++	#define assert(expr) //TODO: GRUB Assertion handling!?
++	
++	#define uint8_t grub_uint8_t
++	#define size_t grub_size_t
++	#define uint16_t grub_uint16_t
++	#define uint32_t grub_uint32_t
++	#define uint64_t grub_uint64_t
++	#define u_int8_t grub_uint8_t
++	#define u_int16_t grub_uint16_t
++	#define u_int32_t grub_uint32_t
++	#define u_int64_t grub_uint64_t
++	#define int8_t grub_int8_t
++	#define int16_t grub_int16_t
++	#define int32_t grub_int32_t
++	#define int64_t grub_int64_t
++	#define loff_t grub_uint64_t
++	#define uintptr_t grub_addr_t
++	char* GWRAP_STRTOK(char* input, const char* delim);
++	char* GWRAP_STRSEP(char** str, const char* delim);
++
++#else
++	#define _GNU_SOURCE
++	#include <sys/types.h>
++	#include <stdio.h>
++	#include <stdint.h>
++	#include <stdarg.h>
++	#include <stdlib.h>
++	#include <unistd.h>
++	#include <string.h>
++	#include <errno.h>
++	#include <fcntl.h>
++	#include <sys/stat.h>
++	#include <sys/mman.h>
++	#include <assert.h>
++	#define GWRAP_MEMCPY(...) memcpy(__VA_ARGS__)
++	#define GWRAP_MEMSET(...) memset(__VA_ARGS__)
++	#define GWRAP_MALLOC(...) malloc(__VA_ARGS__)
++	#define GWRAP_FREE(...) free(__VA_ARGS__)
++	#define GWRAP_STRNDUP(...) strndup(__VA_ARGS__)
++	#define GWRAP_STRDUP(...) strdup(__VA_ARGS__)
++	#define GWRAP_STRCMP(...) strcmp(__VA_ARGS__)
++	#define GWRAP_STRNCMP(...) strncmp(__VA_ARGS__)
++	#define GWRAP_STRLEN(...) strlen(__VA_ARGS__)
++	#define GWRAP_STRSEP(...) strsep(__VA_ARGS__)
++	#define GWRAP_STRTOK(...) strtok(__VA_ARGS__)
++	#define GWRAP_PRINTF(...) printf(__VA_ARGS__)
++	#define GWRAP_SNPRINTF(...) snprintf(__VA_ARGS__)
++	#define GWRAP_VSNPRINTF(...) vsnprintf(__VA_ARGS__)
++	#define GWRAP_FPRINTF(p, ...) fprintf(p, __VA_ARGS__)
++	#define GWRAP_STRRCHR(...) strrchr(__VA_ARGS__)
++#endif
++
++
++
++#define IGEL_BOOTREG_ENTRY_LEN 504
++
++
++
++
++typedef struct bootreg_keyval_list {
++    char* key;
++    char* value;
++    struct bootreg_keyval_list* next;
++} bootreg_keyval_list_t;
++
++
++typedef enum  {
++    BOOTREG_LOG_NONE = 0,   // <!-- no log output
++    BOOTREG_LOG_ERROR,      // <!-- Log errors only
++    BOOTREG_LOG_INFO,       // <!-- Log informations 
++    BOOTREG_LOG_DEBUG       // <!-- Log debug informations, for development only!
++} BOOTREG_LOG_LEVEL;
++
++typedef enum {
++    BOOTREG_RDWR = 0,
++    BOOTREG_RDONLY
++} BOOTREG_PROT;
++
++struct _bootreg_data
++{
++	int fd; /* file descriptor to device or file */
++	char *page;
++	BOOTREG_PROT mode;
++	BOOTREG_LOG_LEVEL loglvl;
++};
++typedef struct _bootreg_data bootreg_data;
++
++extern char* __gpurpose_strtok(char* input, const char* delim, char** rest_str, uint8_t sep);
++
++/**
++ * \brief bootreg_init must be called first, to retrieve a handler for a valid bootreg device or testfile
++ * \param[in]   devicename  device /dev/igfdisk or an existing testfile
++ * \param[in]   readonly    
++ * \param[in]   loglvl      set a log level
++ * \return      NULL on error, else a handler
++ */
++extern bootreg_data* bootreg_init(const char* devicename, BOOTREG_PROT readonly, BOOTREG_LOG_LEVEL loglvl);
++/**
++ * \brief bootreg_deinit deinitalize all open file descriptors and frees all memory
++ * \param[in]   hndl    pointer to handler structure
++ */
++extern void bootreg_deinit(bootreg_data** hndl);
++
++/**
++ * \brief bootreg_validate_header checks if header structure is present, 
++ *      valid and has old/new format. 
++ *      This must be called after bootreg_init and return valid must be checked!
++ *      If it is not valid, bootreg_reset_header must be called and an appropiate boot_id must be set!
++ * \param[in]   hndl    pointer to handler structure
++ * \return      -1      if char *data is a NULL pointer
++ *               0      if no bootreg is present
++ *               1      if a bootreg in the new format is present
++ *               2      if a bootreg in the old format is present
++ * 
++ */
++extern int  bootreg_validate_header(bootreg_data* hndl);
++
++/**
++ * \brief bootreg_reset_header writes a new fresh bootreg header (new format)
++ *      Attention, set at least a new boot_id! 
++ * \param[in]   hndl    pointer to handler structure
++ * \param[in]   encryptionAlgo    encryption algorithm which should be used
++ * \return 0 on success, else -1
++ */
++extern int bootreg_reset_header(bootreg_data* hndl, uint8_t encryptionAlgo);
++
++/**
++ * \brief bootreg_lock_boot prevent grub to boot our system
++ * \param[in]   hndl    pointer to handler structure
++ * \return  -1  on error
++ *           0  on success
++ *           1  already locked
++ */
++extern int bootreg_lock_boot(bootreg_data* hndl);
++
++/**
++ * \brief bootreg_unlock_boot unlocks grub boot
++ * \param[in]   hndl    pointer to handler structure
++ * \return  -1  on error
++ *           0  on success
++ *           1  already unlocked
++ */
++extern int bootreg_unlock_boot(bootreg_data* hndl);
++
++/**
++ * \brief bootreg_get retrieves a value of a key
++ * \param[in]   hndl    pointer to handler structure
++ * \param[in]   key     name of a key
++ * \param[in]   value   value could be NULL (key invalid) or a valid null terminated string (memory must be free'd!)
++ * \return  -1 on error, else 0
++ */
++extern int bootreg_get(bootreg_data* hndl, const char* key, char** value);
++
++/**
++ * \brief bootreg_set add or updates a key with a value
++ * \param[in]   hndl    pointer to handler structure
++ * \param[in]   key     key name which should be created or updated
++ * \param[in]   value   value which should be set
++ * \return -1 on error, else 0
++ */
++extern int bootreg_set(bootreg_data* hndl, const char* key, const char* value);
++
++/**
++ * \brief bootreg_delete deletes given key and it's value
++ * \param[in]   hndl    pointer to handler structure
++ * \param[in]   key     key name to delete
++ * \return
++ */
++extern int bootreg_delete(bootreg_data* hndl, const char* key);
++
++/**
++ * \brief bootreg_list retrieves a complete list of all key value pairs, e.g. for debugging purposes.
++ *  With dump option also the header structure will be added to this list!
++ * \param[in]   hndl    pointer to handler structure
++ * \param[in]   dump    if value is set != 0, header structure will be dumped also
++ * \return      NULL on error, else a complete list with all key/value pairs (memory must be free'd!)
++ */
++extern bootreg_keyval_list_t* bootreg_list(bootreg_data* hndl, int dump);
++
++/**
++ * \brief bootreg_list_free release allocated memory of a given list
++ * \param[in]   list    pointer to an allocated list
++ */
++extern void bootreg_list_free(bootreg_keyval_list_t* list);
++
++/**
++ * \brief bootreg_debug_output 
++ * \param[in]   hndl    pointer to handler structure
++ */
++extern void bootreg_debug_output(bootreg_data* hndl);
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _BOOTREG_H */

@@ -1,0 +1,29 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -610,6 +610,26 @@ menuentry \"Please contact your admin\"
+ 
+   test_and_free(val);
+ 
++  bootreg_get(bt_data, "acpi", &val);
++  if (val != NULL) {
++    if (val[0] == 'f' && val[1] == 'o' && val[2] == 'r' && val[3] == 'c' && val[4] == 'e')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=force");
++    else if (val[0] == 'o' && val[1] == 'n')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=on");
++    else if (val[0] == 'o' && val[1] == 'f' && val[2] == 'f')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=off");
++    else if (val[0] == 'n' && val[1] == 'o' && val[2] == 'i' && val[3] == 'r' && val[4] == 'q')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=noirq");
++    else if (val[0] == 's' && val[1] == 't' && val[2] == 'r' && val[3] == 'i' && val[4] == 'c' && val[5] == 't')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=strict");
++    else if (val[0] == 'r' && val[1] == 's' && val[2] == 'd' && val[3] == 't')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=rsdt");
++    else if (val[0] == 'c' && val[1] == 'o' && val[2] == 'p' && val[3] == 'y' && val[4] == '_' && val[5] == 'd' && val[6] == 's' && val[7] == 'd' && val[8] == 't')
++      grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " acpi=copy_dsdt");
++  }
++
++  test_and_free(val);
++
+   bootreg_get(bt_data, "irqpoll", &val);
+   if (val != NULL && val[0] == '1')
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " irqpoll");

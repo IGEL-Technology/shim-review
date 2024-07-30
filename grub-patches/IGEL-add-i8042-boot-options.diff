@@ -1,0 +1,54 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -390,6 +390,42 @@ menuentry \"Please contact your admin\"
+ 
+   test_and_free(val);
+ 
++  bootreg_get(bt_data, "i8042-debug", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " i8042.debug");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "i8042-nomux", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " i8042.nomux");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "i8042-nopnp", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " i8042.nopnp");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "i8042-noloop", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " i8042.noloop");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "i8042-notimeout", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " i8042.notimeout");
++
++  test_and_free(val);
++
++  bootreg_get(bt_data, "i8042-reset", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " i8042.reset");
++
++  test_and_free(val);
++
+   bootreg_get(bt_data, "splash", &val);
+   if (val != NULL && val[0] == '1')
+     grub_snprintf(splash, 100, "splash=277");
+@@ -412,6 +448,8 @@ menuentry \"Please contact your admin\"
+       def = 2;
+   }
+ 
++  test_and_free(val);
++
+   bootreg_get(bt_data, "boot_cmd", &val);
+   if (val == NULL) {
+     val = empty;
