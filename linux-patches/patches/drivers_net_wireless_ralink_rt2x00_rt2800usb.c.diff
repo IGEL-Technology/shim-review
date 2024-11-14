@@ -1,0 +1,45 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800usb.c b/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800usb.c
+--- a/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800usb.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800usb.c	2024-08-02 15:41:31.555491585 +0200
+@@ -40,6 +40,29 @@ static bool rt2800usb_hwcrypt_disabled(s
+ 	return modparam_nohwcrypt;
+ }
+ 
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++/* hamburg@igel.com adapted for using with one antenna */
++
++static bool modparam_noht;
++module_param_named(noht, modparam_noht, bool, S_IRUGO);
++MODULE_PARM_DESC(noht, "Disable HT capabilities.");
++
++static bool rt2800usb_ht_disabled(struct rt2x00_dev *rt2x00dev)
++{
++	return modparam_noht;
++}
++
++/* hamburg@igel.com adapted for using with one antenna */
++
++static int modparam_chain_num = -1;
++module_param_named(chain_num, modparam_chain_num, int, S_IRUGO);
++MODULE_PARM_DESC(chain_num, "Set RX/TX chain number.");
++
++static int rt2800usb_modparam_chain_num(struct rt2x00_dev *rt2x00dev)
++{
++	return modparam_chain_num;
++}
++#endif
+ /*
+  * Queue handlers.
+  */
+@@ -672,6 +695,11 @@ static const struct rt2800_ops rt2800usb
+ 	.drv_init_registers	= rt2800usb_init_registers,
+ 	.drv_get_txwi		= rt2800usb_get_txwi,
+ 	.drv_get_dma_done	= rt2800usb_get_dma_done,
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	.ht_disabled		= rt2800usb_ht_disabled,
++	.get_chain_number	= rt2800usb_modparam_chain_num,
++#endif
+ };
+ 
+ static const struct rt2x00lib_ops rt2800usb_rt2x00_ops = {

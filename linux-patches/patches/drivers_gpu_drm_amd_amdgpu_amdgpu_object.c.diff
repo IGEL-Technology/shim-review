@@ -1,0 +1,107 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c	2024-08-02 15:41:31.535491108 +0200
+@@ -903,6 +903,9 @@ int amdgpu_bo_pin_restricted(struct amdg
+ 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->tbo.bdev);
+ 	struct ttm_operation_ctx ctx = { false, false };
+ 	int r, i;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++	u32 orig_domain;
++#endif
+ 
+ 	if (amdgpu_ttm_tt_get_usermm(bo->tbo.ttm))
+ 		return -EPERM;
+@@ -922,12 +925,21 @@ int amdgpu_bo_pin_restricted(struct amdg
+ 			return -EINVAL;
+ 	}
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++	orig_domain = domain;
++#endif
++
+ 	if (bo->tbo.pin_count) {
+ 		uint32_t mem_type = bo->tbo.resource->mem_type;
+ 		uint32_t mem_flags = bo->tbo.resource->placement;
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		if (!(orig_domain & amdgpu_mem_type_to_domain(mem_type)))
++			return -EINVAL;
++#else
+ 		if (!(domain & amdgpu_mem_type_to_domain(mem_type)))
+ 			return -EINVAL;
++#endif
+ 
+ 		if ((mem_type == TTM_PL_VRAM) &&
+ 		    (bo->flags & AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS) &&
+@@ -949,7 +961,11 @@ int amdgpu_bo_pin_restricted(struct amdg
+ 	/* This assumes only APU display buffers are pinned with (VRAM|GTT).
+ 	 * See function amdgpu_display_supported_domains()
+ 	 */
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++	domain = amdgpu_bo_get_preferred_domain(adev, orig_domain);
++#else
+ 	domain = amdgpu_bo_get_preferred_domain(adev, domain);
++#endif
+ 
+ 	if (bo->tbo.base.import_attach)
+ 		dma_buf_pin(bo->tbo.base.import_attach);
+@@ -957,6 +973,9 @@ int amdgpu_bo_pin_restricted(struct amdg
+ 	/* force to pin into visible video ram */
+ 	if (!(bo->flags & AMDGPU_GEM_CREATE_NO_CPU_ACCESS))
+ 		bo->flags |= AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++retry_bo_pin:
++#endif
+ 	amdgpu_bo_placement_from_domain(bo, domain);
+ 	for (i = 0; i < bo->placement.num_placement; i++) {
+ 		unsigned int fpfn, lpfn;
+@@ -973,6 +992,15 @@ int amdgpu_bo_pin_restricted(struct amdg
+ 
+ 	r = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
+ 	if (unlikely(r)) {
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		if (r == -ENOMEM &&
++		    orig_domain == (AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT) &&
++		    domain == AMDGPU_GEM_DOMAIN_VRAM) {
++			domain = AMDGPU_GEM_DOMAIN_GTT;
++			dev_err(adev->dev, "%p pin goto retry bo pin\n", bo);
++			goto retry_bo_pin;
++		}
++#endif
+ 		dev_err(adev->dev, "%p pin failed\n", bo);
+ 		goto error;
+ 	}
+@@ -1558,11 +1586,33 @@ uint32_t amdgpu_bo_get_preferred_domain(
+ 	if ((domain == (AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT)) &&
+ 	    ((adev->asic_type == CHIP_CARRIZO) || (adev->asic_type == CHIP_STONEY))) {
+ 		domain = AMDGPU_GEM_DOMAIN_VRAM;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		if (amdgpu_prefer_vram_over_gtt == 0) {
++			domain = AMDGPU_GEM_DOMAIN_GTT;
++		} else if (amdgpu_prefer_vram_over_gtt != 1) {
++			if (adev->gmc.real_vram_size <= AMDGPU_SG_THRESHOLD)
++                 	       domain = AMDGPU_GEM_DOMAIN_GTT;
++		}
++#else
+ 		if (adev->gmc.real_vram_size <= AMDGPU_SG_THRESHOLD)
+ 			domain = AMDGPU_GEM_DOMAIN_GTT;
++#endif
++	}
++	return domain;
++}
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++uint32_t amdgpu_bo_get_preferred_fbc_domain(struct amdgpu_device *adev,
++					    uint32_t domain)
++{
++	if (domain == (AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT)) {
++		domain = AMDGPU_GEM_DOMAIN_VRAM;
++		if (amdgpu_prefer_vram_over_gtt != 1)
++			domain = AMDGPU_GEM_DOMAIN_GTT;
+ 	}
+ 	return domain;
+ }
++#endif
+ 
+ #if defined(CONFIG_DEBUG_FS)
+ #define amdgpu_bo_print_flag(m, bo, flag)		        \

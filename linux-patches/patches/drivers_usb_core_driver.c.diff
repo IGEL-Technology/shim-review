@@ -1,0 +1,68 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/core/driver.c b/linux-6.6.38.igel/drivers/usb/core/driver.c
+--- a/linux-6.6.38.igel/drivers/usb/core/driver.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/core/driver.c	2024-08-02 15:41:31.563491776 +0200
+@@ -305,6 +305,14 @@ static int usb_unbind_device(struct devi
+ 	struct usb_device *udev = to_usb_device(dev);
+ 	struct usb_device_driver *udriver = to_usb_device_driver(dev->driver);
+ 
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* gottwald@igel.com prevent device from being released */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked usb_unbind_device for USB device protected by disable_disconnect\n");
++		return -ENODEV;
++	}
++#endif
+ 	if (udriver->disconnect)
+ 		udriver->disconnect(udev);
+ 	if (udriver->generic_subclass)
+@@ -434,10 +442,24 @@ static int usb_unbind_interface(struct d
+ 	int i, j, error, r;
+ 	int lpm_disable_error = -ENODEV;
+ 
++#ifndef CONFIG_IGEL_USB_DISABLE_DISCONNECT
+ 	intf->condition = USB_INTERFACE_UNBINDING;
+ 
+ 	/* Autoresume for set_interface call below */
+ 	udev = interface_to_usbdev(intf);
++#else
++	/* Autoresume for set_interface call below */
++	udev = interface_to_usbdev(intf);
++
++	/* gottwald@igel.com prevent device from being released */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked usb_unbind_interface for USB device protected by disable_disconnect\n");
++		return lpm_disable_error;
++	}
++
++	intf->condition = USB_INTERFACE_UNBINDING;
++#endif
+ 	error = usb_autoresume_device(udev);
+ 
+ 	/* If hub-initiated LPM policy may change, attempt to disable LPM until
+@@ -610,6 +632,9 @@ void usb_driver_release_interface(struct
+ 					struct usb_interface *iface)
+ {
+ 	struct device *dev = &iface->dev;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	struct usb_device *udev = interface_to_usbdev(iface);
++#endif
+ 
+ 	/* this should never happen, don't release something that's not ours */
+ 	if (!dev->driver || dev->driver != &driver->drvwrap.driver)
+@@ -618,6 +643,14 @@ void usb_driver_release_interface(struct
+ 	/* don't release from within disconnect() */
+ 	if (iface->condition != USB_INTERFACE_BOUND)
+ 		return;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* gottwald@igel.com prevent device from being released */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked usb_driver_release_interface for USB device protected by disable_disconnect\n");
++		return;
++	}
++#endif
+ 	iface->condition = USB_INTERFACE_UNBINDING;
+ 
+ 	/* Release via the driver core only if the interface

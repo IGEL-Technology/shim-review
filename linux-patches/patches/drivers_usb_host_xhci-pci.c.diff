@@ -1,0 +1,37 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/host/xhci-pci.c b/linux-6.6.38.igel/drivers/usb/host/xhci-pci.c
+--- a/linux-6.6.38.igel/drivers/usb/host/xhci-pci.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/host/xhci-pci.c	2024-08-02 15:41:31.563491776 +0200
+@@ -365,10 +365,18 @@ static void xhci_pci_quirks(struct devic
+ 	    (pdev->device == 0x15e0 || pdev->device == 0x15e1))
+ 		xhci->quirks |= XHCI_SNPS_BROKEN_SUSPEND;
+ 
++#ifdef CONFIG_IGEL_AMD_WORKAROUND_XHCI_S3_ISSUES
++	if (pdev->vendor == PCI_VENDOR_ID_AMD &&
++            (pdev->device == 0x15e0 || pdev->device == 0x15e1 || pdev->device == 0x15e5)) {
++		xhci->quirks |= XHCI_DISABLE_SPARSE;
++		xhci->quirks |= XHCI_RESET_ON_RESUME;
++	}
++#else
+ 	if (pdev->vendor == PCI_VENDOR_ID_AMD && pdev->device == 0x15e5) {
+ 		xhci->quirks |= XHCI_DISABLE_SPARSE;
+ 		xhci->quirks |= XHCI_RESET_ON_RESUME;
+ 	}
++#endif
+ 
+ 	if (pdev->vendor == PCI_VENDOR_ID_AMD)
+ 		xhci->quirks |= XHCI_TRUST_TX_LENGTH;
+@@ -543,6 +551,14 @@ static void xhci_pci_quirks(struct devic
+ 	if (xhci->hci_version >= 0x120)
+ 		xhci->quirks |= XHCI_DEFAULT_PM_RUNTIME_ALLOW;
+ 
++#ifdef CONFIG_IGEL_XHCI_THINKCENTRE_M73_REBOOT_QUIRK
++	/* gottwald@igel: quirk Lenovo ThinkCentre M73 to avoid superious reboot after shutdown problems */
++	if (pdev->vendor == PCI_VENDOR_ID_INTEL &&
++		pdev->device == PCI_DEVICE_ID_INTEL_LYNXPOINT_XHCI) {
++		xhci->quirks |= XHCI_SPURIOUS_REBOOT;
++	}
++#endif
++
+ 	if (xhci->quirks & XHCI_RESET_ON_RESUME)
+ 		xhci_dbg_trace(xhci, trace_xhci_dbg_quirks,
+ 				"QUIRK: Resetting on resume");

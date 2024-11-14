@@ -1,0 +1,33 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/host/xhci.c b/linux-6.6.38.igel/drivers/usb/host/xhci.c
+--- a/linux-6.6.38.igel/drivers/usb/host/xhci.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/host/xhci.c	2024-08-02 15:41:31.563491776 +0200
+@@ -3085,6 +3085,29 @@ static void xhci_endpoint_reset(struct u
+ 	if (!host_ep->hcpriv)
+ 		return;
+ 	udev = (struct usb_device *) host_ep->hcpriv;
++
++#ifdef CONFIG_IGEL_AMD_USB2_CHERRY_KEYBOARD_WORKAROUND
++	/* gottwald@igel.com : Do this only for AMD devices as the problem
++	 * seems only occur there and not on Intel devices */
++	if (boot_cpu_data.x86_vendor == X86_VENDOR_AMD) {
++		//andrew.li@amd.com added Jul-28-2020
++		//revert from commit f5249461b504d35aa1a40140983b7ec415807d9e
++		//to commit 15febf5eede9ff9d3180d257441e9a2fbb3f0ae6
++		//for Cherry GmbH only, to fix CHERRY SECURE BOARD not working issue
++		//
++		//For Cherry GmbH usb devices, driver will work like as linux kernel v4.16; for others, it works as normal.
++		//if (udev->product && !strncmp(udev->product, "CHERRY SECURE BOARD", strlen("CHERRY SECURE BOARD"))){
++		if (udev->manufacturer && !strncmp(udev->manufacturer, "Cherry GmbH", strlen("Cherry GmbH"))){
++			/* For now just print debug to follow the situation */
++			xhci_dbg(xhci, "Endpoint 0x%x ep reset callback called\n",
++				 host_ep->desc.bEndpointAddress);
++			dev_info(&udev->dev, "A '%s' USB device found, Will not reset device.\n",
++				 udev->manufacturer);
++			return;
++		}
++	}
++#endif
++
+ 	vdev = xhci->devs[udev->slot_id];
+ 
+ 	/*

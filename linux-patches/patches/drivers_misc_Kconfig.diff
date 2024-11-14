@@ -1,0 +1,9 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/misc/Kconfig b/linux-6.6.38.igel/drivers/misc/Kconfig
+--- a/linux-6.6.38.igel/drivers/misc/Kconfig	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/misc/Kconfig	2024-08-02 15:41:31.551491490 +0200
+@@ -579,4 +579,5 @@ source "drivers/misc/cardreader/Kconfig"
+ source "drivers/misc/uacce/Kconfig"
+ source "drivers/misc/pvpanic/Kconfig"
+ source "drivers/misc/mchp_pci1xxxx/Kconfig"
++source "drivers/misc/ipts/Kconfig"
+ endmenu

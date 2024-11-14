@@ -1,0 +1,45 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/core/devio.c b/linux-6.6.38.igel/drivers/usb/core/devio.c
+--- a/linux-6.6.38.igel/drivers/usb/core/devio.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/core/devio.c	2024-08-02 15:41:31.563491776 +0200
+@@ -2352,6 +2352,15 @@ static int proc_ioctl(struct usb_dev_sta
+ 	/* disconnect kernel driver from interface */
+ 	case USBDEVFS_DISCONNECT:
+ 		if (intf->dev.driver) {
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++			struct usb_device       *udev = ps->dev;
++			/* gottwald@igel.com disable disconnect if it was disabled via sysfs */
++			if (udev->disable_disconnect) {
++				printk(KERN_WARNING "Blocked usbdevfs disconnect ioctl for USB device protected by disable_disconnect\n");
++				retval = -EACCES;
++				break;
++			}
++#endif
+ 			driver = to_usb_driver(intf->dev.driver);
+ 			dev_dbg(&intf->dev, "disconnect by usbfs\n");
+ 			usb_driver_release_interface(driver, intf);
+@@ -2461,6 +2470,9 @@ static int proc_disconnect_claim(struct
+ {
+ 	struct usbdevfs_disconnect_claim dc;
+ 	struct usb_interface *intf;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	struct usb_device *udev = ps->dev;
++#endif
+ 
+ 	if (copy_from_user(&dc, arg, sizeof(dc)))
+ 		return -EFAULT;
+@@ -2469,6 +2481,15 @@ static int proc_disconnect_claim(struct
+ 	if (!intf)
+ 		return -EINVAL;
+ 
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* gottwald@igel.com disable disconnect if it was disabled via sysfs */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked disconnect claim ioctl for USB device protected by disable_disconnect\n");
++		return -EACCES;
++	}
++#endif
++
+ 	if (intf->dev.driver) {
+ 		struct usb_driver *driver = to_usb_driver(intf->dev.driver);
+ 

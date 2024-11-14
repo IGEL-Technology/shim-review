@@ -1,0 +1,135 @@
+diff -Naurp a/linux-6.6.38.igel/security/selinux/netlabel.c b/linux-6.6.38.igel/security/selinux/netlabel.c
+--- a/linux-6.6.38.igel/security/selinux/netlabel.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/selinux/netlabel.c	2024-08-02 15:41:31.575492063 +0200
+@@ -17,6 +17,9 @@
+ #include <linux/gfp.h>
+ #include <linux/ip.h>
+ #include <linux/ipv6.h>
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++#include <linux/lsm_hooks.h>
++#endif
+ #include <net/sock.h>
+ #include <net/netlabel.h>
+ #include <net/ip.h>
+@@ -68,7 +71,11 @@ static int selinux_netlbl_sidlookup_cach
+ static struct netlbl_lsm_secattr *selinux_netlbl_sock_genattr(struct sock *sk)
+ {
+ 	int rc;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct netlbl_lsm_secattr *secattr;
+ 
+ 	if (sksec->nlbl_secattr != NULL)
+@@ -100,7 +107,11 @@ static struct netlbl_lsm_secattr *selinu
+ 							const struct sock *sk,
+ 							u32 sid)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct netlbl_lsm_secattr *secattr = sksec->nlbl_secattr;
+ 
+ 	if (secattr == NULL)
+@@ -240,7 +251,11 @@ int selinux_netlbl_skbuff_setsid(struct
+ 	 * being labeled by it's parent socket, if it is just exit */
+ 	sk = skb_to_full_sk(skb);
+ 	if (sk != NULL) {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 		struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 
+ 		if (sksec->nlbl_state != NLBL_REQSKB)
+ 			return 0;
+@@ -277,7 +292,11 @@ int selinux_netlbl_sctp_assoc_request(st
+ {
+ 	int rc;
+ 	struct netlbl_lsm_secattr secattr;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(asoc->base.sk);
++#else
+ 	struct sk_security_struct *sksec = asoc->base.sk->sk_security;
++#endif
+ 	struct sockaddr_in addr4;
+ 	struct sockaddr_in6 addr6;
+ 
+@@ -356,7 +375,11 @@ inet_conn_request_return:
+  */
+ void selinux_netlbl_inet_csk_clone(struct sock *sk, u16 family)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 
+ 	if (family == PF_INET)
+ 		sksec->nlbl_state = NLBL_LABELED;
+@@ -374,8 +397,13 @@ void selinux_netlbl_inet_csk_clone(struc
+  */
+ void selinux_netlbl_sctp_sk_clone(struct sock *sk, struct sock *newsk)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++	struct sk_security_struct *newsksec = selinux_sock(newsk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
+ 	struct sk_security_struct *newsksec = newsk->sk_security;
++#endif
+ 
+ 	newsksec->nlbl_state = sksec->nlbl_state;
+ }
+@@ -393,7 +421,11 @@ void selinux_netlbl_sctp_sk_clone(struct
+ int selinux_netlbl_socket_post_create(struct sock *sk, u16 family)
+ {
+ 	int rc;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct netlbl_lsm_secattr *secattr;
+ 
+ 	if (family != PF_INET && family != PF_INET6)
+@@ -507,7 +539,11 @@ int selinux_netlbl_socket_setsockopt(str
+ {
+ 	int rc = 0;
+ 	struct sock *sk = sock->sk;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct netlbl_lsm_secattr secattr;
+ 
+ 	if (selinux_netlbl_option(level, optname) &&
+@@ -545,7 +581,11 @@ static int selinux_netlbl_socket_connect
+ 						struct sockaddr *addr)
+ {
+ 	int rc;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct netlbl_lsm_secattr *secattr;
+ 
+ 	/* connected sockets are allowed to disconnect when the address family
+@@ -584,7 +624,11 @@ static int selinux_netlbl_socket_connect
+ int selinux_netlbl_socket_connect_locked(struct sock *sk,
+ 					 struct sockaddr *addr)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 
+ 	if (sksec->nlbl_state != NLBL_REQSKB &&
+ 	    sksec->nlbl_state != NLBL_CONNLABELED)

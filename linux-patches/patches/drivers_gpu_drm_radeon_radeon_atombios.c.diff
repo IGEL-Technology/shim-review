@@ -1,0 +1,155 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_atombios.c b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_atombios.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_atombios.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_atombios.c	2024-08-02 15:41:31.543491299 +0200
+@@ -30,7 +30,10 @@
+ #include <drm/radeon_drm.h>
+ 
+ #include "radeon.h"
+-
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include "radeon_drv.h"
++#include <linux/dmi.h>
++#endif
+ #include "atom.h"
+ #include "atom-bits.h"
+ #include "radeon_asic.h"
+@@ -286,6 +289,18 @@ static bool radeon_atom_apply_quirks(str
+ {
+ 	struct pci_dev *pdev = to_pci_dev(dev->dev);
+ 
++#if defined(CONFIG_IGEL_RADEON_DETECTION) || defined(CONFIG_IGEL_FUJITSU_DVI_VGA_SPLIT_QUIRKS)
++	const char *product;
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++	/* lang@igel.de:
++	   if the user selected lvds=0 don't try and add the connector */
++	if ((*connector_type == DRM_MODE_CONNECTOR_LVDS) &&
++	    (radeon_lvds == 0)) {
++		DRM_INFO("apply quirk: LVDS is disabled by module parameter\n");
++		return false;
++	}
++#endif
+ 	/* Asus M2A-VM HDMI board lists the DVI port as HDMI */
+ 	if ((pdev->device == 0x791e) &&
+ 	    (pdev->subsystem_vendor == 0x1043) &&
+@@ -449,6 +464,42 @@ static bool radeon_atom_apply_quirks(str
+ 		}
+ 	}
+ 
++#ifdef CONFIG_IGEL_FUJITSU_DVI_VGA_SPLIT_QUIRKS
++	/* Fujitsu D3003-S2 board lists DVI-I as DVI-I and VGA */
++	if ((pdev->device == 0x9805) &&
++	    (pdev->subsystem_vendor == 0x1734) &&
++	    (pdev->subsystem_device == 0x11bd)) {
++		if (*connector_type == DRM_MODE_CONNECTOR_VGA) {
++			/* gottwald@igel.com limit this only to the board which is mentioned in the 
++			 * BUG report https://bugs.freedesktop.org/show_bug.cgi?id=83184
++			 * this should fix the non working VGA port on Futro S700 devices */
++			product = dmi_get_system_info(DMI_BOARD_NAME);
++			if (product != NULL)
++				if (strstr(product, "D3003-S1"))
++					return false;
++		}
++	}
++#endif
++#ifdef CONFIG_IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
++	/* Handle IGEL M340C outputs correctly */
++	if ((pdev->device == 0x9854) &&
++	    (pdev->subsystem_vendor == 0x1002) &&
++	    (pdev->subsystem_device == 0x9854)) {
++		if (! IS_IGEL_M340C) {
++			product = dmi_get_system_info(DMI_BOARD_NAME);
++			if (product != NULL)
++				if (strstr(product, "M340C")) 
++					igel_platform = IGEL_M340C;
++		}
++	}
++
++	if (IS_IGEL_M340C) {
++		if ((*connector_type == DRM_MODE_CONNECTOR_DisplayPort) &&
++		    (supported_device == ATOM_DEVICE_DFP2_SUPPORT) ) {
++			*connector_type = DRM_MODE_CONNECTOR_DVID;
++		}
++	}
++#endif
+ 	return true;
+ }
+ 
+@@ -820,7 +871,12 @@ bool radeon_get_atom_connector_info_from
+ 						  igp_lane_info,
+ 						  connector_object_id,
+ 						  &hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++						  &router,
++						  0);
++#else
+ 						  &router);
++#endif
+ 
+ 		}
+ 	}
+@@ -878,6 +934,9 @@ struct bios_connector {
+ 	int connector_type;
+ 	struct radeon_i2c_bus_rec ddc_bus;
+ 	struct radeon_hpd hpd;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	int splitted_dvii;
++#endif
+ };
+ 
+ bool radeon_get_atom_connector_info_from_supported_devices_table(struct
+@@ -1046,6 +1105,33 @@ bool radeon_get_atom_connector_info_from
+ 						     (bios_connectors[j].devices & (ATOM_DEVICE_CRT_SUPPORT))) ||
+ 						    ((bios_connectors[j].devices & (ATOM_DEVICE_DFP_SUPPORT)) &&
+ 						     (bios_connectors[i].devices & (ATOM_DEVICE_CRT_SUPPORT)))) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++							/* lang@igel: split DVI-I connector in analog + digital connector */
++							if (radeon_split_dvii) {
++								if (bios_connectors[i].splitted_dvii &&
++								bios_connectors[j].splitted_dvii)
++									continue;
++								DRM_INFO("split DVI-I connector in separate "
++								 "analog and digital connectors\n");
++								bios_connectors[i].splitted_dvii = 1;
++								bios_connectors[j].splitted_dvii = 1;
++								bios_connectors[i].connector_type = DRM_MODE_CONNECTOR_DVII;
++								bios_connectors[j].connector_type = DRM_MODE_CONNECTOR_DVII;
++								if (bios_connectors[j].devices & (ATOM_DEVICE_DFP_SUPPORT))
++								bios_connectors[i].hpd = bios_connectors[j].hpd;
++								if (bios_connectors[i].devices & (ATOM_DEVICE_DFP_SUPPORT))
++								bios_connectors[j].hpd = bios_connectors[i].hpd;
++							} else {
++								bios_connectors[i].devices |=
++									bios_connectors[j].devices;
++								bios_connectors[i].connector_type =
++									DRM_MODE_CONNECTOR_DVII;
++								if (bios_connectors[j].devices & (ATOM_DEVICE_DFP_SUPPORT))
++									bios_connectors[i].hpd =
++										bios_connectors[j].hpd;
++								bios_connectors[j].valid = false;
++							}
++#else
+ 							bios_connectors[i].devices |=
+ 								bios_connectors[j].devices;
+ 							bios_connectors[i].connector_type =
+@@ -1054,6 +1140,7 @@ bool radeon_get_atom_connector_info_from
+ 								bios_connectors[i].hpd =
+ 									bios_connectors[j].hpd;
+ 							bios_connectors[j].valid = false;
++#endif
+ 						}
+ 					}
+ 				}
+@@ -1077,7 +1164,12 @@ bool radeon_get_atom_connector_info_from
+ 						  0,
+ 						  connector_object_id,
+ 						  &bios_connectors[i].hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++						  &router,
++						  bios_connectors[i].splitted_dvii);
++#else
+ 						  &router);
++#endif
+ 		}
+ 	}
+ 

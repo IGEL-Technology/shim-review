@@ -1,0 +1,19 @@
+diff -Naurp a/linux-6.6.38.igel/tools/power/cpupower/Makefile b/linux-6.6.38.igel/tools/power/cpupower/Makefile
+--- a/linux-6.6.38.igel/tools/power/cpupower/Makefile	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/tools/power/cpupower/Makefile	2024-08-02 15:41:31.579492158 +0200
+@@ -217,12 +217,13 @@ $(OUTPUT)%.o: %.c
+ 	$(ECHO) "  CC      " $@
+ 	$(QUIET) $(CC) $(CFLAGS) -I./lib -I ./utils -o $@ -c $*.c
+ 
++# IGEL added -lz for build with musl
+ $(OUTPUT)cpupower: $(UTIL_OBJS) $(OUTPUT)libcpupower.so.$(LIB_MAJ)
+ 	$(ECHO) "  CC      " $@
+ ifeq ($(strip $(STATIC)),true)
+-	$(QUIET) $(CC) $(CFLAGS) $(LDFLAGS) $(UTIL_OBJS) -lrt -lpci -L$(OUTPUT) -o $@
++	$(QUIET) $(CC) $(CFLAGS) $(LDFLAGS) $(UTIL_OBJS) -lrt -lpci -lz -L$(OUTPUT) -o $@
+ else
+-	$(QUIET) $(CC) $(CFLAGS) $(LDFLAGS) $(UTIL_OBJS) -lcpupower -lrt -lpci -L$(OUTPUT) -o $@
++	$(QUIET) $(CC) $(CFLAGS) $(LDFLAGS) $(UTIL_OBJS) -lcpupower -lrt -lpci -lz -L$(OUTPUT) -o $@
+ endif
+ 	$(QUIET) $(STRIPCMD) $@
+ 

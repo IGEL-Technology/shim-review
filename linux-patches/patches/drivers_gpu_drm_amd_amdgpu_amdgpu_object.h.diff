@@ -1,0 +1,14 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h b/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h
+--- a/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h	2024-08-02 15:41:31.535491108 +0200
+@@ -348,6 +348,10 @@ int amdgpu_bo_restore_shadow(struct amdg
+ 			     struct dma_fence **fence);
+ uint32_t amdgpu_bo_get_preferred_domain(struct amdgpu_device *adev,
+ 					    uint32_t domain);
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++uint32_t amdgpu_bo_get_preferred_fbc_domain(struct amdgpu_device *adev,
++					    uint32_t domain);
++#endif
+ 
+ /*
+  * sub allocation

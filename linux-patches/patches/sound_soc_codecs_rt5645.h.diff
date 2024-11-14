@@ -1,0 +1,17 @@
+diff -Naurp a/linux-6.6.38.igel/sound/soc/codecs/rt5645.h b/linux-6.6.38.igel/sound/soc/codecs/rt5645.h
+--- a/linux-6.6.38.igel/sound/soc/codecs/rt5645.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/soc/codecs/rt5645.h	2024-08-02 15:41:31.575492063 +0200
+@@ -1629,6 +1629,13 @@
+ #define RT5645_JD_1_1_SFT			7
+ #define RT5645_JD_1_1_NOR			(0x0 << 7)
+ #define RT5645_JD_1_1_INV			(0x1 << 7)
++#ifdef CONFIG_IGEL_HP_T240_SOUND_FIXES
++#define RT5645_IRQ_JD_1_2_EN			(0x1 << 6)
++#define RT5645_JD_1_2_MASK			(0x1 << 4)
++#define RT5645_JD_1_2_SFT			4
++#define RT5645_JD_1_2_NOR			(0x0 << 4)
++#define RT5645_JD_1_2_INV			(0x1 << 4)
++#endif
+ 
+ /* IRQ Control 2 (0xbe) */
+ #define RT5645_IRQ_MB1_OC_MASK			(0x1 << 15)

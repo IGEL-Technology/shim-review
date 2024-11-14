@@ -1,0 +1,19 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+--- a/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/amd/amdgpu/amdgpu.h	2024-08-02 15:41:31.535491108 +0200
+@@ -230,6 +230,15 @@ extern bool pcie_p2p;
+ 
+ extern int amdgpu_tmz;
+ extern int amdgpu_reset_method;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++extern int amdgpu_use_fbc;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++extern int amdgpu_prefer_vram_over_gtt;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++extern int amdgpu_disable_mst_support;
++#endif
+ 
+ #ifdef CONFIG_DRM_AMDGPU_SI
+ extern int amdgpu_si_support;

@@ -1,0 +1,13 @@
+diff -Naurp a/linux-6.6.38.igel/security/apparmor/policy.c b/linux-6.6.38.igel/security/apparmor/policy.c
+--- a/linux-6.6.38.igel/security/apparmor/policy.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/apparmor/policy.c	2024-08-02 15:41:31.571491967 +0200
+@@ -258,6 +258,9 @@ void aa_free_profile(struct aa_profile *
+ 	kfree_sensitive(profile->disconnected);
+ 
+ 	free_attachment(&profile->attach);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	kfree_sensitive(profile->net_compat);
++#endif
+ 
+ 	/*
+ 	 * at this point there are no tasks that can have a reference

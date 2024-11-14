@@ -1,0 +1,20 @@
+diff -Naurp a/linux-6.6.38.igel/sound/soc/intel/common/soc-acpi-intel-cht-match.c b/linux-6.6.38.igel/sound/soc/intel/common/soc-acpi-intel-cht-match.c
+--- a/linux-6.6.38.igel/sound/soc/intel/common/soc-acpi-intel-cht-match.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/soc/intel/common/soc-acpi-intel-cht-match.c	2024-08-02 15:41:31.579492158 +0200
+@@ -27,6 +27,16 @@ static const struct dmi_system_id cht_ta
+ 			DMI_MATCH(DMI_PRODUCT_NAME, "Surface 3"),
+ 		},
+ 	},
++#ifdef CONFIG_IGEL_SURFACE_SURFACE3_OEMB_FIX
++	{
++		.callback = cht_surface_quirk_cb,
++		.matches = {
++			DMI_MATCH(DMI_BIOS_VENDOR, "American Megatrends Inc."),
++			DMI_MATCH(DMI_SYS_VENDOR, "OEMB"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "OEMB"),
++		},
++	},
++#endif
+ 	{ }
+ };
+ 

@@ -1,0 +1,16 @@
+diff -Naurp a/linux-6.6.38.igel/net/dccp/ipv4.c b/linux-6.6.38.igel/net/dccp/ipv4.c
+--- a/linux-6.6.38.igel/net/dccp/ipv4.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/net/dccp/ipv4.c	2024-08-02 15:41:31.567491872 +0200
+@@ -1096,8 +1096,12 @@ module_exit(dccp_v4_exit);
+  * values directly, Also cover the case where the protocol is not specified,
+  * i.e. net-pf-PF_INET-proto-0-type-SOCK_DCCP
+  */
++/* gottwald@igel.com : Disable auto loading as mitigation against local exploits.
++ * Patch taken from debian Change some defaults for security reasons */
++#ifndef CONFIG_IGEL_DISABLE_AUTOLOADING_OF_NON_SECURE_NET_MODULES
+ MODULE_ALIAS_NET_PF_PROTO_TYPE(PF_INET, 33, 6);
+ MODULE_ALIAS_NET_PF_PROTO_TYPE(PF_INET, 0, 6);
++#endif
+ MODULE_LICENSE("GPL");
+ MODULE_AUTHOR("Arnaldo Carvalho de Melo <acme@mandriva.com>");
+ MODULE_DESCRIPTION("DCCP - Datagram Congestion Controlled Protocol");

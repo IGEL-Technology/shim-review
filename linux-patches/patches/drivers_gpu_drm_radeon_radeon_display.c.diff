@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_display.c b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_display.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_display.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_display.c	2024-08-02 15:41:31.547491394 +0200
+@@ -713,6 +713,11 @@ static void radeon_crtc_init(struct drm_
+ 		radeon_atombios_init_crtc(dev, radeon_crtc);
+ 	else
+ 		radeon_legacy_init_crtc(dev, radeon_crtc);
++
++#ifdef CONFIG_IGEL_RADEON_FIX_CURSOR_DISAPPEAR
++	/* lang@igel: initialize cursor registers */
++	radeon_crtc_cursor_set2(&radeon_crtc->base, NULL, 0, 0, 0, 0, 0);
++#endif
+ }
+ 
+ static const char *encoder_names[38] = {

@@ -1,0 +1,51 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/settings.h b/linux-6.6.38.igel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/settings.h
+--- a/linux-6.6.38.igel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/settings.h	1970-01-01 01:00:00.000000000 +0100
++++ b/linux-6.6.38.igel/drivers/net/wireless/broadcom/brcm80211/brcmfmac/settings.h	2024-08-02 15:41:31.555491585 +0200
+@@ -0,0 +1,47 @@
++// SPDX-License-Identifier: ISC
++/*
++ * Copyright (c) 2014 Broadcom Corporation
++ */
++
++#ifndef BRCMFMAC_SETTINGS_H
++#define BRCMFMAC_SETTINGS_H
++
++#include <linux/platform_data/brcmfmac.h>
++
++/* Definition for the device specific settings are defined here. One struct
++ * is used called brcmf_mp_device. The device specific settings is part of
++ * the drvr struct and should be initialized on every brcmf_attach.
++ */
++
++/**
++ * struct brcmf_mp_device - Device module paramaters.
++ *
++ * @p2p_enable: Legacy P2P0 enable (old wpa_supplicant).
++ * @feature_disable: Feature_disable bitmask.
++ * @fcmode: FWS flow control.
++ * @roamoff: Firmware roaming off?
++ * @ignore_probe_fail: Ignore probe failure.
++ * @trivial_ccode_map: Assume firmware uses ISO3166 country codes with rev 0
++ * @country_codes: If available, pointer to struct for translating country codes
++ * @bus: Bus specific platform data. Only SDIO at the mmoment.
++ * @rambase_addr: Manually specified FW shared rambase address.
++ */
++struct brcmf_mp_device {
++	bool		p2p_enable;
++	unsigned int	feature_disable;
++	int		fcmode;
++	bool		roamoff;
++	bool		iapp;
++	bool		ignore_probe_fail;
++	bool		trivial_ccode_map;
++	struct brcmfmac_pd_cc *country_codes;
++	const char	*board_type;
++	unsigned char	mac[ETH_ALEN];
++	const char	*antenna_sku;
++	union {
++		struct brcmfmac_sdio_pd sdio;
++	} bus;
++	u32		rambase_addr;
++};
++
++#endif /* BRCMFMAC_SETTINGS_H */

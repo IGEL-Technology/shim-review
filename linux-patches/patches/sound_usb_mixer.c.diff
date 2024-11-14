@@ -1,0 +1,173 @@
+diff -Naurp a/linux-6.6.38.igel/sound/usb/mixer.c b/linux-6.6.38.igel/sound/usb/mixer.c
+--- a/linux-6.6.38.igel/sound/usb/mixer.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/usb/mixer.c	2024-08-02 15:41:31.579492158 +0200
+@@ -90,6 +90,14 @@ enum {
+ 	USB_XU_SOFT_LIMIT_SELECTOR = 0x03	/* soft limiter */
+ };
+ 
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS) || defined(CONFIG_IGEL_USB_SOUND_PLANTRONICS_QUIRKS)
++/* prototype for get_fu_volume_min_max_range */
++
++static void get_fu_volume_min_max_range(struct usb_mixer_interface *mixer,
++                                  struct usb_mixer_elem_info *cval, int unitid,
++                                  struct snd_kcontrol *kctl);
++#endif
++
+ /*
+  * manual mapping of mixer names
+  * if the mixer topology is too complicated and the parsed names are
+@@ -1451,13 +1459,30 @@ static int mixer_ctl_feature_put(struct
+ 			if (!(cval->cmask & (1 << c)))
+ 				continue;
+ 			err = snd_usb_get_cur_mix_value(cval, c + 1, cnt, &oval);
+-			if (err < 0)
++			if (err < 0) {
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS) || defined(CONFIG_IGEL_USB_SOUND_PLANTRONICS_QUIRKS)
++				usb_audio_dbg(cval->head.mixer->chip,
++						"%s(): failed to get volume value on channel %d\n",
++						__func__, c + 1);
++#endif
+ 				return filter_error(cval, err);
++			}
+ 			val = ucontrol->value.integer.value[cnt];
+ 			val = get_abs_value(cval, val);
+ 			if (oval != val) {
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS) || defined(CONFIG_IGEL_USB_SOUND_PLANTRONICS_QUIRKS)
++				err = snd_usb_set_cur_mix_value(cval, c + 1, cnt, val);
++				if (err) {
++					usb_audio_dbg(cval->head.mixer->chip,
++					      "%s(): failed to change volume value on channel %d\n",
++					    __func__, c + 1);
++				} else {
++					changed = 1;
++				}
++#else
+ 				snd_usb_set_cur_mix_value(cval, c + 1, cnt, val);
+ 				changed = 1;
++#endif
+ 			}
+ 			cnt++;
+ 		}
+@@ -1729,6 +1754,15 @@ static void __build_feature_ctl(struct u
+ 		len = snd_usb_copy_string_desc(mixer->chip, nameid,
+ 				kctl->id.name, sizeof(kctl->id.name));
+ 
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS)
++	/* hamburg@igel.com fixed Sennheiser DW Pro2 headset: renamed control
++	 * elements in FEATURE_UNIT of sidetone chain */
++
++	if (!len) {
++		len = snd_usb_mixer_control_name_apply_quirk(mixer, unitid, kctl);
++	}
++#endif
++
+ 	switch (control) {
+ 	case UAC_FU_MUTE:
+ 	case UAC_FU_VOLUME:
+@@ -1779,7 +1813,14 @@ static void __build_feature_ctl(struct u
+ 	}
+ 
+ 	/* get min/max values */
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS) || defined(CONFIG_IGEL_USB_SOUND_PLANTRONICS_QUIRKS)
++	get_fu_volume_min_max_range(mixer, cval, unitid, kctl);
++	if (!cval->initialized) {
++		get_min_max_with_quirks(cval, 0, kctl);
++	}
++#else
+ 	get_min_max_with_quirks(cval, 0, kctl);
++#endif
+ 
+ 	/* skip a bogus volume range */
+ 	if (cval->max <= cval->min) {
+@@ -1825,6 +1866,91 @@ static void __build_feature_ctl(struct u
+ 	snd_usb_mixer_add_control(&cval->head, kctl);
+ }
+ 
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS) || defined(CONFIG_IGEL_USB_SOUND_PLANTRONICS_QUIRKS)
++static int get_fu_control_min_max_res(struct usb_mixer_elem_info *cval)
++{
++	int i;
++	int minchn = 0;
++
++	if (cval->cmask) {
++		for (i = 0; i < MAX_CHANNELS; i++)
++			if (cval->cmask & (1 << i)) {
++				minchn = i + 1;
++				break;
++			}
++	}
++	if (get_ctl_value(cval, UAC_GET_MAX, (cval->control << 8) | minchn, &cval->max) < 0 ||
++			get_ctl_value(cval, UAC_GET_MIN, (cval->control << 8) | minchn, &cval->min) < 0) {
++		usb_audio_err(cval->head.mixer->chip,
++				"%d:%d: cannot get min/max values for control %d (id %d)\n",
++				cval->head.id, snd_usb_ctrl_intf(cval->head.mixer->chip),
++				cval->control, cval->head.id);
++		return -EINVAL;
++	}
++	if (get_ctl_value(cval, UAC_GET_RES,
++				(cval->control << 8) | minchn,
++				&cval->res) < 0) {
++		cval->res = 1;
++	}
++	if (cval->res == 0) {
++		cval->res = 1;
++	}
++
++	/* USB descriptions contain the dB scale in 1/256 dB unit
++	 * while ALSA TLV contains in 1/100 dB unit
++	 */
++	cval->dBmin = (convert_signed_value(cval, cval->min) * 100) / 256;
++	cval->dBmax = (convert_signed_value(cval, cval->max) * 100) / 256;
++
++	return 0;
++}
++
++static void get_fu_volume_min_max_range(struct usb_mixer_interface *mixer,
++				  struct usb_mixer_elem_info *cval, int unitid,
++				  struct snd_kcontrol *kctl)
++{
++	int err;
++
++	if (cval->control != UAC_FU_VOLUME) {
++		return;
++	}
++	if (cval->val_type == USB_MIXER_BOOLEAN ||
++		cval->val_type == USB_MIXER_INV_BOOLEAN) {
++		cval->initialized = 1;
++		return;
++	}
++
++	switch (USB_ID_VENDOR(mixer->chip->usb_id)) {
++#if defined(CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS)
++	case 0x1395: /* Sennheiser */
++		if (0x0037 == USB_ID_PRODUCT(mixer->chip->usb_id) && 11 == unitid) {
++			/* FU sidetone on SC660 */
++			cval->res = 512;
++			cval->min = 0;
++			cval->max = 4096;
++			cval->dBmin = (convert_signed_value(cval, cval->min) * 100) / 256;
++			cval->dBmax = (convert_signed_value(cval, cval->max) * 100) / 256;
++			cval->initialized = 1;
++		} else {
++			err = get_fu_control_min_max_res(cval);
++			if (!err) {
++				cval->initialized = 1;
++			}
++		}
++		break;
++#endif
++#if defined(CONFIG_IGEL_USB_SOUND_PLANTRONICS_QUIRKS)
++	case 0x047f: /* Plantronics */
++		err = get_fu_control_min_max_res(cval);
++		if (!err) {
++			cval->initialized = 1;
++		}
++		break;
++#endif
++	}
++}
++#endif
++
+ static void build_feature_ctl(struct mixer_build *state, void *raw_desc,
+ 			      unsigned int ctl_mask, int control,
+ 			      struct usb_audio_term *iterm, int unitid,

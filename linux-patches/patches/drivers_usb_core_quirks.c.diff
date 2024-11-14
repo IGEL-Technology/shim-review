@@ -1,0 +1,28 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/core/quirks.c b/linux-6.6.38.igel/drivers/usb/core/quirks.c
+--- a/linux-6.6.38.igel/drivers/usb/core/quirks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/core/quirks.c	2024-08-02 15:41:31.563491776 +0200
+@@ -325,6 +325,11 @@ static const struct usb_device_id usb_qu
+ 	/* Alcor Micro Corp. Hub */
+ 	{ USB_DEVICE(0x058f, 0x9254), .driver_info = USB_QUIRK_RESET_RESUME },
+ 
++#ifdef CONFIG_IGEL_MICROTOUCH_USB_RESUME_QUIRK
++	/* MicroTouch Systems touchscreen */
++	{ USB_DEVICE(0x0596, 0x051e), .driver_info = USB_QUIRK_RESET_RESUME },
++#endif
++
+ 	/* appletouch */
+ 	{ USB_DEVICE(0x05ac, 0x021a), .driver_info = USB_QUIRK_RESET_RESUME },
+ 
+@@ -477,6 +482,12 @@ static const struct usb_device_id usb_qu
+ 	{ USB_DEVICE(0x1908, 0x1315), .driver_info =
+ 			USB_QUIRK_HONOR_BNUMINTERFACES },
+ 
++#ifdef CONFIG_IGEL_KYOCERA_USB_SET_INTF_QUIRK
++	/* lang@igel: Kyocera FS-1350DN printer
++	 * doesn't print anything if quirk is not set */
++	{ USB_DEVICE(0x0482, 0x0392), .driver_info = USB_QUIRK_NO_SET_INTF },
++#endif
++
+ 	/* Protocol and OTG Electrical Test Device */
+ 	{ USB_DEVICE(0x1a0a, 0x0200), .driver_info =
+ 			USB_QUIRK_LINEAR_UFRAME_INTR_BINTERVAL },

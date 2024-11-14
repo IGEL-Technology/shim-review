@@ -1,0 +1,13 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/misc/mei/hw-me-regs.h b/linux-6.6.38.igel/drivers/misc/mei/hw-me-regs.h
+--- a/linux-6.6.38.igel/drivers/misc/mei/hw-me-regs.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/misc/mei/hw-me-regs.h	2024-08-02 15:41:31.551491490 +0200
+@@ -92,6 +92,9 @@
+ #define MEI_DEV_ID_CDF        0x18D3  /* Cedar Fork */
+ 
+ #define MEI_DEV_ID_ICP_LP     0x34E0  /* Ice Lake Point LP */
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++#define MEI_DEV_ID_ICP_LP_3   0x34E4  /* Ice Lake Point LP 3 (iTouch) */
++#endif
+ #define MEI_DEV_ID_ICP_N      0x38E0  /* Ice Lake Point N */
+ 
+ #define MEI_DEV_ID_JSP_N      0x4DE0  /* Jasper Lake Point N */

@@ -1,0 +1,24 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/pci/pci.c b/linux-6.6.38.igel/drivers/pci/pci.c
+--- a/linux-6.6.38.igel/drivers/pci/pci.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/pci/pci.c	2024-08-02 15:41:31.559491681 +0200
+@@ -3045,6 +3045,20 @@ static const struct dmi_system_id bridge
+ 			DMI_MATCH(DMI_BOARD_VERSION, "Continental Z2"),
+ 		},
+ 	},
++#ifdef CONFIG_IGEL_FIX_ELO_I2_WIFI_ISSUE
++	{
++		/*
++		* Downstream device is not accessible after putting a root port
++		* into D3cold and back into D0 on Elo i2.
++		*/
++		.ident = "Elo i2",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Elo Touch Solutions"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Elo i2"),
++			DMI_MATCH(DMI_PRODUCT_VERSION, "RevB"),
++		},
++	},
++#endif
+ 	{
+ 		/*
+ 		 * Changing power state of root port dGPU is connected fails

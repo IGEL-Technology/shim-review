@@ -1,0 +1,8 @@
+diff -Naurp a/linux-6.6.38.igel/fs/proc/Makefile b/linux-6.6.38.igel/fs/proc/Makefile
+--- a/linux-6.6.38.igel/fs/proc/Makefile	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/fs/proc/Makefile	2024-08-02 15:41:31.567491872 +0200
+@@ -34,3 +34,4 @@ proc-$(CONFIG_PROC_VMCORE)	+= vmcore.o
+ proc-$(CONFIG_PRINTK)	+= kmsg.o
+ proc-$(CONFIG_PROC_PAGE_MONITOR)	+= page.o
+ proc-$(CONFIG_BOOT_CONFIG)	+= bootconfig.o
++proc-$(CONFIG_IGEL_USE_VERSION_SIGNATURE)	+= version_signature.o

@@ -1,0 +1,24 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/drm_edid.c b/linux-6.6.38.igel/drivers/gpu/drm/drm_edid.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/drm_edid.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/drm_edid.c	2024-08-02 15:41:31.539491203 +0200
+@@ -2176,8 +2176,20 @@ drm_do_probe_ddc_edid(void *data, u8 *bu
+ 		ret = i2c_transfer(adapter, &msgs[3 - xfers], xfers);
+ 
+ 		if (ret == -ENXIO) {
++#ifdef CONFIG_IGEL_EDID_DETECTION_SECOND_TRY_QUIRK
++			/* gottwald@igel.com try a second time if getting a ENXIO
++			 * this fix wrong detection on Lenovo ThinkCentre M32 */
++			if (retries <= 2) {
++				DRM_DEBUG_KMS("drm: skipping non-existent adapter %s\n",
++						adapter->name);
++				break;
++			} else {
++				retries = 2;
++			}
++#else
+ 			DRM_DEBUG_KMS("drm: skipping non-existent adapter %s\n",
+ 					adapter->name);
++#endif
+ 			break;
+ 		}
+ 	} while (ret != xfers && --retries);

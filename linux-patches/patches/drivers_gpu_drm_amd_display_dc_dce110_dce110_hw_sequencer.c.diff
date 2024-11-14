@@ -1,0 +1,25 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dce110/dce110_hw_sequencer.c b/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dce110/dce110_hw_sequencer.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dce110/dce110_hw_sequencer.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dce110/dce110_hw_sequencer.c	2024-08-02 15:41:31.539491203 +0200
+@@ -35,7 +35,9 @@
+ #include "gpio_service_interface.h"
+ 
+ #include "dce110_compressor.h"
+-
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++#include "amdgpu.h"
++#endif
+ #include "bios/bios_parser_helper.h"
+ #include "timing_generator.h"
+ #include "mem_input.h"
+@@ -1987,6 +1989,10 @@ static bool should_enable_fbc(struct dc
+ 	struct resource_context *res_ctx = &context->res_ctx;
+ 	unsigned int underlay_idx = dc->res_pool->underlay_pipe_index;
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++	if (amdgpu_use_fbc != 1)
++		return false;
++#endif
+ 
+ 	ASSERT(dc->fbc_compressor);
+ 

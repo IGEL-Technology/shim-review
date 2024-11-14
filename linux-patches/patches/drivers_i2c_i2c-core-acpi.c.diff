@@ -1,0 +1,56 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/i2c/i2c-core-acpi.c b/linux-6.6.38.igel/drivers/i2c/i2c-core-acpi.c
+--- a/linux-6.6.38.igel/drivers/i2c/i2c-core-acpi.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/i2c/i2c-core-acpi.c	2024-08-02 15:41:31.551491490 +0200
+@@ -639,6 +639,30 @@ static int acpi_gsb_i2c_write_bytes(stru
+ 	return (ret == 1) ? 0 : -EIO;
+ }
+ 
++#ifdef CONFIG_IGEL_SURFACE_BOOK1_DGPU_SWITCH
++static int acpi_gsb_i2c_write_raw_bytes(struct i2c_client *client,
++		u8 *data, u8 data_len)
++{
++	struct i2c_msg msgs[1];
++	int ret = AE_OK;
++
++	msgs[0].addr = client->addr;
++	msgs[0].flags = client->flags;
++	msgs[0].len = data_len + 1;
++	msgs[0].buf = data;
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++
++	if (ret < 0) {
++		dev_err(&client->adapter->dev, "i2c write failed: %d\n", ret);
++		return ret;
++	}
++
++	/* 1 transfer must have completed successfully */
++	return (ret == 1) ? 0 : -EIO;
++}
++#endif
++
+ static acpi_status
+ i2c_acpi_space_handler(u32 function, acpi_physical_address command,
+ 			u32 bits, u64 *value64,
+@@ -740,6 +764,21 @@ i2c_acpi_space_handler(u32 function, acp
+ 		}
+ 		break;
+ 
++#ifdef CONFIG_IGEL_SURFACE_BOOK1_DGPU_SWITCH
++	case ACPI_GSB_ACCESS_ATTRIB_RAW_BYTES:
++		if (action == ACPI_READ) {
++			dev_warn(&adapter->dev,
++				 "protocol 0x%02x not supported for client 0x%02x\n",
++				 accessor_type, client->addr);
++			ret = AE_BAD_PARAMETER;
++			goto err;
++		} else {
++			status = acpi_gsb_i2c_write_raw_bytes(client,
++					gsb->data, info->access_length);
++		}
++		break;
++#endif
++
+ 	default:
+ 		dev_warn(&adapter->dev, "protocol 0x%02x not supported for client 0x%02x\n",
+ 			 accessor_type, client->addr);

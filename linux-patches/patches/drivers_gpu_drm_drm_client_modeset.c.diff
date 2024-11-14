@@ -1,0 +1,503 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/drm_client_modeset.c b/linux-6.6.38.igel/drivers/gpu/drm/drm_client_modeset.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/drm_client_modeset.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/drm_client_modeset.c	2024-08-02 15:41:31.539491203 +0200
+@@ -373,6 +373,408 @@ static int drm_client_get_tile_offsets(s
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++/* gottwald@igel.com: find the best mode for a single screen or a mode common
++ * to all connected displays. Modes with the highest resolution and correct
++ * aspect ratio are choosen. Also the max resolution is limited to modes
++ * smaller then <drm_use_max_w>x<drm_use_max_h>.
++ * Mostly stolen from schneider@igel.com: drm_target_common_modes */
++
++static struct drm_display_mode *drm_find_best_mode(struct drm_client_dev *client,
++						   struct drm_connector **connectors,
++						   unsigned int connector_count,
++					           bool *enabled, int width, int height,
++						   int m_width, int m_height,
++						   struct drm_connector *conn)
++{
++	struct drm_device *dev = client->dev;
++	struct drm_connector *connector;
++	int i, count, aspect, aspect_ratio;
++	bool match_found, first_active;
++	struct list_head *common_mode_entry;
++	struct list_head *tmp_mode_entry;
++	struct drm_display_mode *this_mode, *conn_mode, *found_mode;
++	struct drm_display_mode *copied_mode;
++	struct drm_display_mode *best_mode, *best_mode_aspect, *pref_mode, *pref_first, *current_mode;
++	static int prev_width = 0;
++	static int prev_height = 0;
++	LIST_HEAD(common_modes);
++	LIST_HEAD(common_modes2);
++	int max_width, max_height;
++	struct list_head *work_list = NULL;
++
++	if (width > m_width)
++		max_width = m_width;
++	else
++		max_width = width;
++
++	if (height > m_height)
++		max_height = m_height;
++	else
++		max_height = height;
++
++	count = 0;
++	for (i = 0; i < connector_count; i++) {
++		if (enabled[i])
++			count++;
++	}
++
++	aspect = 3;
++	pref_first = NULL;
++
++	/* Create list of all modes of the first connector and then check if the successive connectors support these modes as well.
++	 * If a mode is not supported by a successive connector, the mode will be removed from our list. */
++	first_active = true;
++	for (i = 0; i < connector_count; i++) {
++		connector = connectors[i];
++
++		if (enabled[i] == false
++		    || connector->status != connector_status_connected
++		    || list_empty(&connector->modes))
++			continue;
++
++		pref_mode = drm_connector_has_preferred_mode(connector, width, height);
++		if (!pref_mode) {
++			list_for_each_entry(this_mode, &connector->modes, head) {
++				if(pref_mode) {
++					if((this_mode->hdisplay * this_mode->vdisplay) > (pref_mode->hdisplay * pref_mode->vdisplay)) {
++						pref_mode = this_mode;
++					}
++				} else {
++					pref_mode = this_mode;
++				}
++			}
++		}
++		if (pref_mode) {
++			aspect_ratio = ((pref_mode->hdisplay * 100) / pref_mode->vdisplay);
++			if (aspect_ratio == 160 && aspect > 0)
++				aspect = 0;
++			else if (aspect_ratio == 177 && aspect > 1)
++				aspect = 1;
++			else if ((aspect_ratio == 133 || aspect_ratio == 125) && aspect > 2)
++				aspect = 2;
++		}
++		if (first_active) {
++			pref_first = pref_mode;
++			if (pref_mode && pref_mode->hdisplay <= max_width && pref_mode->vdisplay <= max_height) {
++				copied_mode = drm_mode_duplicate(dev, pref_mode);
++				list_add_tail(&copied_mode->head, &common_modes);
++				copied_mode = drm_mode_duplicate(dev, pref_mode);
++				list_add_tail(&copied_mode->head, &common_modes2);
++			}
++			/* This is the first active connector, so just add all modes to our list */
++			list_for_each_entry(this_mode, &connector->modes, head) {
++				if (this_mode->hdisplay <= max_width && this_mode->vdisplay <= max_height ) {
++					if (!pref_mode ||
++					    !drm_mode_match(pref_mode, this_mode,
++					   DRM_MODE_MATCH_TIMINGS |
++					   DRM_MODE_MATCH_CLOCK |
++					   DRM_MODE_MATCH_FLAGS |
++					   DRM_MODE_MATCH_3D_FLAGS)) {
++						copied_mode = drm_mode_duplicate(dev, this_mode);
++						list_add_tail(&copied_mode->head, &common_modes);
++						copied_mode = drm_mode_duplicate(dev, this_mode);
++						list_add_tail(&copied_mode->head, &common_modes2);
++					}
++				}
++			}
++			first_active = false;
++		} else {
++			/* This is another connector, so check if our list contains modes that are not supported by this connector and remove them */
++			list_for_each_safe(common_mode_entry, tmp_mode_entry, &common_modes) {
++				struct drm_display_mode *common_mode = list_entry(common_mode_entry, struct drm_display_mode, head);
++				match_found = false;
++				list_for_each_entry(this_mode, &connector->modes, head) {
++					if (drm_mode_match(common_mode, this_mode,
++					   DRM_MODE_MATCH_TIMINGS |
++					   DRM_MODE_MATCH_CLOCK |
++					   DRM_MODE_MATCH_FLAGS |
++					   DRM_MODE_MATCH_3D_FLAGS)) {
++						match_found = true;
++						break;
++					}
++				}
++				if(!match_found) {
++					/* Remove this_mode from the list */
++					list_del_init(&common_mode->head);
++					drm_mode_destroy(dev, common_mode);
++				}
++			}
++			list_for_each_safe(common_mode_entry, tmp_mode_entry, &common_modes2) {
++				struct drm_display_mode *common_mode = list_entry(common_mode_entry, struct drm_display_mode, head);
++				match_found = false;
++				list_for_each_entry(this_mode, &connector->modes, head) {
++					if (common_mode->hdisplay == this_mode->hdisplay &&
++					    common_mode->vdisplay == this_mode->vdisplay) {
++						match_found = true;
++						break;
++					}
++				}
++				if(!match_found) {
++					/* Remove this_mode from the list */
++					list_del_init(&common_mode->head);
++					drm_mode_destroy(dev, common_mode);
++				}
++			}
++		}
++	}
++
++	current_mode = NULL;
++	best_mode = NULL;
++	best_mode_aspect = NULL;
++	work_list = &common_modes2;
++	if (list_empty(work_list))
++		work_list = &common_modes;
++
++	if (!list_empty(work_list) && !best_mode) {
++		/* Find the larges mode in our list */
++		list_for_each_entry(this_mode, work_list, head) {
++			if (prev_width > 0 && prev_height > 0) {
++				if(this_mode->hdisplay == prev_width && this_mode->vdisplay == prev_height) {
++					current_mode = this_mode;
++					break;
++				}
++			}
++			if(best_mode) {
++				if((this_mode->hdisplay * this_mode->vdisplay) > (best_mode->hdisplay * best_mode->vdisplay)) {
++					best_mode = this_mode;
++				}
++			} else {
++				best_mode = this_mode;
++			}
++			aspect_ratio = ((this_mode->hdisplay * 100) / this_mode->vdisplay);
++
++			if ((aspect_ratio == 160 && aspect == 0) ||
++			    (aspect_ratio == 177 && aspect == 1) ||
++			    ((aspect_ratio == 133 || aspect_ratio == 125) && aspect == 2) ||
++			    (aspect == 3)) {
++				if(best_mode_aspect) {
++					if((this_mode->hdisplay * this_mode->vdisplay) > (best_mode_aspect->hdisplay * best_mode_aspect->vdisplay)) {
++						best_mode_aspect = this_mode;
++					}
++				} else {
++					best_mode_aspect = this_mode;
++				}
++			}
++		}
++	}
++
++	if (current_mode)
++		this_mode = current_mode;
++	else if (best_mode_aspect)
++		this_mode = best_mode_aspect;
++	else if (pref_first)
++		this_mode = pref_first;
++	else
++		this_mode = best_mode;
++
++	found_mode = NULL;
++	if (conn && this_mode) {
++		list_for_each_entry(conn_mode, &conn->modes, head) {
++			if (this_mode->hdisplay == conn_mode->hdisplay &&
++			    this_mode->vdisplay == conn_mode->vdisplay &&
++			    ((conn_mode->type & DRM_MODE_TYPE_PREFERRED) ||
++			    found_mode == NULL)) {
++				found_mode = conn_mode;
++			}
++		}
++	}
++
++	if (found_mode) {
++		best_mode = drm_mode_duplicate(dev, found_mode);
++	} else if (this_mode) {
++		best_mode = drm_mode_duplicate(dev, this_mode);
++	}
++
++	/* cleanup after searching best mode */
++
++	list_for_each_safe(common_mode_entry, tmp_mode_entry, &common_modes) {
++		struct drm_display_mode *common_mode = list_entry(common_mode_entry, struct drm_display_mode, head);
++		list_del_init(&common_mode->head);
++		drm_mode_destroy(dev, common_mode);
++	}
++
++	list_for_each_safe(common_mode_entry, tmp_mode_entry, &common_modes2) {
++		struct drm_display_mode *common_mode = list_entry(common_mode_entry, struct drm_display_mode, head);
++		list_del_init(&common_mode->head);
++		drm_mode_destroy(dev, common_mode);
++	}
++
++	if (best_mode) {
++		DRM_INFO("BEST MODE:%dx%d\n", best_mode->hdisplay, best_mode->vdisplay);
++		prev_width = best_mode->hdisplay;
++		prev_height = best_mode->vdisplay;
++	}
++
++	return best_mode;
++}
++
++
++
++/* schneider@igel.com: find a mode common to all connected displays with highest horizontal size */
++static bool drm_client_target_common_modes(struct drm_client_dev *client,
++					   struct drm_connector **connectors,
++					   unsigned int connector_count,
++					   struct drm_display_mode **modes,
++					   bool *enabled, int width, int height,
++					   int m_width, int m_height)
++{
++	struct drm_connector *connector;
++	struct drm_mode_set *mode_set;
++	struct drm_display_mode *this_mode;
++	struct drm_display_mode *best_mode;
++	struct drm_display_mode *found_mode = NULL;
++	int count, i;
++	bool success = false;
++
++	count = 0;
++	drm_client_for_each_modeset(mode_set, client) {
++		struct drm_display_mode *desired_mode;
++		desired_mode = mode_set->mode;
++
++		if (!desired_mode)
++			continue;
++
++		count++;
++	}
++
++	if (count <= 1)
++		return false;
++
++	count = 0;
++	for (i = 0; i < connector_count; i++) {
++		if (enabled[i])
++			count++;
++	}
++
++	/* only contemplate cloning if more than one connector is enabled */
++	if (count <= 1)
++		return false;
++
++	best_mode = drm_find_best_mode(client, connectors, connector_count, enabled, width, height, m_width, m_height, NULL);
++
++	/* If we have found a mode, find the matching modes in all connectors and set the related modes[] value to it */
++	if(best_mode) {
++		for (i = 0; i < connector_count; i++) {
++			connector = connectors[i];
++
++			if (enabled[i] == false) {
++				continue;
++			}
++			found_mode = NULL;
++			success = false;
++			list_for_each_entry(this_mode, &connector->modes, head) {
++				if (best_mode->hdisplay == this_mode->hdisplay &&
++				    best_mode->vdisplay == this_mode->vdisplay &&
++				    ((this_mode->type & DRM_MODE_TYPE_PREFERRED) ||
++				    found_mode == NULL)) {
++					found_mode = this_mode;
++				}
++				if (drm_mode_match(best_mode, this_mode,
++					   DRM_MODE_MATCH_TIMINGS |
++					   DRM_MODE_MATCH_CLOCK |
++					   DRM_MODE_MATCH_FLAGS |
++					   DRM_MODE_MATCH_3D_FLAGS)) {
++					modes[i] = this_mode;
++					success = true;
++				}
++			}
++			/* if no equal mode was found take one with the same hdisplay and vdisplay size */
++			if (found_mode) {
++				modes[i] = found_mode;
++				success = true;
++			}
++			if (success == true) {
++				DRM_INFO("BEST MODE[%s]:%dx%d\n", connector->name, modes[i]->hdisplay, modes[i]->vdisplay);
++			}
++		}
++	}
++
++	return success;
++}
++
++static bool drm_client_best_mode(struct drm_client_dev *client,
++				 struct drm_connector **connectors,
++				 unsigned int connector_count,
++				 struct drm_display_mode **modes,
++				 struct drm_client_offset *offsets,
++				 bool *enabled, int width, int height,
++				 int m_width, int m_height)
++{
++	const u64 mask = BIT_ULL(connector_count) - 1;
++	struct drm_connector *connector;
++	u64 conn_configured = 0;
++	int tile_pass = 0;
++	int i;
++
++retry:
++	for (i = 0; i < connector_count; i++) {
++		connector = connectors[i];
++
++		if (conn_configured & BIT_ULL(i))
++			continue;
++
++		if (enabled[i] == false) {
++			conn_configured |= BIT_ULL(i);
++			continue;
++		}
++
++		/* first pass over all the untiled connectors */
++		if (tile_pass == 0 && connector->has_tile)
++			continue;
++
++		if (tile_pass == 1) {
++			if (connector->tile_h_loc != 0 ||
++			    connector->tile_v_loc != 0)
++				continue;
++
++		} else {
++			if (connector->tile_h_loc != tile_pass - 1 &&
++			    connector->tile_v_loc != tile_pass - 1)
++			/* if this tile_pass doesn't cover any of the tiles - keep going */
++				continue;
++
++			/*
++			 * find the tile offsets for this pass - need to find
++			 * all tiles left and above
++			 */
++			drm_client_get_tile_offsets(connectors, connector_count, modes, offsets, i,
++						    connector->tile_h_loc, connector->tile_v_loc);
++		}
++		DRM_DEBUG_KMS("looking for cmdline mode on connector %d\n",
++			      connector->base.id);
++
++		/* got for command line mode first */
++		modes[i] = drm_connector_pick_cmdline_mode(connector);
++		if (!modes[i]) {
++			DRM_DEBUG_KMS("looking for best mode on connector %d %d\n",
++				      connector->base.id, connector->tile_group ? connector->tile_group->id : 0);
++			modes[i] = drm_find_best_mode(client, connectors, connector_count, enabled, width, height, m_width, m_height, connector);
++			DRM_INFO("BEST MODE[%s]:%dx%d\n", connector->name, modes[i]->hdisplay, modes[i]->vdisplay);
++		}
++		if (!modes[i]) {
++			DRM_DEBUG_KMS("looking for preferred mode on connector %d %d\n",
++				      connector->base.id, connector->tile_group ? connector->tile_group->id : 0);
++			modes[i] = drm_connector_has_preferred_mode(connector, width, height);
++		}
++		/* No preferred modes, pick one off the list */
++		if (!modes[i] && !list_empty(&connector->modes)) {
++			list_for_each_entry(modes[i], &connector->modes, head)
++				break;
++		}
++		DRM_DEBUG_KMS("found mode %s\n", modes[i] ? modes[i]->name :
++			  "none");
++		conn_configured |= BIT_ULL(i);
++	}
++
++	if ((conn_configured & mask) != mask) {
++		tile_pass++;
++		goto retry;
++	}
++	return true;
++}
++#endif /* CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER */
++
+ static bool drm_client_target_preferred(struct drm_connector **connectors,
+ 					unsigned int connector_count,
+ 					struct drm_display_mode **modes,
+@@ -769,7 +1171,11 @@ bail:
+  * Returns:
+  * Zero on success or negative error code on failure.
+  */
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++int drm_client_modeset_probe(struct drm_client_dev *client, unsigned int width, unsigned int height, bool use_best_mode, unsigned int m_width, unsigned int m_height)
++#else
+ int drm_client_modeset_probe(struct drm_client_dev *client, unsigned int width, unsigned int height)
++#endif
+ {
+ 	struct drm_connector *connector, **connectors = NULL;
+ 	struct drm_connector_list_iter conn_iter;
+@@ -782,6 +1188,9 @@ int drm_client_modeset_probe(struct drm_
+ 	struct drm_crtc **crtcs;
+ 	int i, ret = 0;
+ 	bool *enabled;
++#if defined(CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE) || defined(CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE)
++	int count = 0;
++#endif
+ 
+ 	DRM_DEBUG_KMS("\n");
+ 
+@@ -828,17 +1237,68 @@ int drm_client_modeset_probe(struct drm_
+ 		DRM_DEBUG_KMS("No connectors reported connected with modes\n");
+ 	drm_client_connectors_enabled(connectors, connector_count, enabled);
+ 
++#if defined(CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE) || defined(CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE)
++	count = 0;
++	for (i = 0; i < connector_count; i++) {
++		if (enabled[i])
++			count++;
++	}
++#endif
++
++#ifdef CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE
++	/* We have a radeon device which behave really badly if trying to set a common
++	 * mode with more then 2 monitors with different resolutions so try to fix this */
++	if (count > 2) {
++		if (dev &&
++		dev->driver &&
++		dev->driver->name) {
++			if (!strcmp(dev->driver->name, "radeon")) {
++				use_best_mode = 0;
++			}
++		}
++	}
++#endif /* CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE */
++
++#ifdef CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE
++	/* we tested with a AMD V1000 platform and 4 x 4K screens and run into issues
++	 * so do not use best_mode for more then 3 screens */
++	if (count > 3) {
++		use_best_mode = 0;
++	}
++#endif /* CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE */
++
+ 	if (!drm_client_firmware_config(client, connectors, connector_count, crtcs,
+ 					modes, offsets, enabled, width, height)) {
+ 		memset(modes, 0, connector_count * sizeof(*modes));
+ 		memset(crtcs, 0, connector_count * sizeof(*crtcs));
+ 		memset(offsets, 0, connector_count * sizeof(*offsets));
+ 
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++		if (!drm_client_target_cloned(dev, connectors, connector_count, modes,
++					      offsets, enabled, width, height)) {
++			if (use_best_mode) {
++				if (!drm_client_target_common_modes(client, connectors, connector_count, modes,
++								    enabled, width, height,
++								    (int)m_width, (int)m_height)) {
++					if (!drm_client_best_mode(client, connectors, connector_count, modes,
++								  offsets, enabled, width, height,
++								  (int)m_width, (int)m_height)) {
++						DRM_ERROR("Unable to find initial modes\n");
++					}
++				}
++			} else {
++				if(!drm_client_target_preferred(connectors, connector_count, modes,
++								offsets, enabled, width, height))
++					DRM_ERROR("Unable to find initial modes\n");
++			}
++		}
++#else
+ 		if (!drm_client_target_cloned(dev, connectors, connector_count, modes,
+ 					      offsets, enabled, width, height) &&
+ 		    !drm_client_target_preferred(connectors, connector_count, modes,
+ 						 offsets, enabled, width, height))
+ 			DRM_ERROR("Unable to find initial modes\n");
++#endif
+ 
+ 		DRM_DEBUG_KMS("picking CRTCs for %dx%d config\n",
+ 			      width, height);

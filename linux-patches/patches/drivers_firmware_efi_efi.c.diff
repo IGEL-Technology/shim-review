@@ -1,0 +1,16 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/firmware/efi/efi.c b/linux-6.6.38.igel/drivers/firmware/efi/efi.c
+--- a/linux-6.6.38.igel/drivers/firmware/efi/efi.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/firmware/efi/efi.c	2024-08-02 15:41:31.535491108 +0200
+@@ -383,7 +383,12 @@ static int __init efisubsys_init(void)
+ 	if (!efi_enabled(EFI_RUNTIME_SERVICES))
+ 		efi.runtime_supported_mask = 0;
+ 
++#ifdef CONFIG_IGEL_DISBALE_EFI_COMPLETE_WITH_NOEFI_PARAM
++	/* gottwald@igel.com ensure EFI is really fully disabled if noefi kernel parameter was set */
++	if (!efi_enabled(EFI_BOOT) || efi_runtime_disabled())
++#else
+ 	if (!efi_enabled(EFI_BOOT))
++#endif
+ 		return 0;
+ 
+ 	if (efi.runtime_supported_mask) {

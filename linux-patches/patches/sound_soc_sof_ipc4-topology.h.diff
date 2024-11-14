@@ -1,0 +1,38 @@
+diff -Naurp a/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.h b/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.h
+--- a/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.h	2024-08-02 15:41:31.579492158 +0200
+@@ -319,7 +319,7 @@ struct sof_ipc4_copier {
+ /**
+  * struct sof_ipc4_ctrl_value_chan: generic channel mapped value data
+  * @channel: Channel ID
+- * @value: gain value
++ * @value: Value associated with @channel
+  */
+ struct sof_ipc4_ctrl_value_chan {
+ 	u32 channel;
+@@ -361,6 +361,25 @@ struct sof_ipc4_gain_params {
+ 	uint32_t curve_duration_h;
+ } __packed __aligned(4);
+ 
++#ifdef CONFIG_IGEL_LENOVO_MTL_MIC_MUTE_LED_FIX
++#define SOF_IPC4_SWITCH_CONTROL_PARAM_ID	200
++#define SOF_IPC4_ENUM_CONTROL_PARAM_ID		201
++
++/**
++ * struct sof_ipc4_control_msg_payload - IPC payload for kcontrol parameters
++ * @id: unique id of the control
++ * @num_elems: Number of elements in the chanv array
++ * @reserved: reserved for future use, must be set to 0
++ * @chanv: channel ID and value array
++ */
++struct sof_ipc4_control_msg_payload {
++	uint16_t id;
++	uint16_t num_elems;
++	uint32_t reserved[4];
++	DECLARE_FLEX_ARRAY(struct sof_ipc4_ctrl_value_chan, chanv);
++} __packed;
++#endif /* CONFIG_IGEL_LENOVO_MTL_MIC_MUTE_LED_FIX */
++
+ /**
+  * struct sof_ipc4_gain_data - IPC gain init blob
+  * @base_config: IPC base config data

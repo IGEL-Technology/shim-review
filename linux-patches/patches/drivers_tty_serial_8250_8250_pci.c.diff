@@ -1,0 +1,369 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/tty/serial/8250/8250_pci.c b/linux-6.6.38.igel/drivers/tty/serial/8250/8250_pci.c
+--- a/linux-6.6.38.igel/drivers/tty/serial/8250/8250_pci.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/tty/serial/8250/8250_pci.c	2024-08-02 15:41:31.559491681 +0200
+@@ -3850,6 +3850,339 @@ static const struct pci_device_id blackl
+ 	{ }
+ };
+ 
++#ifdef CONFIG_IGEL_PERLE_BLACKLIST
++/*
++ * lechner@igel.de, 07.08.09
++ * this list is copied from the perle_serial driver
++ * blacklist perle cards here and handle them with perle_serial driver
++ */
++
++/* PCI PNP Vendor and Device IDs */
++#define PCI_VENDOR_ID_PLX				0x10b5
++#define PCI_DEVICE_ID_PLX_9030				0x9030
++
++#define PCI_VENDOR_ID_P_EXAR	   			0x13A8
++#define PCI_DEVICE_ID_EXAR_158     			0x158
++#define PCI_DEVICE_ID_EXAR_154     			0x154
++#define PCI_DEVICE_ID_EXAR_152     			0x152
++
++// duplicate of Vender and Device ID for Exar as sub-vendor and sub-device IDs
++#define PCI_SUBVENDOR_ID_P_EXAR				0x13A8
++#define PCI_SUBDEVICE_ID_EXAR_158     			0x158
++#define PCI_SUBDEVICE_ID_EXAR_154     			0x154
++#define PCI_SUBDEVICE_ID_EXAR_152     			0x152
++
++#define PCI_VENDOR_ID_PERLE				0x155F
++#define PCI_DEVICE_ID_PERLE_SPEED1LE			0xB001
++#define PCI_DEVICE_ID_PERLE_SPEED2LE			0xB002
++#define PCI_DEVICE_ID_PERLE_SPEED4LE			0xB004
++#define PCI_DEVICE_ID_PERLE_SPEED8LE			0xB008
++
++#define PCI_DEVICE_ID_PERLE_SPEED1LEV2			0xB011
++#define PCI_DEVICE_ID_PERLE_SPEED2LEV2			0xB012
++#define PCI_DEVICE_ID_PERLE_SPEED1LE1P			0xB013
++#define PCI_DEVICE_ID_PERLE_SPEED2LE1P			0xB014
++#define PCI_DEVICE_ID_PERLE_SPEEDLE1P			0xB015
++
++#define PCI_DEVICE_ID_PERLE_SPEED1LEEXP			0xB021
++#define PCI_DEVICE_ID_PERLE_SPEED2LEEXP			0xB022
++#define PCI_DEVICE_ID_PERLE_SPEED1LE1PEXP		0xB026
++#define PCI_DEVICE_ID_PERLE_SPEED2LE1PEXP		0xB024
++#define PCI_DEVICE_ID_PERLE_SPEEDLE1PEXP		0xB025
++
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT1EXP		0x0361
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT2EXP		0x0311
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT4EXP		0x0331
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT8EXP		0x0321
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT8IEXP		0x0351
++
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT1EXPV2		0xB030
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT2EXPV2		0xB031
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT4EXPV2		0xB032
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT8EXPV2		0xB033
++
++// duplicate of Ultraport SI sub-device IDs as Device IDs
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT1SI		0x0261
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT2SI		0x0211
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT4SI		0x0231
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT8SI		0x0221
++#define PCI_DEVICE_ID_PERLE_ULTRAPORT8ISI		0x0251
++
++// Versions of linux kernel at approx. 2.6.22 now have PCI_SUBVENDOR_ID_PERLE
++//	defined. Therefore undefine and redefine here.
++#undef	 PCI_SUBVENDOR_ID_PERLE
++#define PCI_SUBVENDOR_ID_PERLE				0x155F
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT1		0x0061
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT2		0x0011
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT4		0x0031
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8		0x0021
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT16		0x0041
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8I		0x0051
++
++#define PCI_SUBDEVICE_ID_PERLE_PCIRAS4			0xF001
++#define PCI_SUBDEVICE_ID_PERLE_PCIRAS8			0xF010
++
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT1SI		0x0261
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT2SI		0x0211
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT4SI		0x0231
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8SI		0x0221
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT16SI		0x0241
++#define PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8ISI		0x0251
++
++#define PCI_SUBVENDOR_ID_OXSEMI				0x1415
++#define PCI_SUBDEVICE_ID_OXSEMI_16PCI952		0x9521
++#define PCI_SUBDEVICE_ID_OXSEMI_16PCI954		0x9501
++#define PCI_SUBDEVICE_ID_OXSEMI_16PCI95N		0x9511
++#define PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x		0x9505
++#define PCI_SUBDEVICE_ID_OXSEMI_OXMPCI952P		0x9513
++
++static const struct pci_device_id perle_blacklist[] = {
++
++	/* Perle PCI-RAS V.92 Multi-Modem cards */
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_PCIRAS4, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_PCIRAS8, 0, 0,
++		0 },
++
++	/* Perle UltraPort cards */
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT1, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT2, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT4, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT16, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8I, 0, 0,
++		0 },
++
++	/* Perle UltraPort SI cards */
++	{	PCI_VENDOR_ID_P_EXAR, PCI_DEVICE_ID_EXAR_152,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT1SI, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_P_EXAR, PCI_DEVICE_ID_EXAR_152,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT2SI, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_P_EXAR, PCI_DEVICE_ID_EXAR_154,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT4SI, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_P_EXAR, PCI_DEVICE_ID_EXAR_158,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8SI, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PLX, PCI_DEVICE_ID_PLX_9030,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT16SI, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_P_EXAR, PCI_DEVICE_ID_EXAR_158,
++		PCI_SUBVENDOR_ID_PERLE,
++		PCI_SUBDEVICE_ID_PERLE_ULTRAPORT8ISI, 0, 0,
++		0 },
++
++	/* Perle UltraPort SI cards - now with Perle as the Vender ID. */
++	//	Do not create a new version for 16SI, it is safe (for now) using PLX.
++
++	{	PCI_VENDOR_ID_PERLE,		PCI_DEVICE_ID_PERLE_ULTRAPORT1SI,
++		PCI_SUBVENDOR_ID_P_EXAR, 	PCI_SUBDEVICE_ID_EXAR_152,
++		0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE,		PCI_DEVICE_ID_PERLE_ULTRAPORT2SI,
++		PCI_SUBVENDOR_ID_P_EXAR, 	PCI_SUBDEVICE_ID_EXAR_152,
++		0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE,		PCI_DEVICE_ID_PERLE_ULTRAPORT4SI,
++		PCI_SUBVENDOR_ID_P_EXAR,	PCI_SUBDEVICE_ID_EXAR_154,
++		0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, 		PCI_DEVICE_ID_PERLE_ULTRAPORT8SI,
++		PCI_SUBVENDOR_ID_P_EXAR, 	PCI_SUBDEVICE_ID_EXAR_158,
++		0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE,		PCI_DEVICE_ID_PERLE_ULTRAPORT8ISI,
++		PCI_SUBVENDOR_ID_P_EXAR, 	PCI_SUBDEVICE_ID_EXAR_158,
++		0, 0,
++		0 },
++
++		/* Perle Speed LE cards */
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED1LE,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI952, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED2LE,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI952, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED4LE,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI954, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED8LE,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI954, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED8LE,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI95N, 0, 0,
++		0 },
++
++		// Kludges to solve hardware problems.
++		//
++		// PCI - The Speed1 LE1P will use the 2nd Uart (which is connected to
++		//       the 10 pin header) for port 1. This is done to allow both the
++		//       serial and parallel ports to fit on 1 back panel.
++		//
++		// Express - The express chip does not allow 2 serial ports when the
++		//           parallel port is enabled. Therefore the first Uart was
++		//           connected to the 10 pin header. This required the
++		//           Speed1 LE Express to use 2nd Uart (which is
++		//           connected to the DB9 ) for port 1
++		//           This also required that a new back panel for the 2 serial
++		//           port version of the card to be created which changed the
++		//           labelling of ports 1 and 2.
++
++
++	// Perle Speed LE with Parallel Port cards.
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED1LEV2,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED2LEV2,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED1LE1P,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED2LE1P,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	// do not include parallel only card (PCI_DEVICE_ID_PERLE_SPEEDLE1P)
++
++	// Perle Speed LE Express with Parallel Port cards.
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED1LEEXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED2LEEXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_SPEED1LE1PEXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	// do not include parallel only card (PCI_DEVICE_ID_PERLE_SPEEDLE1PEXP)
++
++
++	/* Perle UltraPort Express cards */
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT1EXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI952, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT2EXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI952, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT4EXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI954, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT8EXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI954, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT8EXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI95N, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT8IEXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI954, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT8IEXP,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_16PCI95N, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT1EXPV2,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT2EXPV2,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT4EXPV2,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	PCI_VENDOR_ID_PERLE, PCI_DEVICE_ID_PERLE_ULTRAPORT8EXPV2,
++		PCI_SUBVENDOR_ID_OXSEMI,
++		PCI_SUBDEVICE_ID_OXSEMI_OXMPCIe95x, 0, 0,
++		0 },
++
++	{	0, }
++};
++#endif
++
+ static int serial_pci_is_class_communication(struct pci_dev *dev)
+ {
+ 	/*
+@@ -4125,6 +4458,25 @@ pciserial_init_one(struct pci_dev *dev,
+ 
+ 	board = &pci_boards[ent->driver_data];
+ 
++#ifdef CONFIG_IGEL_PERLE_BLACKLIST
++	/*
++	 * lechner@igel.de, 07.08.09
++	 * blacklist perle cards handled by perle_serial driver
++	 * Do not access blacklisted devices that are known not to
++	 * feature serial ports.
++	 */
++
++	for (exclude = perle_blacklist;
++	     exclude < perle_blacklist + ARRAY_SIZE(perle_blacklist);
++	     exclude++) {
++		if (dev->vendor == exclude->vendor &&
++		    dev->device == exclude->device &&
++		    dev->subsystem_vendor == exclude->subvendor &&
++		    dev->subsystem_device == exclude->subdevice)
++			return -ENODEV;
++	}
++#endif
++
+ 	exclude = pci_match_id(blacklist, dev);
+ 	if (exclude) {
+ 		if (exclude->driver_data)

@@ -1,0 +1,27 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_mode.h b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_mode.h
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_mode.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_mode.h	2024-08-02 15:41:31.547491394 +0200
+@@ -533,6 +533,10 @@ struct radeon_connector {
+ 	enum radeon_connector_audio audio;
+ 	enum radeon_connector_dither dither;
+ 	int pixelclock_for_modeset;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	/* lang@igel: split DVI-I connector in analog + digital connector */
++	int splitted_dvii;
++#endif
+ };
+ 
+ #define ENCODER_MODE_IS_DP(em) (((em) == ATOM_ENCODER_MODE_DP) || \
+@@ -662,7 +666,12 @@ radeon_add_atom_connector(struct drm_dev
+ 			  uint32_t igp_lane_info,
+ 			  uint16_t connector_object_id,
+ 			  struct radeon_hpd *hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			  struct radeon_router *router,
++			  int splitted_dvii);
++#else
+ 			  struct radeon_router *router);
++#endif
+ extern void
+ radeon_add_legacy_connector(struct drm_device *dev,
+ 			    uint32_t connector_id,

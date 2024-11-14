@@ -1,0 +1,60 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-o2micro.c b/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-o2micro.c
+--- a/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-o2micro.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-o2micro.c	2024-08-02 15:41:31.555491585 +0200
+@@ -314,13 +314,17 @@ static int sdhci_o2_dll_recovery(struct
+ static int sdhci_o2_execute_tuning(struct mmc_host *mmc, u32 opcode)
+ {
+ 	struct sdhci_host *host = mmc_priv(mmc);
++#ifndef CONFIG_IGEL_HP_T640_EMMC_FIX
+ 	struct sdhci_pci_slot *slot = sdhci_priv(host);
+ 	struct sdhci_pci_chip *chip = slot->chip;
++#endif
+ 	int current_bus_width = 0;
+ 	u32 scratch32 = 0;
+ 	u16 scratch = 0;
++#ifndef CONFIG_IGEL_HP_T640_EMMC_FIX
+ 	u8  scratch_8 = 0;
+ 	u32 reg_val;
++#endif
+ 
+ 	/*
+ 	 * This handler implements the hardware tuning that is specific to
+@@ -339,6 +343,7 @@ static int sdhci_o2_execute_tuning(struc
+ 	scratch |= O2_SD_PWR_FORCE_L0;
+ 	sdhci_writew(host, scratch, O2_SD_MISC_CTRL);
+ 
++#ifndef CONFIG_IGEL_HP_T640_EMMC_FIX
+ 	/* Update output phase */
+ 	switch (chip->pdev->device) {
+ 	case PCI_DEVICE_ID_O2_SDS0:
+@@ -378,6 +383,7 @@ static int sdhci_o2_execute_tuning(struc
+ 	default:
+ 		break;
+ 	}
++#endif
+ 
+ 	/* wait DLL lock, timeout value 5ms */
+ 	if (readx_poll_timeout(sdhci_o2_pll_dll_wdt_control, host,
+@@ -607,6 +613,7 @@ static void sdhci_pci_o2_set_clock(struc
+ 		dmdn_200m = 0x25100000;
+ 	}
+ 
++#ifndef CONFIG_IGEL_HP_T640_EMMC_FIX
+ 	if ((host->timing == MMC_TIMING_UHS_SDR104) && (clock == 200000000)) {
+ 		pci_read_config_dword(chip->pdev, O2_SD_PLL_SETTING, &scratch_32);
+ 
+@@ -622,6 +629,14 @@ static void sdhci_pci_o2_set_clock(struc
+ 	pci_read_config_dword(chip->pdev, O2_SD_OUTPUT_CLK_SOURCE_SWITCH, &scratch_32);
+ 	scratch_32 &= ~(O2_SD_SEL_DLL | O2_SD_PHASE_MASK);
+ 	pci_write_config_dword(chip->pdev, O2_SD_OUTPUT_CLK_SOURCE_SWITCH, scratch_32);
++#else
++	if ((host->timing == MMC_TIMING_UHS_SDR104) && (clock == 200000000)) {
++		pci_read_config_dword(chip->pdev, O2_SD_PLL_SETTING, &scratch_32);
++
++		if ((scratch_32 & 0xFFFF0000) != 0x2c280000)
++			o2_pci_set_baseclk(chip, 0x2c280000);
++	}
++#endif
+ 
+ 	/* Lock WP */
+ 	pci_read_config_byte(chip->pdev, O2_SD_LOCK_WP, &scratch);

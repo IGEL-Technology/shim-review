@@ -1,0 +1,32 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/pinctrl/intel/pinctrl-intel.c b/linux-6.6.38.igel/drivers/pinctrl/intel/pinctrl-intel.c
+--- a/linux-6.6.38.igel/drivers/pinctrl/intel/pinctrl-intel.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/pinctrl/intel/pinctrl-intel.c	2024-08-02 15:41:31.559491681 +0200
+@@ -1692,14 +1692,22 @@ const struct intel_pinctrl_soc_data *int
+ 	if (table) {
+ 		struct acpi_device *adev = ACPI_COMPANION(dev);
+ 		unsigned int i;
+-
+-		for (i = 0; table[i]; i++) {
+-			if (!strcmp(adev->pnp.unique_id, table[i]->uid)) {
+-				data = table[i];
+-				break;
++		/* gottwald@igel.com : Workaround for intel Elkhardt platform do not remove */
++		if (adev && adev->pnp.unique_id) {
++			for (i = 0; table[i]; i++) {
++				if (!table[i]->uid) {
++					printk(KERN_ERR "intel_pinctrl_get_soc_data: table[%d]->uid is NULL\n", i);
++				} else if (!strcmp(adev->pnp.unique_id, table[i]->uid)) {
++					data = table[i];
++					break;
++				}
+ 			}
++		} else {
++			printk(KERN_ERR "intel_pinctrl_get_soc_data: adev->pnp.unique_id is NULL\n");
++			table = NULL;
+ 		}
+-	} else {
++	}
++	if (!table) {
+ 		const struct platform_device_id *id;
+ 
+ 		id = platform_get_device_id(pdev);

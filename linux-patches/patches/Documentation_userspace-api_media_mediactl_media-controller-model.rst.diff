@@ -1,0 +1,10 @@
+diff -Naurp a/linux-6.6.38.igel/Documentation/userspace-api/media/mediactl/media-controller-model.rst b/linux-6.6.38.igel/Documentation/userspace-api/media/mediactl/media-controller-model.rst
+--- a/linux-6.6.38.igel/Documentation/userspace-api/media/mediactl/media-controller-model.rst	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/Documentation/userspace-api/media/mediactl/media-controller-model.rst	2024-08-02 15:41:31.527490917 +0200
+@@ -38,4 +38,4 @@ are:
+   entities form a single logical unit. For example this could represent the
+   fact that a particular camera sensor and lens controller form a single
+   physical module, meaning this lens controller drives the lens for this
+-  camera sensor.
+\ No newline at end of file
++  camera sensor.

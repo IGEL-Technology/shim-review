@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/hwmon/Makefile b/linux-6.6.38.igel/drivers/hwmon/Makefile
+--- a/linux-6.6.38.igel/drivers/hwmon/Makefile	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/hwmon/Makefile	2024-08-02 15:41:31.547491394 +0200
+@@ -48,7 +48,11 @@ obj-$(CONFIG_SENSORS_ADT7462)	+= adt7462
+ obj-$(CONFIG_SENSORS_ADT7470)	+= adt7470.o
+ obj-$(CONFIG_SENSORS_ADT7475)	+= adt7475.o
+ obj-$(CONFIG_SENSORS_AHT10)	+= aht10.o
++ifeq ($(CONFIG_IGEL_USE_PATCHED_APPLESMC),y)
++obj-$(CONFIG_SENSORS_APPLESMC)	+= igel/applesmc.o
++else
+ obj-$(CONFIG_SENSORS_APPLESMC)	+= applesmc.o
++endif
+ obj-$(CONFIG_SENSORS_AQUACOMPUTER_D5NEXT) += aquacomputer_d5next.o
+ obj-$(CONFIG_SENSORS_ARM_SCMI)	+= scmi-hwmon.o
+ obj-$(CONFIG_SENSORS_ARM_SCPI)	+= scpi-hwmon.o

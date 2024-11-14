@@ -1,0 +1,13 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/hid/Makefile b/linux-6.6.38.igel/drivers/hid/Makefile
+--- a/linux-6.6.38.igel/drivers/hid/Makefile	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/hid/Makefile	2024-08-02 15:41:31.547491394 +0200
+@@ -28,6 +28,9 @@ obj-$(CONFIG_HID_ACCUTOUCH)	+= hid-accut
+ obj-$(CONFIG_HID_ALPS)		+= hid-alps.o
+ obj-$(CONFIG_HID_ACRUX)		+= hid-axff.o
+ obj-$(CONFIG_HID_APPLE)		+= hid-apple.o
++obj-$(CONFIG_HID_APPLE_IBRIDGE)	+= apple-ibridge.o
++obj-$(CONFIG_HID_APPLE_TOUCHBAR)	+= apple-touchbar.o
++obj-$(CONFIG_HID_APPLE_MAGIC_BACKLIGHT)	+= hid-apple-magic-backlight.o
+ obj-$(CONFIG_HID_APPLEIR)	+= hid-appleir.o
+ obj-$(CONFIG_HID_CREATIVE_SB0540)	+= hid-creative-sb0540.o
+ obj-$(CONFIG_HID_ASUS)		+= hid-asus.o

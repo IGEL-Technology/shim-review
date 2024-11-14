@@ -1,0 +1,99 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.c b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.c	2024-08-02 15:41:31.547491394 +0200
+@@ -36,6 +36,9 @@
+ #include <linux/vga_switcheroo.h>
+ #include <linux/mmu_notifier.h>
+ #include <linux/pci.h>
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include <linux/dmi.h>
++#endif
+ 
+ #include <drm/drm_aperture.h>
+ #include <drm/drm_drv.h>
+@@ -124,6 +127,12 @@ int radeon_gart_size = -1; /* auto */
+ int radeon_benchmarking;
+ int radeon_testing;
+ int radeon_connector_table;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++int radeon_split_dvii = 1;
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++int radeon_lvds = 1;
++#endif
+ int radeon_tv = 1;
+ int radeon_audio = -1;
+ int radeon_disp_priority;
+@@ -146,6 +155,14 @@ int radeon_auxch = -1;
+ int radeon_uvd = 1;
+ int radeon_vce = 1;
+ 
++#ifdef CONFIG_IGEL_RADEON_DP_DVI_ADAPTER_PROBE_WORKAROUND
++int radeon_dp_dvi_probe_workaround = 0;
++#endif
++
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++enum igel_platforms igel_platform = NO_IGEL_PLATFORM;
++#endif
++
+ MODULE_PARM_DESC(no_wb, "Disable AGP writeback for scratch registers");
+ module_param_named(no_wb, radeon_no_wb, int, 0444);
+ 
+@@ -176,6 +193,15 @@ module_param_named(test, radeon_testing,
+ MODULE_PARM_DESC(connector_table, "Force connector table");
+ module_param_named(connector_table, radeon_connector_table, int, 0444);
+ 
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++MODULE_PARM_DESC(split_dvii, "Split DVI-I connector in 2 connectors (0 = disable)");
++module_param_named(split_dvii, radeon_split_dvii, int, 0444);
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++MODULE_PARM_DESC(lvds, "LVDS enable (0 = disable)");
++module_param_named(lvds, radeon_lvds, int, 0444);
++#endif
++
+ MODULE_PARM_DESC(tv, "TV enable (0 = disable)");
+ module_param_named(tv, radeon_tv, int, 0444);
+ 
+@@ -247,6 +273,11 @@ int radeon_cik_support = 1;
+ MODULE_PARM_DESC(cik_support, "CIK support (1 = enabled (default), 0 = disabled)");
+ module_param_named(cik_support, radeon_cik_support, int, 0444);
+ 
++#ifdef CONFIG_IGEL_RADEON_DP_DVI_ADAPTER_PROBE_WORKAROUND
++MODULE_PARM_DESC(dp_dvi_probe_workaround, "DisplayPort DVI adapter probe workaround for DPMS issues (1 = enabled, 0 = disabled (default))");
++module_param_named(dp_dvi_probe_workaround, radeon_dp_dvi_probe_workaround, int, 0644);
++#endif
++
+ static struct pci_device_id pciidlist[] = {
+ 	radeon_PCI_IDS
+ };
+@@ -600,9 +631,29 @@ static struct pci_driver radeon_kms_pci_
+ 
+ static int __init radeon_module_init(void)
+ {
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++	const char *product;
++	const char *vendor;
++#endif
+ 	if (drm_firmware_drivers_only() && radeon_modeset == -1)
+ 		radeon_modeset = 0;
+ 
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++	if (igel_platform == NO_IGEL_PLATFORM) {
++		product = dmi_get_system_info(DMI_PRODUCT_NAME);
++		vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++		if (product != NULL && vendor != NULL) {
++			if (strstr(product, "TC2") && 
++			strstr(vendor, "Samsung Electronics Co., Ltd")) {
++				igel_platform = SAMSUNG_TC2;
++			} else if (strstr(product, "M340C") && 
++			strstr(vendor, "IGEL Technology GmbH")) {
++				igel_platform = IGEL_M340C;
++			}
++		}
++	}
++#endif
++
+ 	if (radeon_modeset == 0)
+ 		return -EINVAL;
+ 

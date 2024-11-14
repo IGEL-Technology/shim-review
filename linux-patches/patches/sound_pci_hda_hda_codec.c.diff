@@ -1,0 +1,36 @@
+diff -Naurp a/linux-6.6.38.igel/sound/pci/hda/hda_codec.c b/linux-6.6.38.igel/sound/pci/hda/hda_codec.c
+--- a/linux-6.6.38.igel/sound/pci/hda/hda_codec.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/pci/hda/hda_codec.c	2024-08-02 15:41:31.575492063 +0200
+@@ -23,6 +23,9 @@
+ #include "hda_jack.h"
+ #include <sound/hda_hwdep.h>
+ #include <sound/hda_component.h>
++#ifdef CONFIG_IGEL_LG_LIMIT_VOLUME
++#include <linux/dmi.h>
++#endif
+ 
+ #define codec_in_pm(codec)		snd_hdac_is_in_pm(&codec->core)
+ #define hda_codec_is_power_on(codec)	snd_hdac_is_power_on(&codec->core)
+@@ -1460,11 +1463,22 @@ int snd_hda_mixer_amp_volume_info(struct
+ 	u8 chs = get_amp_channels(kcontrol);
+ 	int dir = get_amp_direction(kcontrol);
+ 	unsigned int ofs = get_amp_offset(kcontrol);
++#ifdef CONFIG_IGEL_LG_LIMIT_VOLUME
++	const char *vendor = NULL;
++#endif
+ 
+ 	uinfo->type = SNDRV_CTL_ELEM_TYPE_INTEGER;
+ 	uinfo->count = chs == 3 ? 2 : 1;
+ 	uinfo->value.integer.min = 0;
++#ifdef CONFIG_IGEL_LG_LIMIT_VOLUME
++	vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++	if (vendor && strcmp(vendor, "LG Electronics") == 0 && nid == 0x03)
++		uinfo->value.integer.max = get_amp_max_value(codec, nid, dir, ofs) - 11;
++	else
++		uinfo->value.integer.max = get_amp_max_value(codec, nid, dir, ofs);
++#else
+ 	uinfo->value.integer.max = get_amp_max_value(codec, nid, dir, ofs);
++#endif
+ 	if (!uinfo->value.integer.max) {
+ 		codec_warn(codec,
+ 			   "num_steps = 0 for NID=0x%x (ctl = %s)\n",

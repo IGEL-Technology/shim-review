@@ -1,0 +1,83 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/host/pci-quirks.c b/linux-6.6.38.igel/drivers/usb/host/pci-quirks.c
+--- a/linux-6.6.38.igel/drivers/usb/host/pci-quirks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/host/pci-quirks.c	2024-08-02 15:41:31.563491776 +0200
+@@ -1016,6 +1016,57 @@ static int handshake(void __iomem *ptr,
+ 					 delay_usec, wait_usec);
+ }
+ 
++#ifdef CONFIG_IGEL_TI_TUSB73X0_XHCI_QUIRK
++/* lang@igel: quirk for TI tusb73x0 xHCI controller, if HC halt failed */
++/* gottwald@igel.de: readded patch from 3.2 kernel */
++#define PCI_DEVICE_ID_TI_TUSB73X0_XHCI	0x8241
++#define PCIE_TUSB73X0_USBCONTROL	0xE0
++#define XHCI_CMD_LHCRSE		(1 << 7)
++static int quirk_ti_tusb73x0_xhci(struct pci_dev *pdev, void __iomem *op_reg_base)
++{
++	u32 ti_usbcontrol_reg = 0, val;
++	int timeout;
++
++	if (pdev->class != PCI_CLASS_SERIAL_USB_XHCI ||
++	    pdev->vendor != PCI_VENDOR_ID_TI ||
++	    pdev->device != PCI_DEVICE_ID_TI_TUSB73X0_XHCI)
++		return 1;
++
++	dev_warn(&pdev->dev, "Quirk for TI tusb73x0 xHCI controller\n");
++	pci_read_config_dword(pdev, PCIE_TUSB73X0_USBCONTROL,
++			&ti_usbcontrol_reg);
++	/* disable all ports */
++	pci_write_config_dword(pdev, PCIE_TUSB73X0_USBCONTROL,
++			cpu_to_le32(ti_usbcontrol_reg | 0xf00));
++
++	/* light host controller reset */
++	val = readl(op_reg_base + XHCI_CMD_OFFSET);
++	val |= XHCI_CMD_LHCRSE;
++	writel(val, op_reg_base + XHCI_CMD_OFFSET);
++	timeout = handshake(op_reg_base + XHCI_CMD_OFFSET, XHCI_CMD_LHCRSE, 0,
++			5000, 125);
++	/* Wait for the host controller to be ready before writing any
++	 * operational or runtime registers.  Wait 5 seconds and no more.
++	 */
++	timeout = handshake(op_reg_base + XHCI_STS_OFFSET, XHCI_STS_CNR, 0,
++			5000, 10);
++
++	dev_warn(&pdev->dev, "xHCI HC status=%08x, cmd=%08x\n",
++			readl(op_reg_base + XHCI_STS_OFFSET),
++			readl(op_reg_base + XHCI_CMD_OFFSET));
++
++	/* Wait for the HC to halt - poll every 125 usec (one microframe). */
++	timeout = handshake(op_reg_base + XHCI_STS_OFFSET, XHCI_STS_HALT, 1,
++			XHCI_MAX_HALT_USEC, 125);
++
++	/* enable ports again */
++	pci_write_config_dword(pdev, PCIE_TUSB73X0_USBCONTROL,
++			cpu_to_le32(ti_usbcontrol_reg));
++
++	return timeout;
++}
++#endif
++
+ /*
+  * Intel's Panther Point chipset has two host controllers (EHCI and xHCI) that
+  * share some number of ports.  These ports can be switched between either
+@@ -1227,10 +1278,21 @@ hc_init:
+ 	timeout = handshake(op_reg_base + XHCI_STS_OFFSET, XHCI_STS_HALT, 1,
+ 			XHCI_MAX_HALT_USEC, 125);
+ 	if (timeout) {
++#ifdef CONFIG_IGEL_TI_TUSB73X0_XHCI_QUIRK
++		/* lang@igel: quirk for TI tusb73x0 xHCI controller */
++		/* gottwald@igel.de: readded patch from 3.2 kernel */
++		if (quirk_ti_tusb73x0_xhci(pdev, op_reg_base)) {
++			val = readl(op_reg_base + XHCI_STS_OFFSET);
++			dev_warn(&pdev->dev,
++				 "xHCI HW did not halt within %d usec status = 0x%x\n",
++				 XHCI_MAX_HALT_USEC, val);
++		}
++#else
+ 		val = readl(op_reg_base + XHCI_STS_OFFSET);
+ 		dev_warn(&pdev->dev,
+ 			 "xHCI HW did not halt within %d usec status = 0x%x\n",
+ 			 XHCI_MAX_HALT_USEC, val);
++#endif
+ 	}
+ 
+ iounmap:

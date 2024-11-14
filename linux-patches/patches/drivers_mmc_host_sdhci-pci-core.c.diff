@@ -1,0 +1,48 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-core.c b/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-core.c
+--- a/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-core.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/mmc/host/sdhci-pci-core.c	2024-08-02 15:41:31.551491490 +0200
+@@ -902,6 +902,15 @@ static int byt_emmc_probe_slot(struct sd
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IGEL_CLIENTRON_SD_CARD_QUIRK
++static bool adl_clientron_removable(struct sdhci_pci_slot *slot)
++{
++	return slot->chip->pdev->device == PCI_DEVICE_ID_INTEL_ADL_EMMC &&
++	       (dmi_match(DMI_SYS_VENDOR, "Clientron corp.") ||
++		dmi_match(DMI_PRODUCT_NAME, "UA9 TC156-AN"));
++}
++#endif
++
+ static bool glk_broken_cqhci(struct sdhci_pci_slot *slot)
+ {
+ 	return slot->chip->pdev->device == PCI_DEVICE_ID_INTEL_GLK_EMMC &&
+@@ -919,6 +928,13 @@ static int glk_emmc_probe_slot(struct sd
+ {
+ 	int ret = byt_emmc_probe_slot(slot);
+ 
++#ifdef CONFIG_IGEL_CLIENTRON_SD_CARD_QUIRK
++	if (adl_clientron_removable(slot)) {
++		printk(KERN_ERR "Mark MMC as removable\n");
++		slot->host->mmc->caps &= ~MMC_CAP_NONREMOVABLE;
++	}
++#endif
++
+ 	if (!glk_broken_cqhci(slot))
+ 		slot->host->mmc->caps2 |= MMC_CAP2_CQE;
+ 
+@@ -1749,8 +1765,13 @@ static int amd_probe(struct sdhci_pci_ch
+ 
+ 	pci_dev_put(smbus_dev);
+ 
+-	if (gen == AMD_CHIPSET_BEFORE_ML || gen == AMD_CHIPSET_CZ)
++	if (gen == AMD_CHIPSET_BEFORE_ML || gen == AMD_CHIPSET_CZ) {
+ 		chip->quirks2 |= SDHCI_QUIRK2_CLEAR_TRANSFERMODE_REG_BEFORE_CMD;
++#ifdef CONFIG_IGEL_MMC_QUIRK_FOR_SAMSUNG_TC2
++		/* gottwald@igel.com : Fix MMC support for Samsung TC2 */
++		chip->quirks2 |= SDHCI_QUIRK2_BROKEN_HS200;
++#endif
++	}
+ 
+ 	return 0;
+ }

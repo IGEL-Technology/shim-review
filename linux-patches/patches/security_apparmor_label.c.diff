@@ -1,0 +1,24 @@
+diff -Naurp a/linux-6.6.38.igel/security/apparmor/label.c b/linux-6.6.38.igel/security/apparmor/label.c
+--- a/linux-6.6.38.igel/security/apparmor/label.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/apparmor/label.c	2024-08-02 15:41:31.571491967 +0200
+@@ -1632,6 +1632,12 @@ int aa_label_snxprint(char *str, size_t
+ 	AA_BUG(!str && size != 0);
+ 	AA_BUG(!label);
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	if (AA_DEBUG_LABEL && (flags & FLAG_ABS_ROOT))
++		ns = root_ns;
++	else if (!ns)
++		ns = labels_ns(label);
++#else
+ 	if (AA_DEBUG_LABEL && (flags & FLAG_ABS_ROOT)) {
+ 		ns = root_ns;
+ 		len = snprintf(str, size, "_");
+@@ -1639,6 +1645,7 @@ int aa_label_snxprint(char *str, size_t
+ 	} else if (!ns) {
+ 		ns = labels_ns(label);
+ 	}
++#endif
+ 
+ 	label_for_each(i, label, profile) {
+ 		if (aa_ns_visible(ns, profile->ns, flags & FLAG_VIEW_SUBNS)) {

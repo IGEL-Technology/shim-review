@@ -1,0 +1,70 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/drm_fb_helper.c b/linux-6.6.38.igel/drivers/gpu/drm/drm_fb_helper.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/drm_fb_helper.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/drm_fb_helper.c	2024-08-02 15:41:31.539491203 +0200
+@@ -56,6 +56,21 @@ MODULE_PARM_DESC(drm_fbdev_overalloc,
+ 		 "Overallocation of the fbdev buffer (%) [default="
+ 		 __MODULE_STRING(CONFIG_DRM_FBDEV_OVERALLOC) "]");
+ 
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++static bool drm_use_best_mode = true;
++module_param_named(best_mode, drm_use_best_mode, bool, 0600);
++MODULE_PARM_DESC(best_mode,
++		 "Enable use of best mode on console [default=true]");
++static int drm_use_max_w = 1920;
++module_param_named(max_width, drm_use_max_w, int, 0600);
++MODULE_PARM_DESC(max_width,
++		 "Limit max resolution width on console [default=1920]");
++static int drm_use_max_h = 1200;
++module_param_named(max_height, drm_use_max_h, int, 0600);
++MODULE_PARM_DESC(max_height,
++		 "Limit max resolution height on console [default=1200]");
++#endif
++
+ /*
+  * In order to keep user-space compatibility, we want in certain use-cases
+  * to keep leaking the fbdev physical address to the user-space program
+@@ -1669,6 +1684,11 @@ static int drm_fb_helper_single_fb_probe
+ 
+ 	/* push down into drivers */
+ 	ret = (*fb_helper->funcs->fb_probe)(fb_helper, &sizes);
++
++#ifdef CONFIG_IGEL_VGA_USE_DVI_MODES_IF_MODES_MISSING_QUIRK
++	/* schneider@igel.com: call fb_probe() another time to allow the VGA to use the DVI modes if there is no VGA EDID found */
++ 	ret = (*fb_helper->funcs->fb_probe)(fb_helper, &sizes);
++#endif
+ 	if (ret < 0)
+ 		return ret;
+ 
+@@ -1845,7 +1865,11 @@ __drm_fb_helper_initial_config_and_unloc
+ 	width = dev->mode_config.max_width;
+ 	height = dev->mode_config.max_height;
+ 
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++	drm_client_modeset_probe(&fb_helper->client, width, height, drm_use_best_mode, drm_use_max_w, drm_use_max_h);
++#else
+ 	drm_client_modeset_probe(&fb_helper->client, width, height);
++#endif
+ 	ret = drm_fb_helper_single_fb_probe(fb_helper);
+ 	if (ret < 0) {
+ 		if (ret == -EAGAIN) {
+@@ -1983,7 +2007,20 @@ int drm_fb_helper_hotplug_event(struct d
+ 
+ 	drm_dbg_kms(fb_helper->dev, "\n");
+ 
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++	/* gottwald@igel.com : No we do not want to limit the max mode sizes to the current console modes, WTF */
++#ifndef CONFIG_IGEL_DO_NOT_LIMIT_MAX_MODE_SIZE
++	drm_client_modeset_probe(&fb_helper->client, fb_helper->fb->width, fb_helper->fb->height, drm_use_best_mode, drm_use_max_w, drm_use_max_h);
++#else
++	drm_client_modeset_probe(&fb_helper->client, 0, 0, drm_use_best_mode, drm_use_max_w, drm_use_max_h);
++#endif
++#else /* CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER */
++#ifndef CONFIG_IGEL_DO_NOT_LIMIT_MAX_MODE_SIZE_TO_CURRENT_FB
+ 	drm_client_modeset_probe(&fb_helper->client, fb_helper->fb->width, fb_helper->fb->height);
++#else
++	drm_client_modeset_probe(&fb_helper->client, 0, 0);
++#endif
++#endif /* CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER */
+ 	drm_setup_crtcs_fb(fb_helper);
+ 	mutex_unlock(&fb_helper->lock);
+ 

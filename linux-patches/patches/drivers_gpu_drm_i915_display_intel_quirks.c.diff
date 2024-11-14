@@ -1,0 +1,56 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_quirks.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_quirks.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_quirks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_quirks.c	2024-08-02 15:41:31.543491299 +0200
+@@ -59,12 +59,37 @@ static void quirk_increase_ddi_disabled_
+ 	drm_info(&i915->drm, "Applying Increase DDI Disabled quirk\n");
+ }
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++/*
++ * In some cases, the firmware might not set the lane count to 4 (for example,
++ * when booting in some dual GPU Macs with the dGPU as the default GPU), this
++ * quirk is used to force it as otherwise it might not be possible to compute a
++ * valid link configuration.
++ */
++static void quirk_ddi_a_force_4_lanes(struct drm_i915_private *i915)
++{
++	intel_set_quirk(i915, QUIRK_DDI_A_FORCE_4_LANES);
++	drm_info(&i915->drm, "Applying DDI A Forced 4 Lanes quirk\n");
++}
++#endif
++
+ static void quirk_no_pps_backlight_power_hook(struct drm_i915_private *i915)
+ {
+ 	intel_set_quirk(i915, QUIRK_NO_PPS_BACKLIGHT_POWER_HOOK);
+ 	drm_info(&i915->drm, "Applying no pps backlight power quirk\n");
+ }
+ 
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++/* Dell Wyse 3040 doesn't work well with some Dell monitors (E-series).
++ * Workaround this by skipping DP DPMS D3 transition.
++ */
++static void quirk_disable_dp_dpms_d3(struct drm_i915_private *i915)
++{
++	intel_set_quirk(i915, QUIRK_SKIP_DP_DPMS_D3);
++	DRM_INFO("Applying Wyse 3040 quirk\n");
++}
++#endif
++
+ struct intel_quirk {
+ 	int device;
+ 	int subsystem_vendor;
+@@ -199,6 +224,14 @@ static struct intel_quirk intel_quirks[]
+ 	/* ECS Liva Q2 */
+ 	{ 0x3185, 0x1019, 0xa94d, quirk_increase_ddi_disabled_time },
+ 	{ 0x3184, 0x1019, 0xa94d, quirk_increase_ddi_disabled_time },
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++	/* Dell Wyse 3040 */
++	{ 0x22b0, 0x1028, 0x07c1, quirk_disable_dp_dpms_d3 },
++#endif
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	/* Apple MacBookPro15,1 */
++	{ 0x3e9b, 0x106b, 0x0176, quirk_ddi_a_force_4_lanes },
++#endif
+ 	/* HP Notebook - 14-r206nv */
+ 	{ 0x0f31, 0x103c, 0x220f, quirk_invert_brightness },
+ };

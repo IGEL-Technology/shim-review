@@ -1,0 +1,14 @@
+diff -Naurp a/linux-6.6.38.igel/fs/proc/base.c b/linux-6.6.38.igel/fs/proc/base.c
+--- a/linux-6.6.38.igel/fs/proc/base.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/fs/proc/base.c	2024-08-02 15:41:31.567491872 +0200
+@@ -2858,6 +2858,10 @@ static const struct pid_entry attr_dir_s
+ 	ATTR(NULL, "fscreate",		0666),
+ 	ATTR(NULL, "keycreate",		0666),
+ 	ATTR(NULL, "sockcreate",	0666),
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	ATTR(NULL, "display",		0666),
++	ATTR(NULL, "context",		0444),
++#endif
+ #ifdef CONFIG_SECURITY_SMACK
+ 	DIR("smack",			0555,
+ 	    proc_smack_attr_dir_inode_ops, proc_smack_attr_dir_ops),

@@ -1,0 +1,44 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/platform/x86/ideapad-laptop.c b/linux-6.6.38.igel/drivers/platform/x86/ideapad-laptop.c
+--- a/linux-6.6.38.igel/drivers/platform/x86/ideapad-laptop.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/platform/x86/ideapad-laptop.c	2024-08-02 15:41:31.559491681 +0200
+@@ -154,6 +154,18 @@ struct ideapad_private {
+ 	} kbd_bl;
+ };
+ 
++#ifdef CONFIG_IGEL_ADD_HW_RFKILL_TO_IDEAPAD
++/* gottwald@igel.com Make it possible to disable hardware rfkill switch usage */
++
++static bool no_hw_rfkill;
++module_param(no_hw_rfkill, bool, 0444);
++MODULE_PARM_DESC(no_hw_rfkill, "Disable usage of hardware rfkill switch.");
++
++static bool hw_rfkill = 0;
++module_param(hw_rfkill, bool, 0444);
++MODULE_PARM_DESC(hw_rfkill, "Enable usage of hardware rfkill switch.");
++#endif
++
+ static bool no_bt_rfkill;
+ module_param(no_bt_rfkill, bool, 0444);
+ MODULE_PARM_DESC(no_bt_rfkill, "No rfkill for bluetooth.");
+@@ -1629,8 +1641,21 @@ static void ideapad_check_features(struc
+ 
+ 	priv->features.set_fn_lock_led =
+ 		set_fn_lock_led || dmi_check_system(set_fn_lock_led_list);
++#ifdef CONFIG_IGEL_ADD_HW_RFKILL_TO_IDEAPAD
++	/* gottwald@igel.com Make it possible to enable/disable hardware
++	 * rfkill switch usage with module parameter */
++	if (no_hw_rfkill) {
++		priv->features.hw_rfkill_switch = 0;
++	} else if (hw_rfkill) {
++		priv->features.hw_rfkill_switch = 1;
++	} else {
++		priv->features.hw_rfkill_switch =
++			hw_rfkill_switch || dmi_check_system(hw_rfkill_list);
++	}
++#else
+ 	priv->features.hw_rfkill_switch =
+ 		hw_rfkill_switch || dmi_check_system(hw_rfkill_list);
++#endif
+ 	priv->features.ctrl_ps2_aux_port =
+ 		ctrl_ps2_aux_port || dmi_check_system(ctrl_ps2_aux_port_list);
+ 	priv->features.touchpad_ctrl_via_ec = touchpad_ctrl_via_ec;

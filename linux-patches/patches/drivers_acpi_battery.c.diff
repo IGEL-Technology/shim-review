@@ -1,0 +1,66 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/acpi/battery.c b/linux-6.6.38.igel/drivers/acpi/battery.c
+--- a/linux-6.6.38.igel/drivers/acpi/battery.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/acpi/battery.c	2024-08-02 15:41:31.535491108 +0200
+@@ -54,6 +54,9 @@ static bool battery_driver_registered;
+ static int battery_bix_broken_package;
+ static int battery_notification_delay_ms;
+ static int battery_ac_is_broken;
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++static int battery_quirk_notcharging;
++#endif
+ static unsigned int cache_time = 1000;
+ module_param(cache_time, uint, 0644);
+ MODULE_PARM_DESC(cache_time, "cache time in milliseconds");
+@@ -217,8 +220,15 @@ static int acpi_battery_get_property(str
+ 			val->intval = POWER_SUPPLY_STATUS_CHARGING;
+ 		else if (acpi_battery_is_charged(battery))
+ 			val->intval = POWER_SUPPLY_STATUS_FULL;
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++		else if (battery_quirk_notcharging)
++			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++		else
++			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
++#else
+ 		else
+ 			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++#endif
+ 		break;
+ 	case POWER_SUPPLY_PROP_PRESENT:
+ 		val->intval = acpi_battery_present(battery);
+@@ -1117,6 +1127,14 @@ battery_ac_is_broken_quirk(const struct
+ 	return 0;
+ }
+ 
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++static int __init battery_quirk_not_charging(const struct dmi_system_id *d)
++{
++	battery_quirk_notcharging = 1;
++	return 0;
++}
++#endif
++
+ static const struct dmi_system_id bat_dmi_table[] __initconst = {
+ 	{
+ 		/* NEC LZ750/LS */
+@@ -1145,6 +1163,21 @@ static const struct dmi_system_id bat_dm
+ 			DMI_MATCH(DMI_BIOS_DATE, "08/22/2014"),
+ 		},
+ 	},
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++	{
++		/*
++		 * On Lenovo ThinkPads the BIOS specification defines
++		 * a state when the bits for charging and discharging
++		 * are both set to 0. That state is "Not Charging".
++		 */
++		.callback = battery_quirk_not_charging,
++		.ident = "Lenovo ThinkPad",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
++			DMI_MATCH(DMI_PRODUCT_VERSION, "ThinkPad"),
++		},
++	},
++#endif
+ 	{
+ 		/* Microsoft Surface Go 3 */
+ 		.callback = battery_notification_delay_quirk,

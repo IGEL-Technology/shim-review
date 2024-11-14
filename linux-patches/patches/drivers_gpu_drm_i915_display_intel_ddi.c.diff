@@ -1,0 +1,60 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_ddi.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_ddi.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_ddi.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_ddi.c	2024-08-02 15:41:31.539491203 +0200
+@@ -2908,7 +2908,12 @@ static void intel_ddi_post_disable_dp(st
+ 	 * Power down sink before disabling the port, otherwise we end
+ 	 * up getting interrupts from the sink on detecting link loss.
+ 	 */
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++	if (!(intel_has_quirk(dev_priv, QUIRK_SKIP_DP_DPMS_D3)))
++		intel_dp_set_power(intel_dp, DP_SET_POWER_D3);
++#else
+ 	intel_dp_set_power(intel_dp, DP_SET_POWER_D3);
++#endif
+ 
+ 	if (DISPLAY_VER(dev_priv) >= 12) {
+ 		if (is_mst) {
+@@ -3775,6 +3780,9 @@ static void intel_ddi_get_config(struct
+ {
+ 	struct drm_i915_private *dev_priv = to_i915(encoder->base.dev);
+ 	enum transcoder cpu_transcoder = pipe_config->cpu_transcoder;
++#if defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) || defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION)
++	bool has_audio = false;
++#endif
+ 
+ 	/* XXX: DSI transcoder paranoia */
+ 	if (drm_WARN_ON(&dev_priv->drm, transcoder_is_dsi(cpu_transcoder)))
+@@ -3784,8 +3792,21 @@ static void intel_ddi_get_config(struct
+ 
+ 	intel_ddi_mso_get_config(encoder, pipe_config);
+ 
++#if defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) || defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION)
++	has_audio = intel_ddi_is_audio_enabled(dev_priv, cpu_transcoder);
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION
++	if ((enum intel_output_type) encoder->compute_output_type == (enum intel_output_type)INTEL_OUTPUT_DP && i915_modparams.disable_dp_audio)
++		has_audio = false;
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
++	if ((enum intel_output_type) encoder->compute_output_type == (enum intel_output_type)INTEL_OUTPUT_HDMI && i915_modparams.disable_hdmi_audio)
++		has_audio = false;
++#endif
++	pipe_config->has_audio = has_audio;
++#else
+ 	pipe_config->has_audio =
+ 		intel_ddi_is_audio_enabled(dev_priv, cpu_transcoder);
++#endif
+ 
+ 	if (encoder->type == INTEL_OUTPUT_EDP)
+ 		intel_edp_fixup_vbt_bpp(encoder, pipe_config->pipe_bpp);
+@@ -4508,6 +4529,11 @@ static bool intel_ddi_a_force_4_lanes(st
+ 	if (dig_port->saved_port_bits & DDI_A_4_LANES)
+ 		return false;
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	if (intel_has_quirk(dev_priv, QUIRK_DDI_A_FORCE_4_LANES))
++		return true;
++#endif
++
+ 	/* Broxton/Geminilake: Bspec says that DDI_A_4_LANES is the only
+ 	 *                     supported configuration
+ 	 */

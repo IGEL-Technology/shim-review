@@ -1,0 +1,43 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/video/fbdev/core/fbcon.c b/linux-6.6.38.igel/drivers/video/fbdev/core/fbcon.c
+--- a/linux-6.6.38.igel/drivers/video/fbdev/core/fbcon.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/video/fbdev/core/fbcon.c	2024-08-02 15:41:31.563491776 +0200
+@@ -270,10 +270,39 @@ static int fbcon_get_rotate(struct fb_in
+ 	return (ops) ? ops->rotate : 0;
+ }
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++static int igel_splash_fix = 1;
++
++/* lang@igel: our bootcode shows a boot splash, the splash
++   should not be destroyed by a frame buffer console */
++static inline int fbcon_fix_igel_splash(struct vc_data *vc)
++{
++	if (vc->vc_num != 0 || fg_console != 0 || ! (*vc->vc_display_fg == vc))
++		return 0;
++	/* remove splash fix after x server was started */
++	if (vc->vc_mode == KD_GRAPHICS) {
++		igel_splash_fix = 0;
++		printk("fbcon: remove igel boot splash fix\n");
++		return 0;
++	}
++	/* show the message only once ! */
++	if (igel_splash_fix == 1) {
++		printk("fbcon: fix igel boot splash\n");
++		igel_splash_fix = 2;
++	}
++	return (1);
++}
++#endif
++
+ static inline int fbcon_is_inactive(struct vc_data *vc, struct fb_info *info)
+ {
+ 	struct fbcon_ops *ops = info->fbcon_par;
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++	if (igel_splash_fix && fbcon_fix_igel_splash(vc))
++		return 1;
++#endif
++
+ 	return (info->state != FBINFO_STATE_RUNNING ||
+ 		vc->vc_mode != KD_TEXT || ops->graphics);
+ }

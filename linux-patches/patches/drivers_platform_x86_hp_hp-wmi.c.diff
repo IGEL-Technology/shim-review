@@ -1,0 +1,54 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/platform/x86/hp/hp-wmi.c b/linux-6.6.38.igel/drivers/platform/x86/hp/hp-wmi.c
+--- a/linux-6.6.38.igel/drivers/platform/x86/hp/hp-wmi.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/platform/x86/hp/hp-wmi.c	2024-08-02 15:41:31.559491681 +0200
+@@ -1451,11 +1451,27 @@ static int hp_wmi_hwmon_init(void);
+ static int __init hp_wmi_bios_setup(struct platform_device *device)
+ {
+ 	int err;
++#ifdef CONFIG_IGEL_HP_RFKILL_MT645_G7_FIX
++        const char *vendor = NULL;
++        const char *name = NULL;
++	int no_rfkill = 0;
++#endif
++
+ 	/* clear detected rfkill devices */
+ 	wifi_rfkill = NULL;
+ 	bluetooth_rfkill = NULL;
+ 	wwan_rfkill = NULL;
+ 	rfkill2_count = 0;
++#ifdef CONFIG_IGEL_HP_RFKILL_MT645_G7_FIX
++        vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++        name = dmi_get_system_info(DMI_PRODUCT_NAME);
++
++        if (vendor != NULL && name != NULL) {
++                if (strstr(vendor, "HP") &&
++                    strstr(name, "mt645 G7")) {
++                        no_rfkill = 1;
++                }
++        }
+ 
+ 	/*
+ 	 * In pre-2009 BIOS, command 1Bh return 0x4 to indicate that
+@@ -1463,10 +1479,22 @@ static int __init hp_wmi_bios_setup(stru
+ 	 * devices. All features supported by this command will no
+ 	 * longer be supported.
+ 	 */
++	if (!no_rfkill && !hp_wmi_bios_2009_later()) {
++		if (hp_wmi_rfkill_setup(device))
++			hp_wmi_rfkill2_setup(device);
++	}
++#else
++	/*
++	 * In pre-2009 BIOS, command 1Bh return 0x4 to indicate that
++	 * BIOS no longer controls the power for the wireless
++	 * devices. All features supported by this command will no
++	 * longer be supported.
++	 */
+ 	if (!hp_wmi_bios_2009_later()) {
+ 		if (hp_wmi_rfkill_setup(device))
+ 			hp_wmi_rfkill2_setup(device);
+ 	}
++#endif
+ 
+ 	err = hp_wmi_hwmon_init();
+ 

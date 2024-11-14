@@ -1,0 +1,25 @@
+diff -Naurp a/linux-6.6.38.igel/include/sound/jack.h b/linux-6.6.38.igel/include/sound/jack.h
+--- a/linux-6.6.38.igel/include/sound/jack.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/sound/jack.h	2024-08-02 15:41:31.567491872 +0200
+@@ -73,6 +73,21 @@ struct snd_jack {
+ 	void (*private_free)(struct snd_jack *);
+ };
+ 
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES) || defined(CONFIG_IGEL_LENOVO_M600_SOUND_FIXES)
++/* gottwald@igel.com moved here from sound/core/jack.c */
++
++struct snd_jack_kctl {
++	struct snd_kcontrol *kctl;
++	struct list_head list;  /* list of controls belong to the same jack */
++	unsigned int mask_bits; /* only masked status bits are reported via kctl */
++        struct snd_jack *jack;  /* pointer to struct snd_jack */
++	bool sw_inject_enable;  /* allow to inject plug event via debugfs */
++#ifdef CONFIG_SND_JACK_INJECTION_DEBUG
++	struct dentry *jack_debugfs_root; /* jack_kctl debugfs root */
++#endif
++};
++#endif
++
+ #ifdef CONFIG_SND_JACK
+ 
+ int snd_jack_new(struct snd_card *card, const char *id, int type,

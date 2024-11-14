@@ -1,0 +1,18 @@
+diff -Naurp a/linux-6.6.38.igel/Documentation/leds/well-known-leds.txt b/linux-6.6.38.igel/Documentation/leds/well-known-leds.txt
+--- a/linux-6.6.38.igel/Documentation/leds/well-known-leds.txt	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/Documentation/leds/well-known-leds.txt	2024-08-02 15:41:31.527490917 +0200
+@@ -44,6 +44,14 @@ Legacy: "lp5523:kb{1,2,3,4,5,6}" (Nokia
+ 
+ Frontlight/backlight of main keyboard.
+ 
++Good: ":*:kbd_backlight"
++Good: "input*:*:kbd_backlight"
++Legacy: "*:*:kbd_backlight"
++
++Many drivers have the vendor or product name as the first field of the led name,
++this makes names inconsistent and is redundant as that information is already in
++sysfs.
++
+ Legacy: "button-backlight" (Motorola Droid 4)
+ 
+ Some phones have touch buttons below screen; it is different from main

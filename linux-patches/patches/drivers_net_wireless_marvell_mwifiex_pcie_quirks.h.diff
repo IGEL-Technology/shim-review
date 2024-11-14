@@ -1,0 +1,14 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h b/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h
+--- a/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h	2024-08-02 15:41:31.555491585 +0200
+@@ -5,5 +5,10 @@
+ 
+ #define QUIRK_FW_RST_D3COLD	BIT(0)
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++#define QUIRK_DO_FLR_ON_BRIDGE	BIT(1)
++#define QUIRK_NO_BRIDGE_D3	BIT(2)
++#endif
++
+ void mwifiex_initialize_quirks(struct pcie_service_card *card);
+ int mwifiex_pcie_reset_d3cold_quirk(struct pci_dev *pdev);

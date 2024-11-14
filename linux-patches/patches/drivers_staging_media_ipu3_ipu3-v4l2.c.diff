@@ -1,0 +1,102 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/staging/media/ipu3/ipu3-v4l2.c b/linux-6.6.38.igel/drivers/staging/media/ipu3/ipu3-v4l2.c
+--- a/linux-6.6.38.igel/drivers/staging/media/ipu3/ipu3-v4l2.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/staging/media/ipu3/ipu3-v4l2.c	2024-08-02 15:41:31.559491681 +0200
+@@ -188,6 +188,7 @@ static int imgu_subdev_set_fmt(struct v4
+ 	return 0;
+ }
+ 
++#ifndef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
+ static struct v4l2_rect *
+ imgu_subdev_get_crop(struct imgu_v4l2_subdev *sd,
+ 		     struct v4l2_subdev_state *sd_state, unsigned int pad,
+@@ -209,6 +210,7 @@ imgu_subdev_get_compose(struct imgu_v4l2
+ 	else
+ 		return &sd->rect.bds;
+ }
++#endif
+ 
+ static int imgu_subdev_get_selection(struct v4l2_subdev *sd,
+ 				     struct v4l2_subdev_state *sd_state,
+@@ -222,12 +224,28 @@ static int imgu_subdev_get_selection(str
+ 
+ 	switch (sel->target) {
+ 	case V4L2_SEL_TGT_CROP:
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		if (sel->which == V4L2_SUBDEV_FORMAT_TRY)
++			sel->r = *v4l2_subdev_get_try_crop(sd, sd_state,
++							   sel->pad);
++		else
++			sel->r = imgu_sd->rect.eff;
++#else
+ 		sel->r = *imgu_subdev_get_crop(imgu_sd, sd_state, sel->pad,
+ 					       sel->which);
++#endif
+ 		return 0;
+ 	case V4L2_SEL_TGT_COMPOSE:
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		if (sel->which == V4L2_SUBDEV_FORMAT_TRY)
++			sel->r = *v4l2_subdev_get_try_compose(sd, sd_state,
++							      sel->pad);
++		else
++			sel->r = imgu_sd->rect.bds;
++#else
+ 		sel->r = *imgu_subdev_get_compose(imgu_sd, sd_state, sel->pad,
+ 						  sel->which);
++#endif
+ 		return 0;
+ 	default:
+ 		return -EINVAL;
+@@ -239,9 +257,16 @@ static int imgu_subdev_set_selection(str
+ 				     struct v4l2_subdev_selection *sel)
+ {
+ 	struct imgu_device *imgu = v4l2_get_subdevdata(sd);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	struct imgu_v4l2_subdev *imgu_sd = container_of(sd,
++							struct imgu_v4l2_subdev,
++							subdev);
++	struct v4l2_rect *rect, *try_sel;
++#else
+ 	struct imgu_v4l2_subdev *imgu_sd =
+ 		container_of(sd, struct imgu_v4l2_subdev, subdev);
+ 	struct v4l2_rect *rect;
++#endif
+ 
+ 	dev_dbg(&imgu->pci_dev->dev,
+ 		 "set subdev %u sel which %u target 0x%4x rect [%ux%u]",
+@@ -253,18 +278,36 @@ static int imgu_subdev_set_selection(str
+ 
+ 	switch (sel->target) {
+ 	case V4L2_SEL_TGT_CROP:
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		try_sel = v4l2_subdev_get_try_crop(sd, sd_state, sel->pad);
++		rect = &imgu_sd->rect.eff;
++#else
+ 		rect = imgu_subdev_get_crop(imgu_sd, sd_state, sel->pad,
+ 					    sel->which);
++#endif
+ 		break;
+ 	case V4L2_SEL_TGT_COMPOSE:
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		try_sel = v4l2_subdev_get_try_compose(sd, sd_state, sel->pad);
++		rect = &imgu_sd->rect.bds;
++#else
+ 		rect = imgu_subdev_get_compose(imgu_sd, sd_state, sel->pad,
+ 					       sel->which);
++#endif
+ 		break;
+ 	default:
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (sel->which == V4L2_SUBDEV_FORMAT_TRY)
++		*try_sel = sel->r;
++	else
++		*rect = sel->r;
++#else
+ 	*rect = sel->r;
++#endif
++
+ 	return 0;
+ }
+ 

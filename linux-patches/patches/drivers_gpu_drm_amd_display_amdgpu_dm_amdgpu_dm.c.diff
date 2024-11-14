@@ -1,0 +1,139 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/linux-6.6.38.igel/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c	2024-08-02 15:41:31.539491203 +0200
+@@ -896,6 +896,11 @@ static void amdgpu_dm_fbc_init(struct dr
+ 	struct drm_display_mode *mode;
+ 	unsigned long max_size = 0;
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++	if (amdgpu_use_fbc == 0)
++		return;
++#endif
++
+ 	if (adev->dm.dc->fbc_compressor == NULL)
+ 		return;
+ 
+@@ -912,9 +917,17 @@ static void amdgpu_dm_fbc_init(struct dr
+ 	}
+ 
+ 	if (max_size) {
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		uint32_t domain = amdgpu_bo_get_preferred_fbc_domain(adev,
++					(AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT));
+ 		int r = amdgpu_bo_create_kernel(adev, max_size * 4, PAGE_SIZE,
+-			    AMDGPU_GEM_DOMAIN_GTT, &compressor->bo_ptr,
++			    domain, &compressor->bo_ptr,
+ 			    &compressor->gpu_addr, &compressor->cpu_addr);
++		if (r == -ENOMEM && domain == AMDGPU_GEM_DOMAIN_VRAM) {
++			r = amdgpu_bo_create_kernel(adev, max_size * 4, PAGE_SIZE,
++				    AMDGPU_GEM_DOMAIN_GTT, &compressor->bo_ptr,
++				    &compressor->gpu_addr, &compressor->cpu_addr);
++		}
+ 
+ 		if (r)
+ 			DRM_ERROR("DM: Failed to initialize FBC\n");
+@@ -922,7 +935,18 @@ static void amdgpu_dm_fbc_init(struct dr
+ 			adev->dm.dc->ctx->fbc_gpu_addr = compressor->gpu_addr;
+ 			DRM_INFO("DM: FBC alloc %lu\n", max_size*4);
+ 		}
++#else
++		int r = amdgpu_bo_create_kernel(adev, max_size * 4, PAGE_SIZE,
++			    AMDGPU_GEM_DOMAIN_GTT, &compressor->bo_ptr,
++			    &compressor->gpu_addr, &compressor->cpu_addr);
+ 
++		if (r)
++			DRM_ERROR("DM: Failed to initialize FBC\n");
++		else {
++			adev->dm.dc->ctx->fbc_gpu_addr = compressor->gpu_addr;
++			DRM_INFO("DM: FBC alloc %lu\n", max_size*4);
++		}
++#endif
+ 	}
+ 
+ }
+@@ -3205,17 +3229,36 @@ void amdgpu_dm_update_connector_after_de
+ 		dc_sink_retain(aconnector->dc_sink);
+ 		if (sink->dc_edid.length == 0) {
+ 			aconnector->edid = NULL;
++#ifdef CONFIG_IGEL_AMDGPU_CALL_DP_CEC_FUNCS_ONLY_FOR_DP
++			if (connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort ||
++			    connector->connector_type == DRM_MODE_CONNECTOR_eDP) {
++				if (aconnector->dc_link->aux_mode) {
++					drm_dp_cec_unset_edid(
++						&aconnector->dm_dp_aux.aux);
++				}
++			}
++#else
+ 			if (aconnector->dc_link->aux_mode) {
+ 				drm_dp_cec_unset_edid(
+ 					&aconnector->dm_dp_aux.aux);
+ 			}
++#endif
+ 		} else {
+ 			aconnector->edid =
+ 				(struct edid *)sink->dc_edid.raw_edid;
+ 
++#ifdef CONFIG_IGEL_AMDGPU_CALL_DP_CEC_FUNCS_ONLY_FOR_DP
++			if (connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort ||
++			    connector->connector_type == DRM_MODE_CONNECTOR_eDP) {
++				if (aconnector->dc_link->aux_mode)
++					drm_dp_cec_set_edid(&aconnector->dm_dp_aux.aux,
++							    aconnector->edid);
++			}
++#else
+ 			if (aconnector->dc_link->aux_mode)
+ 				drm_dp_cec_set_edid(&aconnector->dm_dp_aux.aux,
+ 						    aconnector->edid);
++#endif
+ 		}
+ 
+ 		if (!aconnector->timing_requested) {
+@@ -3229,7 +3272,14 @@ void amdgpu_dm_update_connector_after_de
+ 		amdgpu_dm_update_freesync_caps(connector, aconnector->edid);
+ 		update_connector_ext_caps(aconnector);
+ 	} else {
++#ifdef CONFIG_IGEL_AMDGPU_CALL_DP_CEC_FUNCS_ONLY_FOR_DP
++		if (connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort ||
++		    connector->connector_type == DRM_MODE_CONNECTOR_eDP) {
++			drm_dp_cec_unset_edid(&aconnector->dm_dp_aux.aux);
++		}
++#else
+ 		drm_dp_cec_unset_edid(&aconnector->dm_dp_aux.aux);
++#endif
+ 		amdgpu_dm_update_freesync_caps(connector, NULL);
+ 		drm_connector_update_edid_property(connector, NULL);
+ 		aconnector->num_modes = 0;
+@@ -3462,9 +3512,16 @@ out:
+ 			hdcp_handle_cpirq(adev->dm.hdcp_workqueue,  aconnector->base.index);
+ 	}
+ 
+-	if (dc_link->type != dc_connection_mst_branch)
++	if (dc_link->type != dc_connection_mst_branch) {
++#ifdef CONFIG_IGEL_AMDGPU_CALL_DP_CEC_FUNCS_ONLY_FOR_DP
++		if (connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort ||
++		    connector->connector_type == DRM_MODE_CONNECTOR_eDP) {
++			drm_dp_cec_irq(&aconnector->dm_dp_aux.aux);
++		}
++#else
+ 		drm_dp_cec_irq(&aconnector->dm_dp_aux.aux);
+-
++#endif
++	}
+ 	mutex_unlock(&aconnector->hpd_lock);
+ }
+ 
+@@ -6311,7 +6368,14 @@ static void amdgpu_dm_connector_destroy(
+ 		dc_sink_release(aconnector->dc_sink);
+ 	aconnector->dc_sink = NULL;
+ 
++#ifdef CONFIG_IGEL_AMDGPU_CALL_DP_CEC_FUNCS_ONLY_FOR_DP
++	if (connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort ||
++	    connector->connector_type == DRM_MODE_CONNECTOR_eDP) {
++		drm_dp_cec_unregister_connector(&aconnector->dm_dp_aux.aux);
++	}
++#else
+ 	drm_dp_cec_unregister_connector(&aconnector->dm_dp_aux.aux);
++#endif
+ 	drm_connector_unregister(connector);
+ 	drm_connector_cleanup(connector);
+ 	if (aconnector->i2c) {

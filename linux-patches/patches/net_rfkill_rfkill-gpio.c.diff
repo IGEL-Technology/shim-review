@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/net/rfkill/rfkill-gpio.c b/linux-6.6.38.igel/net/rfkill/rfkill-gpio.c
+--- a/linux-6.6.38.igel/net/rfkill/rfkill-gpio.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/net/rfkill/rfkill-gpio.c	2024-08-02 15:41:31.567491872 +0200
+@@ -170,6 +170,11 @@ static int rfkill_gpio_remove(struct pla
+ static const struct acpi_device_id rfkill_acpi_match[] = {
+ 	{ "BCM4752", RFKILL_TYPE_GPS },
+ 	{ "LNV4752", RFKILL_TYPE_GPS },
++#ifdef CONFIG_IGEL_ADD_RTL8723BS_RFKILL_SWITCH_SUPPORT
++	/* gottwald@igel.com Added RFKILL switch support for realtek rtl8723bs driver
++	 * Patch taken from: https://patchwork.kernel.org/patch/9671285/ */
++	{ "OBDA8723", RFKILL_TYPE_BLUETOOTH },
++#endif
+ 	{ },
+ };
+ MODULE_DEVICE_TABLE(acpi, rfkill_acpi_match);

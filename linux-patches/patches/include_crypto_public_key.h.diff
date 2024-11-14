@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/include/crypto/public_key.h b/linux-6.6.38.igel/include/crypto/public_key.h
+--- a/linux-6.6.38.igel/include/crypto/public_key.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/crypto/public_key.h	2024-08-02 15:41:31.567491872 +0200
+@@ -108,6 +108,11 @@ extern int decrypt_blob(struct kernel_pk
+ extern int create_signature(struct kernel_pkey_params *, const void *, void *);
+ extern int verify_signature(const struct key *,
+ 			    const struct public_key_signature *);
++#ifdef CONFIG_IGEL_VERIFY_SIGNATURE_AGAINST_KEYRING
++extern int verify_signature_igel(const struct key *,
++				 const struct public_key_signature *,
++				 uint32_t *serial);
++#endif
+ 
+ #if IS_REACHABLE(CONFIG_ASYMMETRIC_PUBLIC_KEY_SUBTYPE)
+ int public_key_verify_signature(const struct public_key *pkey,

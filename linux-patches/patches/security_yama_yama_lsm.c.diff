@@ -1,0 +1,29 @@
+diff -Naurp a/linux-6.6.38.igel/security/yama/yama_lsm.c b/linux-6.6.38.igel/security/yama/yama_lsm.c
+--- a/linux-6.6.38.igel/security/yama/yama_lsm.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/yama/yama_lsm.c	2024-08-02 15:41:31.575492063 +0200
+@@ -421,6 +421,13 @@ static int yama_ptrace_traceme(struct ta
+ 	return rc;
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct lsm_id yama_lsmid __lsm_ro_after_init = {
++	.lsm  = "yama",
++	.slot = LSMBLOB_NOT_NEEDED
++};
++#endif
++
+ static struct security_hook_list yama_hooks[] __ro_after_init = {
+ 	LSM_HOOK_INIT(ptrace_access_check, yama_ptrace_access_check),
+ 	LSM_HOOK_INIT(ptrace_traceme, yama_ptrace_traceme),
+@@ -471,7 +478,11 @@ static inline void yama_init_sysctl(void
+ static int __init yama_init(void)
+ {
+ 	pr_info("Yama: becoming mindful.\n");
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(yama_hooks, ARRAY_SIZE(yama_hooks), &yama_lsmid);
++#else
+ 	security_add_hooks(yama_hooks, ARRAY_SIZE(yama_hooks), "yama");
++#endif
+ 	yama_init_sysctl();
+ 	return 0;
+ }

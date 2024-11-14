@@ -1,0 +1,37 @@
+diff -Naurp a/linux-6.6.38.igel/security/apparmor/apparmorfs.c b/linux-6.6.38.igel/security/apparmor/apparmorfs.c
+--- a/linux-6.6.38.igel/security/apparmor/apparmorfs.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/apparmor/apparmorfs.c	2024-08-02 15:41:31.571491967 +0200
+@@ -2374,6 +2374,13 @@ static struct aa_sfs_entry aa_sfs_entry_
+ 	{ }
+ };
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct aa_sfs_entry aa_sfs_entry_dbus[] = {
++	AA_SFS_FILE_STRING("mask", "acquire send receive"),
++	{ }
++};
++#endif
++
+ static struct aa_sfs_entry aa_sfs_entry_query_label[] = {
+ 	AA_SFS_FILE_STRING("perms", "allow deny audit quiet"),
+ 	AA_SFS_FILE_BOOLEAN("data",		1),
+@@ -2390,6 +2397,9 @@ static struct aa_sfs_entry aa_sfs_entry_
+ 	AA_SFS_DIR("domain",			aa_sfs_entry_domain),
+ 	AA_SFS_DIR("file",			aa_sfs_entry_file),
+ 	AA_SFS_DIR("network_v8",		aa_sfs_entry_network),
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	AA_SFS_DIR("network",			aa_sfs_entry_network_compat),
++#endif
+ 	AA_SFS_DIR("mount",			aa_sfs_entry_mount),
+ 	AA_SFS_DIR("namespaces",		aa_sfs_entry_ns),
+ 	AA_SFS_FILE_U64("capability",		VFS_CAP_FLAGS_MASK),
+@@ -2397,6 +2407,9 @@ static struct aa_sfs_entry aa_sfs_entry_
+ 	AA_SFS_DIR("caps",			aa_sfs_entry_caps),
+ 	AA_SFS_DIR("ptrace",			aa_sfs_entry_ptrace),
+ 	AA_SFS_DIR("signal",			aa_sfs_entry_signal),
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	AA_SFS_DIR("dbus",			aa_sfs_entry_dbus),
++#endif
+ 	AA_SFS_DIR("query",			aa_sfs_entry_query),
+ 	{ }
+ };

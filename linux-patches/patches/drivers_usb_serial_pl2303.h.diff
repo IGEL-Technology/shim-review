@@ -1,0 +1,13 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/serial/pl2303.h b/linux-6.6.38.igel/drivers/usb/serial/pl2303.h
+--- a/linux-6.6.38.igel/drivers/usb/serial/pl2303.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/serial/pl2303.h	2024-08-02 15:41:31.563491776 +0200
+@@ -139,6 +139,9 @@
+ #define HP_LCM220_PRODUCT_ID	0x3139
+ #define HP_LCM960_PRODUCT_ID	0x3239
+ #define HP_LD220_PRODUCT_ID	0x3524
++#ifdef CONFIG_IGEL_USB_SERIAL_SUPPORT_HP_LDM350_DEVICES
++#define HP_LDM350_PRODUCT_ID	0x3739
++#endif
+ #define HP_LD220TA_PRODUCT_ID	0x4349
+ #define HP_LD960TA_PRODUCT_ID	0x4439
+ #define HP_LM940_PRODUCT_ID	0x5039

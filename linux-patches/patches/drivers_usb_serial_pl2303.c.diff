@@ -1,0 +1,13 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/usb/serial/pl2303.c b/linux-6.6.38.igel/drivers/usb/serial/pl2303.c
+--- a/linux-6.6.38.igel/drivers/usb/serial/pl2303.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/usb/serial/pl2303.c	2024-08-02 15:41:31.563491776 +0200
+@@ -109,6 +109,9 @@ static const struct usb_device_id id_tab
+ 	{ USB_DEVICE(HP_VENDOR_ID, HP_LM930_PRODUCT_ID) },
+ 	{ USB_DEVICE(HP_VENDOR_ID, HP_LM940_PRODUCT_ID) },
+ 	{ USB_DEVICE(HP_VENDOR_ID, HP_TD620_PRODUCT_ID) },
++#ifdef CONFIG_IGEL_USB_SERIAL_SUPPORT_HP_LDM350_DEVICES
++	{ USB_DEVICE(HP_VENDOR_ID, HP_LDM350_PRODUCT_ID) },
++#endif
+ 	{ USB_DEVICE(CRESSI_VENDOR_ID, CRESSI_EDY_PRODUCT_ID) },
+ 	{ USB_DEVICE(ZEAGLE_VENDOR_ID, ZEAGLE_N2ITION3_PRODUCT_ID) },
+ 	{ USB_DEVICE(SONY_VENDOR_ID, SONY_QN3USB_PRODUCT_ID) },

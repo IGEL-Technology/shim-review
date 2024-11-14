@@ -1,0 +1,94 @@
+diff -Naurp a/linux-6.6.38.igel/kernel/auditfilter.c b/linux-6.6.38.igel/kernel/auditfilter.c
+--- a/linux-6.6.38.igel/kernel/auditfilter.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/kernel/auditfilter.c	2024-08-02 15:41:31.567491872 +0200
+@@ -76,7 +76,11 @@ static void audit_free_lsm_field(struct
+ 	case AUDIT_OBJ_LEV_LOW:
+ 	case AUDIT_OBJ_LEV_HIGH:
+ 		kfree(f->lsm_str);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		security_audit_rule_free(f->lsm_rules);
++#else
+ 		security_audit_rule_free(f->lsm_rule);
++#endif
+ 	}
+ }
+ 
+@@ -527,9 +531,17 @@ static struct audit_entry *audit_data_to
+ 				goto exit_free;
+ 			}
+ 			entry->rule.buflen += f_val;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++			f->lsm_isset = true;
++#endif
+ 			f->lsm_str = str;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++			err = security_audit_rule_init(f->type, f->op, str,
++						       f->lsm_rules);
++#else
+ 			err = security_audit_rule_init(f->type, f->op, str,
+ 						       (void **)&f->lsm_rule);
++#endif
+ 			/* Keep currently invalid fields around in case they
+ 			 * become valid after a policy reload. */
+ 			if (err == -EINVAL) {
+@@ -797,9 +809,15 @@ static inline int audit_dupe_lsm_field(s
+ 		return -ENOMEM;
+ 	df->lsm_str = lsm_str;
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	/* our own (refreshed) copy of lsm_rules */
++	ret = security_audit_rule_init(df->type, df->op, df->lsm_str,
++				       df->lsm_rules);
++#else
+ 	/* our own (refreshed) copy of lsm_rule */
+ 	ret = security_audit_rule_init(df->type, df->op, df->lsm_str,
+ 				       (void **)&df->lsm_rule);
++#endif
+ 	/* Keep currently invalid fields around in case they
+ 	 * become valid after a policy reload. */
+ 	if (ret == -EINVAL) {
+@@ -1368,10 +1386,20 @@ int audit_filter(int msgtype, unsigned i
+ 			case AUDIT_SUBJ_TYPE:
+ 			case AUDIT_SUBJ_SEN:
+ 			case AUDIT_SUBJ_CLR:
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++				if (f->lsm_isset) {
++#else
+ 				if (f->lsm_rule) {
++#endif
+ 					security_current_getsecid_subj(&sid);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++					result = security_audit_rule_match(sid,
++						   f->type, f->op,
++						   f->lsm_rules);
++#else
+ 					result = security_audit_rule_match(sid,
+ 						   f->type, f->op, f->lsm_rule);
++#endif
+ 				}
+ 				break;
+ 			case AUDIT_EXE:
+@@ -1398,7 +1426,11 @@ unlock_and_return:
+ 	return ret;
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static int update_lsm_rules(struct audit_krule *r)
++#else
+ static int update_lsm_rule(struct audit_krule *r)
++#endif
+ {
+ 	struct audit_entry *entry = container_of(r, struct audit_entry, rule);
+ 	struct audit_entry *nentry;
+@@ -1445,7 +1477,11 @@ int audit_update_lsm_rules(void)
+ 
+ 	for (i = 0; i < AUDIT_NR_FILTERS; i++) {
+ 		list_for_each_entry_safe(r, n, &audit_rules_list[i], list) {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++			int res = update_lsm_rules(r);
++#else
+ 			int res = update_lsm_rule(r);
++#endif
+ 			if (!err)
+ 				err = res;
+ 		}

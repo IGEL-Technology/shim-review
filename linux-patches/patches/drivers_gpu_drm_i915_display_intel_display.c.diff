@@ -1,0 +1,41 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_display.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_display.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_display.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_display.c	2024-08-02 15:41:31.539491203 +0200
+@@ -7481,6 +7481,37 @@ void intel_setup_outputs(struct drm_i915
+ 
+ 		if (intel_de_read(dev_priv, PCH_DP_D) & DP_DETECTED)
+ 			g4x_dp_init(dev_priv, PCH_DP_D, PORT_D);
++#ifdef CONFIG_IGEL_I915_H830_CHANGE_CONNECTOR_ORDER
++	} else if (IS_VALLEYVIEW(dev_priv) && IS_IGEL_H830C) {
++		bool has_edp, has_port;
++
++		if (IS_VALLEYVIEW(dev_priv) && dev_priv->display.vbt.int_crt_support)
++			intel_crt_init(dev_priv);
++
++		/* nagel@igel.com:
++		 * On IGEL_H830C board, the DVI connector is init'd first and will get
++		 * numbered as 'HDMI1', as the DVI/DisplayPort connectors on the PCB are switched.
++		 * Because the DVI connector of the H820C got numbered as 'HDMI2',
++		 * this may cause switched monitors when migrating from a H820C to a H830C,
++		 * while using a dual-monitor setup.
++		 */
++
++		has_edp = intel_dp_is_port_edp(dev_priv, PORT_C);
++		has_port = intel_bios_is_port_present(dev_priv, PORT_C);
++		if (intel_de_read(dev_priv, VLV_DP_C) & DP_DETECTED || has_port)
++			has_edp &= g4x_dp_init(dev_priv, VLV_DP_C, PORT_C);
++		if ((intel_de_read(dev_priv, VLV_HDMIC) & SDVO_DETECTED || has_port) && !has_edp)
++			g4x_hdmi_init(dev_priv, VLV_HDMIC, PORT_C);
++
++		has_edp = intel_dp_is_port_edp(dev_priv, PORT_B);
++		has_port = intel_bios_is_port_present(dev_priv, PORT_B);
++		if (intel_de_read(dev_priv, VLV_DP_B) & DP_DETECTED || has_port)
++			has_edp &= g4x_dp_init(dev_priv, VLV_DP_B, PORT_B);
++		if ((intel_de_read(dev_priv, VLV_HDMIB) & SDVO_DETECTED || has_port) && !has_edp)
++			g4x_hdmi_init(dev_priv, VLV_HDMIB, PORT_B);
++
++		vlv_dsi_init(dev_priv);
++#endif
+ 	} else if (IS_VALLEYVIEW(dev_priv) || IS_CHERRYVIEW(dev_priv)) {
+ 		bool has_edp, has_port;
+ 

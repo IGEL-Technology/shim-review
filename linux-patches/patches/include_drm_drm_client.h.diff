@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/include/drm/drm_client.h b/linux-6.6.38.igel/include/drm/drm_client.h
+--- a/linux-6.6.38.igel/include/drm/drm_client.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/drm/drm_client.h	2024-08-02 15:41:31.567491872 +0200
+@@ -165,7 +165,11 @@ void drm_client_buffer_vunmap(struct drm
+ 
+ int drm_client_modeset_create(struct drm_client_dev *client);
+ void drm_client_modeset_free(struct drm_client_dev *client);
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++int drm_client_modeset_probe(struct drm_client_dev *client, unsigned int width, unsigned int height, bool use_best_mode, unsigned int m_width, unsigned int m_height);
++#else
+ int drm_client_modeset_probe(struct drm_client_dev *client, unsigned int width, unsigned int height);
++#endif
+ bool drm_client_rotation(struct drm_mode_set *modeset, unsigned int *rotation);
+ int drm_client_modeset_check(struct drm_client_dev *client);
+ int drm_client_modeset_commit_locked(struct drm_client_dev *client);

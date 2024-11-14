@@ -1,0 +1,87 @@
+diff -Naurp a/linux-6.6.38.igel/crypto/asymmetric_keys/signature.c b/linux-6.6.38.igel/crypto/asymmetric_keys/signature.c
+--- a/linux-6.6.38.igel/crypto/asymmetric_keys/signature.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/crypto/asymmetric_keys/signature.c	2024-08-02 15:41:31.535491108 +0200
+@@ -127,6 +127,83 @@ int create_signature(struct kernel_pkey_
+ }
+ EXPORT_SYMBOL_GPL(create_signature);
+ 
++#ifdef CONFIG_IGEL_VERIFY_SIGNATURE_AGAINST_KEYRING
++struct igel_signature_iter {
++	const struct public_key_signature *pks;
++	uint32_t serial;
++};
++
++/**
++ * Iterator callback for signature verification. It's called with a pointer
++ * to the initialized struct public_key_signature and an asymmetric key to
++ * use for the verification.
++ *
++ * In case of a successfull signature verification, it returns 1.
++ *
++ * NOTE: The pointers used in associative arrays as well as those used by the
++ *       keyrings use the second-least significant bit to store additional
++ *       information. Unfortunately, keyring_ptr_to_key() is static in
++ *       keyring.c so we have to strip the bit ourselves.
++ */
++static int verify_signature_iter(const void *obj, void *parms)
++{
++	const struct key *key = (const struct key *) ((unsigned long) obj & ~2UL);
++	struct igel_signature_iter *igel_iter = parms;
++	const struct public_key_signature *pks = igel_iter->pks;
++
++
++	if (key->type == &key_type_asymmetric) {
++		printk(KERN_INFO "key = %p, description = %s, perm = 0x%x\n", key, key->description, key->perm);
++		if (verify_signature_igel(key, pks, NULL) == 0) {
++			igel_iter->serial = key->serial;
++			return 1;
++		}
++	}
++
++	return 0;
++}
++/**
++ * verify_signature_igel - Initiate the use of an asymmetric key to verify a signature
++ * @key: The asymmetric key to verify against
++ * @sig: The signature to check
++ * @serial: key serial of found asymmetric key
++ *
++ * Returns 0 if successful or else an error.
++ */
++int verify_signature_igel(const struct key *key,
++			  const struct public_key_signature *sig,
++			  uint32_t *serial)
++{
++	int ret;
++	struct igel_signature_iter igel_iter;
++
++	if (serial)
++		*serial = 0;
++	igel_iter.pks = sig;
++	igel_iter.serial = 0;
++
++	pr_devel("==>%s()\n", __func__);
++
++	if (key->type == &key_type_keyring) {
++		rcu_read_lock();
++		ret = assoc_array_iterate(&key->keys, verify_signature_iter, (void *)&igel_iter);
++		rcu_read_unlock();
++		if (ret == 0) {
++			return -ENOKEY;
++		} else {
++			if (serial)
++				*serial = igel_iter.serial;
++			return 0;
++		}
++	} else {
++		return verify_signature(key, sig);
++	}
++
++	return -EINVAL;
++}
++EXPORT_SYMBOL_GPL(verify_signature_igel);
++#endif
++
+ /**
+  * verify_signature - Initiate the use of an asymmetric key to verify a signature
+  * @key: The asymmetric key to verify against

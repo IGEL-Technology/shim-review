@@ -1,0 +1,12 @@
+diff -Naurp a/linux-6.6.38.igel/include/linux/writeback.h b/linux-6.6.38.igel/include/linux/writeback.h
+--- a/linux-6.6.38.igel/include/linux/writeback.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/linux/writeback.h	2024-08-02 15:41:31.567491872 +0200
+@@ -177,7 +177,7 @@ static inline void wb_domain_size_change
+ 
+ /*
+  * fs/fs-writeback.c
+- */	
++ */
+ struct bdi_writeback;
+ void writeback_inodes_sb(struct super_block *, enum wb_reason reason);
+ void writeback_inodes_sb_nr(struct super_block *, unsigned long nr,

@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/sound/usb/mixer_quirks.h b/linux-6.6.38.igel/sound/usb/mixer_quirks.h
+--- a/linux-6.6.38.igel/sound/usb/mixer_quirks.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/usb/mixer_quirks.h	2024-08-02 15:41:31.579492158 +0200
+@@ -16,5 +16,11 @@ void snd_usb_mixer_fu_apply_quirk(struct
+ 
+ void snd_usb_mixer_resume_quirk(struct usb_mixer_interface *mixer);
+ 
++#ifdef CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS
++/* hamburg@igel.com fixed Sennheiser DW Pro2 headset: renamed control
++ * elements in FEATURE_UNIT of sidetone chain */
++size_t snd_usb_mixer_control_name_apply_quirk(struct usb_mixer_interface *mixer,
++		int unitid, struct snd_kcontrol *kctl);
++#endif
+ #endif /* SND_USB_MIXER_QUIRKS_H */
+ 

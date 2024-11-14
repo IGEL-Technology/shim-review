@@ -1,0 +1,53 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/atombios_dp.c b/linux-6.6.38.igel/drivers/gpu/drm/radeon/atombios_dp.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/atombios_dp.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/atombios_dp.c	2024-08-02 15:41:31.543491299 +0200
+@@ -358,11 +358,37 @@ static u8 radeon_dp_encoder_service(stru
+ 	return args.ucStatus;
+ }
+ 
++#ifdef CONFIG_IGEL_RADEON_SINK_POWER_ON_QUIRK
++/* lang@igel: If the sink supports it, try to set the power state */
++static void radeon_dp_sink_power_on(struct radeon_connector *radeon_connector)
++{
++	int ret, i;
++	u16 reg = DP_SET_POWER;
++	u8 val = DP_SET_POWER_D0;
++
++	/*
++	 * When turning on, we need to retry for 1ms to give the sink
++	 * time to wake up.
++	 */
++	for (i = 0; i < 3; i++) {
++		ret = drm_dp_dpcd_writeb(&radeon_connector->ddc_bus->aux, reg, val);
++		if (ret == 1)
++			break;
++		msleep(1);
++	}
++}
++#endif
++
+ u8 radeon_dp_getsinktype(struct radeon_connector *radeon_connector)
+ {
+ 	struct drm_device *dev = radeon_connector->base.dev;
+ 	struct radeon_device *rdev = dev->dev_private;
+ 
++#ifdef CONFIG_IGEL_RADEON_SINK_POWER_ON_QUIRK
++	/* lang@igel: power up the sink */
++	radeon_dp_sink_power_on(radeon_connector);
++#endif
++
+ 	return radeon_dp_encoder_service(rdev, ATOM_DP_ACTION_GET_SINK_TYPE, 0,
+ 					 radeon_connector->ddc_bus->rec.i2c_id, 0);
+ }
+@@ -828,6 +854,11 @@ void radeon_dp_link_train(struct drm_enc
+ 	else
+ 		dp_info.enc_id |= ATOM_DP_CONFIG_LINK_A;
+ 
++#ifdef CONFIG_IGEL_RADEON_SINK_POWER_ON_QUIRK
++	/* lang@igel: power up the sink */
++	radeon_dp_sink_power_on(radeon_connector);
++#endif
++
+ 	if (drm_dp_dpcd_readb(&radeon_connector->ddc_bus->aux, DP_MAX_LANE_COUNT, &tmp)
+ 	    == 1) {
+ 		if (ASIC_IS_DCE5(rdev) && (tmp & DP_TPS3_SUPPORTED))

@@ -1,0 +1,54 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie.c b/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie.c
+--- a/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie.c	2024-08-02 15:41:31.555491585 +0200
+@@ -370,6 +370,9 @@ static int mwifiex_pcie_probe(struct pci
+ 					const struct pci_device_id *ent)
+ {
+ 	struct pcie_service_card *card;
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	struct pci_dev *parent_pdev = pci_upstream_bridge(pdev);
++#endif
+ 	int ret;
+ 
+ 	pr_debug("info: vendor=0x%4.04X device=0x%4.04X rev=%d\n",
+@@ -411,6 +414,14 @@ static int mwifiex_pcie_probe(struct pci
+ 		return -1;
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* disable bridge_d3 for Surface gen4+ devices to fix fw crashing
++	 * after suspend
++	 */
++	if (card->quirks & QUIRK_NO_BRIDGE_D3)
++		parent_pdev->bridge_d3 = false;
++#endif
++
+ 	return 0;
+ }
+ 
+@@ -1771,9 +1782,25 @@ mwifiex_pcie_send_boot_cmd(struct mwifie
+ static int mwifiex_pcie_init_fw_port(struct mwifiex_adapter *adapter)
+ {
+ 	struct pcie_service_card *card = adapter->card;
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	struct pci_dev *pdev = card->dev;
++	struct pci_dev *parent_pdev = pci_upstream_bridge(pdev);
++#endif
+ 	const struct mwifiex_pcie_card_reg *reg = card->pcie.reg;
+ 	int tx_wrap = card->txbd_wrptr & reg->tx_wrap_mask;
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* Trigger a function level reset of the PCI bridge device, this makes
++	 * the firmware of PCIe 88W8897 cards stop reporting a fixed LTR value
++	 * that prevents the system from entering package C10 and S0ix powersaving
++	 * states.
++	 * We need to do it here because it must happen after firmware
++	 * initialization and this function is called after that is done.
++	 */
++	if (card->quirks & QUIRK_DO_FLR_ON_BRIDGE)
++		pci_reset_function(parent_pdev);
++#endif
++
+ 	/* Write the RX ring read pointer in to reg->rx_rdptr */
+ 	if (mwifiex_write_reg(adapter, reg->rx_rdptr, card->rxbd_rdptr |
+ 			      tx_wrap)) {

@@ -1,0 +1,499 @@
+diff -Naurp a/linux-6.6.38.igel/sound/pci/hda/patch_realtek.c b/linux-6.6.38.igel/sound/pci/hda/patch_realtek.c
+--- a/linux-6.6.38.igel/sound/pci/hda/patch_realtek.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/pci/hda/patch_realtek.c	2024-08-02 15:41:31.575492063 +0200
+@@ -56,6 +56,14 @@ enum {
+ 	ALC_KEY_MICMUTE_INDEX,
+ };
+ 
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES)
++enum {
++	IGEL_OFF,
++	IGEL_M350,
++	IGEL_M250,
++};
++#endif
++
+ struct alc_customize_define {
+ 	unsigned int  sku_cfg;
+ 	unsigned char port_connectivity;
+@@ -136,6 +144,12 @@ struct alc_spec {
+ 	struct hda_component comps[HDA_MAX_COMPONENTS];
+ };
+ 
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES)
++int igel_thin_clients = IGEL_OFF;
++module_param(igel_thin_clients, int, 0644);
++MODULE_PARM_DESC(igel_thin_clients, "Set to 1 to fix microphone dead if plugged in during reboot issues");
++#endif
++
+ /*
+  * COEF access helper functions
+  */
+@@ -3581,6 +3595,9 @@ static void alc256_init(struct hda_codec
+ 	struct alc_spec *spec = codec->spec;
+ 	hda_nid_t hp_pin = alc_get_hp_pin(spec);
+ 	bool hp_pin_sense;
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES)
++	const char *product = NULL, *vendor = NULL;
++#endif
+ 
+ 	if (spec->ultra_low_power) {
+ 		alc_update_coef_idx(codec, 0x03, 1<<1, 1<<1);
+@@ -3626,6 +3643,23 @@ static void alc256_init(struct hda_codec
+ 	 * this register.
+ 	 */
+ 	alc_write_coef_idx(codec, 0x36, 0x5757);
++
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES)
++	/*
++	 * Detect our IGEL supported hardware (M350)
++	 */
++	product = dmi_get_system_info(DMI_PRODUCT_NAME);
++	vendor = dmi_get_system_info(DMI_SYS_VENDOR); 
++	if (product != NULL && vendor != NULL) {
++		if (strstr(vendor, "IGEL Technology GmbH")) {
++			if (strstr(product, "M350C"))
++				igel_thin_clients = IGEL_M350;				
++			if (strstr(product, "M250C"))
++				igel_thin_clients = IGEL_M250;
++			pr_info("ALC256 detected: %s %s", vendor, product);
++		}
++	}
++#endif
+ }
+ 
+ static void alc256_shutup(struct hda_codec *codec)
+@@ -3654,8 +3688,18 @@ static void alc256_shutup(struct hda_cod
+ 	/* If disable 3k pulldown control for alc257, the Mic detection will not work correctly
+ 	 * when booting with headset plugged. So skip setting it for the codec alc257
+ 	 */
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES)
++	if (codec->core.vendor_id != 0x10ec0236 &&
++	    codec->core.vendor_id != 0x10ec0257 &&
++	    !igel_thin_clients)
++#else
+ 	if (spec->en_3kpull_low)
++#endif
+ 		alc_update_coef_idx(codec, 0x46, 0, 3 << 12);
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES)
++	else
++		pr_info("ALC256 detected, IGEL sound fix active");
++#endif
+ 
+ 	if (!spec->no_shutup_pins)
+ 		snd_hda_codec_write(codec, hp_pin, 0,
+@@ -6418,6 +6462,53 @@ static void alc285_fixup_thinkpad_x1_gen
+ 	}
+ }
+ 
++#if defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES) || defined(CONFIG_IGEL_LENOVO_M600_SOUND_FIXES)
++static void alc_rename_ctl(struct hda_codec *codec, unsigned int nid,
++			   const char *name, const char *new_name)
++{
++	int i;
++	struct hda_nid_item *items = codec->mixers.list;
++
++	for (i = 0; i < codec->mixers.used; i++) {
++		if (items[i].nid == nid && !strcmp(items[i].kctl->id.name, name)) {
++			strcpy(items[i].kctl->id.name, new_name);
++			break;
++		}
++	}
++}
++
++static void alc_rename_jack(struct hda_codec *codec, unsigned int nid,
++			    const char *name, const char *new_name)
++{
++	struct hda_jack_tbl *j;
++	struct snd_jack_kctl *jack_kctl, *tmp_jack_kctl;
++
++	j = snd_hda_jack_tbl_get(codec, nid);
++	if (NULL != j && NULL != j->jack) {
++		list_for_each_entry_safe(jack_kctl,
++					 tmp_jack_kctl, &(j->jack->kctl_list), list)
++		{
++			if (!strcmp(jack_kctl->kctl->id.name, name)) {
++				strcpy(jack_kctl->kctl->id.name, new_name);
++			}
++		}
++	}
++}
++
++#ifdef CONFIG_IGEL_LENOVO_M600_SOUND_FIXES
++/* hamburg@igel.com */
++static void alc233_fixup_lenovo_m600(struct hda_codec *codec,
++				     const struct hda_fixup *fix, int action)
++{
++	if (HDA_FIXUP_ACT_BUILD == action) {
++		/* rename double */
++		alc_rename_jack(codec, 0x19,
++				"Mic Jack", "Headset Mic Jack");
++	}
++}
++#endif
++#endif
++
+ static void alc233_alc662_fixup_lenovo_dual_codecs(struct hda_codec *codec,
+ 					 const struct hda_fixup *fix,
+ 					 int action)
+@@ -6623,6 +6714,32 @@ static void alc274_fixup_hp_headset_mic(
+ 	}
+ }
+ 
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++static void alc_fixup_lg_headphone(struct hda_codec *codec,
++				  const struct hda_fixup *fix, int action)
++{
++	if (action == HDA_FIXUP_ACT_PRE_PROBE) {
++		snd_hda_override_wcaps(codec, 0x19, get_wcaps(codec, 0x19) & ~AC_WCAP_IN_AMP);
++	
++//		alc_update_coef_idx(codec, 0x10, 0x000c, 2 << 2); // Line2 JD gate
++//		alc_update_coef_idx(codec, 0x1b, 0x0f00, 0xc << 8); // Analog JD
++		alc_write_coef_idx(codec, 0x1b, 0x0a4b);
++		alc_update_coef_idx(codec, 0x47, 0x00f0, 0xa << 4); // TD1 timing
++	
++//		if (!query_amp_caps(codec, 0x8, HDA_INPUT))
++			/* override the amp caps for capture generator */
++			snd_hda_override_amp_caps(codec, 0x08, HDA_INPUT,
++					  (0x01f << AC_AMPCAP_OFFSET_SHIFT) |
++					  (0x037 << AC_AMPCAP_NUM_STEPS_SHIFT) |  // 18db --> 0x3f-0x08=0x37
++										  // 6db  --> 0x3f-0x20=0x1f
++										  // 0db  --> 0x3f-0x28-0x17		
++					  (0x02 << AC_AMPCAP_STEP_SIZE_SHIFT) |
++					  (1 << AC_AMPCAP_MUTE_SHIFT));
++	}
++	
++}
++#endif
++
+ static void alc_fixup_no_int_mic(struct hda_codec *codec,
+ 				    const struct hda_fixup *fix, int action)
+ {
+@@ -6696,6 +6813,32 @@ static void alc285_fixup_hp_spectre_x360
+ 	}
+ }
+ 
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++static void alc256_hp_playback_pcm_hook(struct hda_pcm_stream *hinfo,
++					struct hda_codec *codec,
++					struct snd_pcm_substream *substream,
++					int action)
++{
++	switch (action) {
++	case HDA_GEN_PCM_ACT_OPEN:
++		alc_auto_setup_eapd(codec, true);
++		break;
++	case HDA_GEN_PCM_ACT_CLOSE:
++		alc_auto_setup_eapd(codec, false);
++		break;
++	}
++}
++
++static void alc_fixup_hp_spk_noise(struct hda_codec *codec,
++				   const struct hda_fixup *fix, int action)
++{
++	struct alc_spec *spec = codec->spec;
++
++	if (action == HDA_FIXUP_ACT_PRE_PROBE)
++		spec->gen.pcm_playback_hook = alc256_hp_playback_pcm_hook;
++}
++#endif
++
+ static void alc285_fixup_hp_envy_x360(struct hda_codec *codec,
+ 				      const struct hda_fixup *fix,
+ 				      int action)
+@@ -7279,6 +7422,9 @@ enum {
+ 	ALC225_FIXUP_DISABLE_MIC_VREF,
+ 	ALC225_FIXUP_DELL1_MIC_NO_PRESENCE,
+ 	ALC295_FIXUP_DISABLE_DAC3,
++#ifdef CONFIG_IGEL_LENOVO_M600_SOUND_FIXES
++	ALC233_FIXUP_LENOVO_M600,
++#endif
+ 	ALC285_FIXUP_SPEAKER2_TO_DAC1,
+ 	ALC285_FIXUP_ASUS_SPEAKER2_TO_DAC1,
+ 	ALC285_FIXUP_ASUS_HEADSET_MIC,
+@@ -7403,6 +7549,10 @@ enum {
+ 	ALC285_FIXUP_HP_SPECTRE_X360,
+ 	ALC287_FIXUP_IDEAPAD_BASS_SPK_AMP,
+ 	ALC623_FIXUP_LENOVO_THINKSTATION_P340,
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++	ALC256_FIXUP_HEADPHONE_HEADSET,
++	ALC256_FIXUP_LG_AIO,
++#endif
+ 	ALC255_FIXUP_ACER_HEADPHONE_AND_MIC,
+ 	ALC236_FIXUP_HP_LIMIT_INT_MIC_BOOST,
+ 	ALC287_FIXUP_LEGION_15IMHG05_SPEAKERS,
+@@ -7441,6 +7591,9 @@ enum {
+ 	ALC2XX_FIXUP_HEADSET_MIC,
+ 	ALC289_FIXUP_DELL_CS35L41_SPI_2,
+ 	ALC294_FIXUP_CS35L41_I2C_2,
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++	ALC256_FIXUP_HP_SPK_NOISE,
++#endif
+ };
+ 
+ /* A special fixup for Lenovo C940 and Yoga Duet 7;
+@@ -8295,6 +8448,13 @@ static const struct hda_fixup alc269_fix
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = alc295_fixup_disable_dac3,
+ 	},
++#ifdef CONFIG_IGEL_LENOVO_M600_SOUND_FIXES
++	/* hamburg@igel.com */
++	[ALC233_FIXUP_LENOVO_M600] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc233_fixup_lenovo_m600
++	},
++#endif
+ 	[ALC285_FIXUP_SPEAKER2_TO_DAC1] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = alc285_fixup_speaker2_to_dac1,
+@@ -9254,6 +9414,22 @@ static const struct hda_fixup alc269_fix
+ 		.chained = true,
+ 		.chain_id = ALC283_FIXUP_HEADSET_MIC,
+ 	},
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++	[ALC256_FIXUP_HEADPHONE_HEADSET] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_lg_headphone,
++	},
++	[ALC256_FIXUP_LG_AIO] = {
++		.type = HDA_FIXUP_PINS,
++		.v.pins = (const struct hda_pintbl[]) {
++			{ 0x19, 0x04a11030 },
++			{ 0x21, 0x411111f0 },
++			{}
++		},
++		.chained = true,
++		.chain_id = ALC256_FIXUP_HEADPHONE_HEADSET,
++	},
++#endif
+ 	[ALC255_FIXUP_ACER_HEADPHONE_AND_MIC] = {
+ 		.type = HDA_FIXUP_PINS,
+ 		.v.pins = (const struct hda_pintbl[]) {
+@@ -9620,6 +9796,12 @@ static const struct hda_fixup alc269_fix
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = cs35l41_fixup_i2c_two,
+ 	},
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++	[ALC256_FIXUP_HP_SPK_NOISE] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_hp_spk_noise,
++	},
++#endif
+ };
+ 
+ static const struct snd_pci_quirk alc269_fixup_tbl[] = {
+@@ -10311,6 +10493,9 @@ static const struct snd_pci_quirk alc269
+ 	SND_PCI_QUIRK(0x17aa, 0x9e54, "LENOVO NB", ALC269_FIXUP_LENOVO_EAPD),
+ 	SND_PCI_QUIRK(0x17aa, 0x9e56, "Lenovo ZhaoYang CF4620Z", ALC286_FIXUP_SONY_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0x1849, 0x1233, "ASRock NUC Box 1100", ALC233_FIXUP_NO_AUDIO_JACK),
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++	SND_PCI_QUIRK(0x1854, 0x0345, "LG CL66 AIO", ALC256_FIXUP_ASUS_MIC_NO_PRESENCE),
++#endif
+ 	SND_PCI_QUIRK(0x1849, 0xa233, "Positivo Master C6300", ALC269_FIXUP_HEADSET_MIC),
+ 	SND_PCI_QUIRK(0x19e5, 0x3204, "Huawei MACH-WX9", ALC256_FIXUP_HUAWEI_MACH_WX9_PINS),
+ 	SND_PCI_QUIRK(0x19e5, 0x320f, "Huawei WRT-WX9 ", ALC256_FIXUP_ASUS_MIC_NO_PRESENCE),
+@@ -10346,6 +10531,9 @@ static const struct snd_pci_quirk alc269
+ 	SND_PCI_QUIRK(0x8086, 0x3038, "Intel NUC 13", ALC295_FIXUP_CHROME_BOOK),
+ 	SND_PCI_QUIRK(0xf111, 0x0001, "Framework Laptop", ALC295_FIXUP_FRAMEWORK_LAPTOP_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0xf111, 0x0006, "Framework Laptop", ALC295_FIXUP_FRAMEWORK_LAPTOP_MIC_NO_PRESENCE),
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++	SND_PCI_QUIRK(0x103c, 0x8523, "HP t640", ALC256_FIXUP_HP_SPK_NOISE),
++#endif
+ 
+ #if 0
+ 	/* Below is a quirk table taken from the old code.
+@@ -10495,6 +10683,9 @@ static const struct hda_model_fixup alc2
+ 	{.id = ALC255_FIXUP_DELL_SPK_NOISE, .name = "dell-spk-noise"},
+ 	{.id = ALC225_FIXUP_DELL1_MIC_NO_PRESENCE, .name = "alc225-dell1"},
+ 	{.id = ALC295_FIXUP_DISABLE_DAC3, .name = "alc295-disable-dac3"},
++#ifdef CONFIG_IGEL_LENOVO_M600_SOUND_FIXES
++	{.id = ALC233_FIXUP_LENOVO_M600, .name = "lenovo-m600"},
++#endif
+ 	{.id = ALC285_FIXUP_SPEAKER2_TO_DAC1, .name = "alc285-speaker2-to-dac1"},
+ 	{.id = ALC280_FIXUP_HP_HEADSET_MIC, .name = "alc280-hp-headset"},
+ 	{.id = ALC221_FIXUP_HP_FRONT_MIC, .name = "alc221-hp-mic"},
+@@ -11716,6 +11907,103 @@ static void alc668_restore_default_value
+ 	alc_process_coef_fw(codec, alc668_coefs);
+ }
+ 
++#ifdef CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES
++static void alc662_fixup_limit_mic_boost(struct hda_codec *codec,
++					 const struct hda_fixup *fix,
++					 int action)
++{
++	if (action != HDA_FIXUP_ACT_PROBE)
++		return;
++
++	/* The mic boosts on level 2 and 3 are too noisy
++	   on the internal mic input. Therefore limit the boost to 0 or 1. */
++	snd_hda_override_amp_caps(codec, 0x18, HDA_INPUT,
++				  (0x00 << AC_AMPCAP_OFFSET_SHIFT) |
++				  (0x01 << AC_AMPCAP_NUM_STEPS_SHIFT) |
++				  (0x2f << AC_AMPCAP_STEP_SIZE_SHIFT) |
++				  (0 << AC_AMPCAP_MUTE_SHIFT));
++
++	/* limit Mic Playback Volume to avoid noise in sound output */
++	snd_hda_override_amp_caps(codec, 0x0b, HDA_INPUT,
++				  (0x00 << AC_AMPCAP_OFFSET_SHIFT) |
++				  (0x14 << AC_AMPCAP_NUM_STEPS_SHIFT) |
++				  (0x02 << AC_AMPCAP_STEP_SIZE_SHIFT) |
++				  (0 << AC_AMPCAP_MUTE_SHIFT));
++}
++
++static void alc_fixup_igel_m340c_ctl(struct hda_codec *codec,
++				     const struct hda_fixup *fix, int action)
++{
++	struct snd_kcontrol *kctl;
++
++	if (action == HDA_FIXUP_ACT_BUILD) {
++		kctl = snd_hda_find_mixer_ctl(codec, "Speaker Playback Volume");
++		if (kctl) {
++			strcpy(kctl->id.name, "Alt Speaker Playback Volume");
++		}
++		kctl = snd_hda_find_mixer_ctl(codec, "Speaker Playback Switch");
++		if (kctl) {
++			strcpy(kctl->id.name, "Alt Speaker Playback Switch");
++		}
++
++		kctl = snd_hda_find_mixer_ctl(codec, "Headphone Playback Volume");
++		if (kctl) {
++			strcpy(kctl->id.name, "Speaker Playback Volume");
++		}
++		kctl = snd_hda_find_mixer_ctl(codec, "Headphone Playback Switch");
++		if (kctl) {
++			strcpy(kctl->id.name, "Speaker Playback Switch");
++		}
++	}
++}
++
++/* hamburg@igel.com: rename speaker control */
++static void alc_fixup_igel_ud9_ctl(struct hda_codec *codec,
++				   const struct hda_fixup *fix, int action)
++{
++	struct snd_kcontrol *kctl;
++
++	if (action == HDA_FIXUP_ACT_BUILD) {
++		/* ud9 with the new BIOS */
++		kctl = snd_hda_find_mixer_ctl(codec, "Front Playback Volume");
++		if (kctl) {
++			strcpy(kctl->id.name, "Speaker Playback Volume");
++		}
++		kctl = snd_hda_find_mixer_ctl(codec, "Front Playback Switch");
++		if (kctl) {
++			strcpy(kctl->id.name, "Speaker Playback Switch");
++		}
++
++		/* ud9 with the old BIOS */
++		kctl = snd_hda_find_mixer_ctl(codec, "Master Playback Volume");
++		if (kctl) {
++			strcpy(kctl->id.name, "PCM Playback Volume");
++		}
++		kctl = snd_hda_find_mixer_ctl(codec, "Master Playback Switch");
++		if (kctl) {
++			strcpy(kctl->id.name, "PCM Playback Switch");
++		}
++		alc_rename_ctl(codec, 0x09, "Capture Volume", "Alt Capture Volume");
++		alc_rename_ctl(codec, 0x09, "Capture Switch", "Alt Capture Switch");
++	}
++}
++
++/* hamburg@igel.com */
++static void alc_fixup_igel_h830(struct hda_codec *codec,
++				const struct hda_fixup *fix, int action)
++{
++	if (HDA_FIXUP_ACT_BUILD == action) {
++		/* rename mixer control element for the line out on the rear side */
++		alc_rename_ctl(codec, 0x03,
++				"PCM Playback Volume", "Headphone Playback Volume");
++		alc_rename_ctl(codec, 0x1b,
++				"PCM Playback Switch", "Headphone Playback Switch");
++		alc_rename_jack(codec, 0x1b,
++				"Line Out Jack", "Headphone Jack");
++	}
++}
++#endif
++
+ enum {
+ 	ALC662_FIXUP_ASPIRE,
+ 	ALC662_FIXUP_LED_GPIO1,
+@@ -11770,6 +12058,13 @@ enum {
+ 	ALC897_FIXUP_LENOVO_HEADSET_MIC,
+ 	ALC897_FIXUP_HEADSET_MIC_PIN,
+ 	ALC897_FIXUP_HP_HSMIC_VERB,
++#ifdef CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES
++	ALC662_FIXUP_IGEL_UD9,
++	ALC662_FIXUP_IGEL_UD9_CTL,
++	ALC662_FIXUP_LIMIT_MIC_BOOST,
++	ALC662_FIXUP_IGEL_H830,
++	ALC662_FIXUP_IGEL_M340C,
++#endif
+ 	ALC897_FIXUP_LENOVO_HEADSET_MODE,
+ 	ALC897_FIXUP_HEADSET_MIC_PIN2,
+ 	ALC897_FIXUP_UNIS_H3C_X500S,
+@@ -12199,6 +12494,42 @@ static const struct hda_fixup alc662_fix
+ 			{ }
+ 		},
+ 	},
++#ifdef CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES
++	/* hamburg@igel.com : fix line out in H830 */
++	[ALC662_FIXUP_IGEL_H830] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_igel_h830,
++		.chained = true,
++		.chain_id = ALC662_FIXUP_LIMIT_MIC_BOOST
++	},
++	/* hamburg@igel.com : fix EAPD in UD9 devices */
++	[ALC662_FIXUP_IGEL_UD9] = {
++		.type = HDA_FIXUP_VERBS,
++		.v.verbs = (const struct hda_verb[]) {
++			{0x14, AC_VERB_SET_EAPD_BTLENABLE, 0},
++			{}
++		},
++		.chained = true,
++		.chain_id = ALC662_FIXUP_IGEL_UD9_CTL
++	},
++	/* hamburg@igel.com : rename playback control: "Front" into "Speaker"
++	 * in UD9 devices */
++	[ALC662_FIXUP_IGEL_UD9_CTL] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_igel_ud9_ctl,
++		.chained = true,
++		.chain_id = ALC662_FIXUP_LIMIT_MIC_BOOST
++	},
++	/* hamburg@igel.com : limit Mic Boost */
++	[ALC662_FIXUP_LIMIT_MIC_BOOST] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc662_fixup_limit_mic_boost,
++	},
++	[ALC662_FIXUP_IGEL_M340C] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_igel_m340c_ctl,
++	},
++#endif
+ 	[ALC897_FIXUP_LENOVO_HEADSET_MODE] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = alc897_fixup_lenovo_headset_mode,
+@@ -12287,6 +12618,11 @@ static const struct snd_pci_quirk alc662
+ 	SND_PCI_QUIRK(0x1b35, 0x1234, "CZC ET26", ALC662_FIXUP_CZC_ET26),
+ 	SND_PCI_QUIRK(0x1b35, 0x2206, "CZC P10T", ALC662_FIXUP_CZC_P10T),
+ 	SND_PCI_QUIRK(0x1c6c, 0x1239, "Compaq N14JP6-V2", ALC897_FIXUP_HP_HSMIC_VERB),
++#ifdef CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES
++	/* hamburg@igel.com: activate ALC662 fixes */
++	SND_PCI_QUIRK(0x8086, 0x27d8, "IGEL-UD9", ALC662_FIXUP_IGEL_UD9),
++	SND_PCI_QUIRK(0x8086, 0x7270, "IGEL-H830", ALC662_FIXUP_IGEL_H830),
++#endif
+ 
+ #if 0
+ 	/* Below is a quirk table taken from the old code.
+@@ -12382,6 +12718,10 @@ static const struct hda_model_fixup alc6
+ 	{.id = ALC662_FIXUP_LENOVO_MULTI_CODECS, .name = "dual-codecs"},
+ 	{.id = ALC669_FIXUP_ACER_ASPIRE_ETHOS, .name = "aspire-ethos"},
+ 	{.id = ALC897_FIXUP_UNIS_H3C_X500S, .name = "unis-h3c-x500s"},
++#ifdef CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES
++	{.id = ALC662_FIXUP_IGEL_UD9, .name = "igel-ud9"},
++	{.id = ALC662_FIXUP_IGEL_M340C, .name = "igel-m340c"},
++#endif
+ 	{}
+ };
+ 

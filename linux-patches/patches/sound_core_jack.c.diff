@@ -1,0 +1,21 @@
+diff -Naurp a/linux-6.6.38.igel/sound/core/jack.c b/linux-6.6.38.igel/sound/core/jack.c
+--- a/linux-6.6.38.igel/sound/core/jack.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/core/jack.c	2024-08-02 15:41:31.575492063 +0200
+@@ -15,6 +15,9 @@
+ #include <sound/core.h>
+ #include <sound/control.h>
+ 
++#if !defined(CONFIG_IGEL_OWN_DEVICE_SOUND_FIXES) && !defined(CONFIG_IGEL_LENOVO_M600_SOUND_FIXES)
++/* gottwald@igel.com moved to include/sound/jack.h if SOUND FIXES are choosen
++ * because struct is also needed by sound/pci/hda/patch_realtek.c */
+ struct snd_jack_kctl {
+ 	struct snd_kcontrol *kctl;
+ 	struct list_head list;  /* list of controls belong to the same jack */
+@@ -25,6 +28,7 @@ struct snd_jack_kctl {
+ 	struct dentry *jack_debugfs_root; /* jack_kctl debugfs root */
+ #endif
+ };
++#endif
+ 
+ #ifdef CONFIG_SND_JACK_INPUT_DEV
+ static const int jack_switch_types[SND_JACK_SWITCH_TYPES] = {

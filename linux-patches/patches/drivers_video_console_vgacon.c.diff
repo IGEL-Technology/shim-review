@@ -1,0 +1,50 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/video/console/vgacon.c b/linux-6.6.38.igel/drivers/video/console/vgacon.c
+--- a/linux-6.6.38.igel/drivers/video/console/vgacon.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/video/console/vgacon.c	2024-08-02 15:41:31.563491776 +0200
+@@ -92,6 +92,31 @@ static unsigned int 	vga_rolled_over; /*
+ static bool vga_hardscroll_enabled;
+ static bool vga_hardscroll_user_enable = true;
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++/* lang@igel.de: splash=<modenr> is set by our bootcode if splash is active */
++static int splash_mode = 0;
++
++static int __init setup_splash_mode(char *str)
++{
++	if (splash_mode == 0)
++		get_option(&str, &splash_mode);
++	return 1;
++}
++__setup("splash=", setup_splash_mode);
++
++/* gottwald@igel.com : make it possible to disable the splash fix with boot
++ *                     options as this could cause some problem in virtualized
++ *                     environments */
++
++static int __init no_splash_fix(char *str)
++{
++	splash_mode = -1;
++	return 1;
++}
++
++__setup("no_igel_splash_fix", no_splash_fix);
++#endif
++
+ static int __init no_scroll(char *str)
+ {
+ 	/*
+@@ -164,6 +189,14 @@ static const char *vgacon_startup(void)
+ #endif
+ 	}
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++	/* lang@igel.de: if splash is active do not configure a VGA console,
++	   because the boot splash is corrupted by a VGA console */
++	if (splash_mode > 0) {
++		goto no_vga;
++	}
++#endif
++
+ 	/* boot_params.screen_info reasonably initialized? */
+ 	if ((screen_info.orig_video_lines == 0) ||
+ 	    (screen_info.orig_video_cols  == 0))

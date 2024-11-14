@@ -1,0 +1,35 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu_core.c b/linux-6.6.38.igel/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu_core.c
+--- a/linux-6.6.38.igel/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu_core.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/realtek/rtl8xxxu/rtl8xxxu_core.c	2024-08-02 15:41:31.555491585 +0200
+@@ -7725,6 +7725,7 @@ static const struct usb_device_id dev_ta
+ 	.driver_info = (unsigned long)&rtl8723au_fops},
+ {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x0724, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8723au_fops},
++#ifndef CONFIG_IGEL_DISABLE_RTL8XXXU_USB_IDS_HANDLED_BY_8192EU
+ {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x818b, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192eu_fops},
+ /* TP-Link TL-WN822N v4 */
+@@ -7736,6 +7737,7 @@ static const struct usb_device_id dev_ta
+ /* Tested by Myckel Habets */
+ {USB_DEVICE_AND_INTERFACE_INFO(0x2357, 0x0109, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192eu_fops},
++#endif
+ {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0xb720, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8723bu_fops},
+ {USB_DEVICE_AND_INTERFACE_INFO(0x7392, 0xa611, 0xff, 0xff, 0xff),
+@@ -7952,6 +7954,7 @@ static const struct usb_device_id dev_ta
+ {USB_DEVICE_AND_INTERFACE_INFO(0x7392, 0x7822, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192cu_fops},
+ /* found in rtl8192eu vendor driver */
++#ifndef CONFIG_IGEL_DISABLE_RTL8XXXU_USB_IDS_HANDLED_BY_8192EU
+ {USB_DEVICE_AND_INTERFACE_INFO(0x2357, 0x0107, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192eu_fops},
+ {USB_DEVICE_AND_INTERFACE_INFO(0x2019, 0xab33, 0xff, 0xff, 0xff),
+@@ -7971,6 +7974,7 @@ static const struct usb_device_id dev_ta
+ {USB_DEVICE_AND_INTERFACE_INFO(0x2c4e, 0x0104, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192eu_fops},
+ #endif
++#endif
+ { }
+ };
+ 

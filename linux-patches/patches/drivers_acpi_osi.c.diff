@@ -1,0 +1,26 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/acpi/osi.c b/linux-6.6.38.igel/drivers/acpi/osi.c
+--- a/linux-6.6.38.igel/drivers/acpi/osi.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/acpi/osi.c	2024-08-02 15:41:31.535491108 +0200
+@@ -44,6 +44,22 @@ osi_setup_entries[OSI_STRING_ENTRIES_MAX
+ 	{"Processor Device", true},
+ 	{"3.0 _SCP Extensions", true},
+ 	{"Processor Aggregator Device", true},
++#ifdef CONFIG_IGEL_HP_MT645_BIOS_S3
++	/*
++	 * Following is no longer supported since kernel 6.1:
++	 *
++	 * In the past _OSI strings have been abused by other BIOS vendors to change
++	 * completely unrelated code on completely unrelated systems.  This prompted
++	 * an evaluation of all of it's uses. This uncovered that they aren't needed
++	 * for any of the original reasons. As such, the kernel will not respond to
++	 * any custom Linux-* strings by default.
++	 *
++	 * Below defined _OSI string is used by hp mt645
++	 * System BIOS: U81 Ver.01.10.01 01/09/2023
++	 * for S3 (suspend to ram) functionality.
++	 */
++	{"Linux-HPI-Hybrid-Graphics", true},
++#endif
+ };
+ 
+ static u32 acpi_osi_handler(acpi_string interface, u32 supported)

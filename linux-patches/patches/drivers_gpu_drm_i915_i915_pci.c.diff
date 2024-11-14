@@ -1,0 +1,58 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_pci.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_pci.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_pci.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_pci.c	2024-08-02 15:41:31.543491299 +0200
+@@ -22,6 +22,10 @@
+  *
+  */
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++#include <linux/dmi.h>
++#endif
++
+ #include <drm/drm_color_mgmt.h>
+ #include <drm/drm_drv.h>
+ #include <drm/i915_pciids.h>
+@@ -38,6 +42,10 @@
+ #include "i915_reg.h"
+ #include "intel_pci_config.h"
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++enum igel_platforms igel_platform = NO_IGEL_PLATFORM;
++#endif
++
+ #define PLATFORM(x) .platform = (x)
+ #define GEN(x) \
+ 	.__runtime.graphics.ip.ver = (x), \
+@@ -837,7 +845,11 @@ static const struct intel_device_info mt
+ 	.has_pxp = 1,
+ 	.memory_regions = REGION_SMEM | REGION_STOLEN_LMEM,
+ 	.platform_engine_mask = BIT(RCS0) | BIT(BCS0) | BIT(CCS0),
++#ifdef CONFIG_IGEL_I915_ENABLE_METEOR_LAKE
++	.require_force_probe = 0,
++#else
+ 	.require_force_probe = 1,
++#endif
+ 	MTL_CACHELEVEL,
+ };
+ 
+@@ -1093,6 +1105,20 @@ static struct pci_driver i915_pci_driver
+ 
+ int i915_pci_register_driver(void)
+ {
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++	const char *product;
++	product = dmi_get_system_info(DMI_PRODUCT_NAME);
++
++	igel_platform = NO_IGEL_PLATFORM;
++
++	if (product != NULL) {
++		/* gottwald@igel.com Detect IGEL platform according to the DMI data */
++		if (strstr(product, "TC215B"))
++			igel_platform = IGEL_TC215B;
++		else if (strstr(product, "H830C"))
++			igel_platform = IGEL_H830C;
++	}
++#endif
+ 	return pci_register_driver(&i915_pci_driver);
+ }
+ 

@@ -1,0 +1,17 @@
+diff -Naurp a/linux-6.6.38.igel/Makefile b/linux-6.6.38.igel/Makefile
+--- a/linux-6.6.38.igel/Makefile	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/Makefile	2024-08-02 15:41:31.531491012 +0200
+@@ -1167,11 +1167,8 @@ vmlinux: vmlinux.o $(KBUILD_LDS) modpost
+ # make sure no implicit rule kicks in
+ $(sort $(KBUILD_LDS) $(KBUILD_VMLINUX_OBJS) $(KBUILD_VMLINUX_LIBS)): . ;
+ 
+-ifeq ($(origin KERNELRELEASE),file)
+-filechk_kernel.release = $(srctree)/scripts/setlocalversion $(srctree)
+-else
+-filechk_kernel.release = echo $(KERNELRELEASE)
+-endif
++filechk_kernel.release = \
++	echo "$(KERNELVERSION)$$($(CONFIG_SHELL) $(srctree)/scripts/setlocalversion $(srctree))"
+ 
+ # Store (new) KERNELRELEASE string in include/config/kernel.release
+ include/config/kernel.release: FORCE

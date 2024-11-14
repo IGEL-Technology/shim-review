@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/acpi/scan.c b/linux-6.6.38.igel/drivers/acpi/scan.c
+--- a/linux-6.6.38.igel/drivers/acpi/scan.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/acpi/scan.c	2024-08-02 15:41:31.535491108 +0200
+@@ -2110,6 +2110,11 @@ static acpi_status acpi_bus_check_add_2(
+ 
+ static void acpi_default_enumeration(struct acpi_device *device)
+ {
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (!acpi_dev_ready_for_enumeration(device))
++		return;
++#endif
++
+ 	/*
+ 	 * Do not enumerate devices with enumeration_by_parent flag set as
+ 	 * they will be enumerated by their respective parents.

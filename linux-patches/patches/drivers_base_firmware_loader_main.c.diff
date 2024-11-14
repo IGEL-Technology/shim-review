@@ -1,0 +1,60 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/base/firmware_loader/main.c b/linux-6.6.38.igel/drivers/base/firmware_loader/main.c
+--- a/linux-6.6.38.igel/drivers/base/firmware_loader/main.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/base/firmware_loader/main.c	2024-08-02 15:41:31.535491108 +0200
+@@ -551,8 +551,13 @@ fw_get_filesystem_firmware(struct device
+ 						       READING_FIRMWARE);
+ 		if (rc < 0) {
+ 			if (rc != -ENOENT)
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++				dev_dbg(device, "loading %s failed with error %d\n",
++					path, rc);
++#else
+ 				dev_warn(device, "loading %s failed with error %d\n",
+ 					 path, rc);
++#endif
+ 			else
+ 				dev_dbg(device, "loading %s failed for no such file or directory.\n",
+ 					 path);
+@@ -563,8 +568,13 @@ fw_get_filesystem_firmware(struct device
+ 
+ 		dev_dbg(device, "Loading firmware from %s\n", path);
+ 		if (decompress) {
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++			dev_info(device, "firmware: f/w decompressing %s\n",
++				 fw_priv->fw_name);
++#else
+ 			dev_dbg(device, "f/w decompressing %s\n",
+ 				fw_priv->fw_name);
++#endif
+ 			rc = decompress(device, fw_priv, size, buffer);
+ 			/* discard the superfluous original content */
+ 			vfree(buffer);
+@@ -574,8 +584,13 @@ fw_get_filesystem_firmware(struct device
+ 				continue;
+ 			}
+ 		} else {
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++			dev_info(device, "firmware: direct-loading %s\n",
++				 fw_priv->fw_name);
++#else
+ 			dev_dbg(device, "direct-loading %s\n",
+ 				fw_priv->fw_name);
++#endif
+ 			if (!fw_priv->data)
+ 				fw_priv->data = buffer;
+ 			fw_priv->size = size;
+@@ -584,6 +599,14 @@ fw_get_filesystem_firmware(struct device
+ 		break;
+ 	}
+ 	__putname(path);
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++	if (rc == -ENOENT)
++		dev_err(device, "firmware: failed to load %s (no such file or directory)\n",
++			fw_priv->fw_name);
++	else if (rc)
++		dev_err(device, "firmware: failed to load %s (errorcode: %d)\n",
++			fw_priv->fw_name, rc);
++#endif
+ 
+ 	return rc;
+ }

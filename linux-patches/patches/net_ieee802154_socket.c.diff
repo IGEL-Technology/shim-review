@@ -1,0 +1,12 @@
+diff -Naurp a/linux-6.6.38.igel/net/ieee802154/socket.c b/linux-6.6.38.igel/net/ieee802154/socket.c
+--- a/linux-6.6.38.igel/net/ieee802154/socket.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/net/ieee802154/socket.c	2024-08-02 15:41:31.567491872 +0200
+@@ -1137,4 +1137,8 @@ module_init(af_ieee802154_init);
+ module_exit(af_ieee802154_remove);
+ 
+ MODULE_LICENSE("GPL");
++/* gottwald@igel.com : Disable auto loading as mitigation against local exploits.
++ * Patch taken from debian Change some defaults for security reasons */
++#ifndef CONFIG_IGEL_DISABLE_AUTOLOADING_OF_NON_SECURE_NET_MODULES
+ MODULE_ALIAS_NETPROTO(PF_IEEE802154);
++#endif

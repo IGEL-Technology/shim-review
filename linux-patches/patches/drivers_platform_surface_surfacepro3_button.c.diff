@@ -1,0 +1,39 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/platform/surface/surfacepro3_button.c b/linux-6.6.38.igel/drivers/platform/surface/surfacepro3_button.c
+--- a/linux-6.6.38.igel/drivers/platform/surface/surfacepro3_button.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/platform/surface/surfacepro3_button.c	2024-08-02 15:41:31.559491681 +0200
+@@ -146,6 +146,26 @@ static int surface_button_resume(struct
+ }
+ #endif
+ 
++#ifdef CONFIG_IGEL_SURFACE_BUTTON_CHANGES
++/*
++ * Surface Pro 4 and Surface Book 2 / Surface Pro 2017 use the same device
++ * ID (MSHW0040) for the power/volume buttons. Make sure this is the right
++ * device by checking for the _DSM method and OEM Platform Revision DSM
++ * function.
++ *
++ * Returns true if the driver should bind to this device, i.e. the device is
++ * either MSWH0028 (Pro 3) or MSHW0040 on a Pro 4 or Book 1.
++ */
++static bool surface_button_check_MSHW0040(struct acpi_device *dev)
++{
++	acpi_handle handle = dev->handle;
++
++	// make sure that OEM platform revision DSM call does not exist
++	return !acpi_check_dsm(handle, &MSHW0040_DSM_UUID,
++			       MSHW0040_DSM_REVISION,
++			       BIT(MSHW0040_DSM_GET_OMPR));
++}
++#else
+ /*
+  * Surface Pro 4 and Surface Book 2 / Surface Pro 2017 use the same device
+  * ID (MSHW0040) for the power/volume buttons. Make sure this is the right
+@@ -182,7 +202,7 @@ static bool surface_button_check_MSHW004
+ 
+ 	return oem_platform_rev == 0;
+ }
+-
++#endif
+ 
+ static int surface_button_add(struct acpi_device *device)
+ {

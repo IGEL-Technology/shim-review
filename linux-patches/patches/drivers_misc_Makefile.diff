@@ -1,0 +1,11 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/misc/Makefile b/linux-6.6.38.igel/drivers/misc/Makefile
+--- a/linux-6.6.38.igel/drivers/misc/Makefile	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/misc/Makefile	2024-08-02 15:41:31.551491490 +0200
+@@ -63,6 +63,7 @@ obj-$(CONFIG_HI6421V600_IRQ)	+= hi6421v6
+ obj-$(CONFIG_OPEN_DICE)		+= open-dice.o
+ obj-$(CONFIG_GP_PCI1XXXX)	+= mchp_pci1xxxx/
+ obj-$(CONFIG_VCPU_STALL_DETECTOR)	+= vcpu_stall_detector.o
++obj-$(CONFIG_MISC_IPTS)		+= ipts/
+ obj-$(CONFIG_TMR_MANAGER)      += xilinx_tmr_manager.o
+ obj-$(CONFIG_TMR_INJECT)	+= xilinx_tmr_inject.o
+ obj-$(CONFIG_TPS6594_ESM)	+= tps6594-esm.o

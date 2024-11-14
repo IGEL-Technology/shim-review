@@ -1,0 +1,19 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/pci/pcie/aer.c b/linux-6.6.38.igel/drivers/pci/pcie/aer.c
+--- a/linux-6.6.38.igel/drivers/pci/pcie/aer.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/pci/pcie/aer.c	2024-08-02 15:41:31.559491681 +0200
+@@ -107,7 +107,15 @@ struct aer_stats {
+ 					PCI_ERR_ROOT_MULTI_COR_RCV |	\
+ 					PCI_ERR_ROOT_MULTI_UNCOR_RCV)
+ 
++/* gottwald@igel.com disable PCI advanced error reporting because it is spaming
++ * the syslog with unnecessary messages see also
++ * http://marc.info/?l=linux-pci&m=145140470807043
++ * for details */
++#ifdef CONFIG_IGEL_PCIEAER_DISABLE
++static int pcie_aer_disable = 1;
++#else
+ static int pcie_aer_disable;
++#endif
+ static pci_ers_result_t aer_root_reset(struct pci_dev *dev);
+ 
+ void pci_no_aer(void)

@@ -1,0 +1,17 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_lvds.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_lvds.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_lvds.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_lvds.c	2024-08-02 15:41:31.543491299 +0200
+@@ -857,6 +857,13 @@ void intel_lvds_init(struct drm_i915_pri
+ 		return;
+ 	}
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION
++	/* lang@igel.de: Skip init if LVDS is disabled */
++	if (! i915_modparams.lvds) {
++		DRM_INFO("LVDS is disabled by module parameter\n");
++		return;
++	}
++#endif
+ 	if (HAS_PCH_SPLIT(i915))
+ 		lvds_reg = PCH_LVDS;
+ 	else

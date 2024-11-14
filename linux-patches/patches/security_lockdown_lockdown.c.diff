@@ -1,0 +1,31 @@
+diff -Naurp a/linux-6.6.38.igel/security/lockdown/lockdown.c b/linux-6.6.38.igel/security/lockdown/lockdown.c
+--- a/linux-6.6.38.igel/security/lockdown/lockdown.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/lockdown/lockdown.c	2024-08-02 15:41:31.571491967 +0200
+@@ -75,6 +75,13 @@ static struct security_hook_list lockdow
+ 	LSM_HOOK_INIT(locked_down, lockdown_is_locked_down),
+ };
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct lsm_id lockdown_lsmid __lsm_ro_after_init = {
++	.lsm = "lockdown",
++	.slot = LSMBLOB_NOT_NEEDED
++};
++#endif
++
+ static int __init lockdown_lsm_init(void)
+ {
+ #if defined(CONFIG_LOCK_DOWN_KERNEL_FORCE_INTEGRITY)
+@@ -82,8 +89,13 @@ static int __init lockdown_lsm_init(void
+ #elif defined(CONFIG_LOCK_DOWN_KERNEL_FORCE_CONFIDENTIALITY)
+ 	lock_kernel_down("Kernel configuration", LOCKDOWN_CONFIDENTIALITY_MAX);
+ #endif
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(lockdown_hooks, ARRAY_SIZE(lockdown_hooks),
++			   &lockdown_lsmid);
++#else
+ 	security_add_hooks(lockdown_hooks, ARRAY_SIZE(lockdown_hooks),
+ 			   "lockdown");
++#endif
+ 	return 0;
+ }
+ 

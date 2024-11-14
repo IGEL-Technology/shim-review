@@ -1,0 +1,19 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_bios.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_bios.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_bios.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_bios.c	2024-08-02 15:41:31.539491203 +0200
+@@ -3647,6 +3647,15 @@ void intel_bios_for_each_encoder(struct
+ {
+ 	struct intel_bios_encoder_data *devdata;
+ 
++#ifdef CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER
++	if (i915_modparams.reverse_enum_order != 0)
++		list_for_each_entry_reverse(devdata, &i915->display.vbt.display_devices, node)
++			func(i915, devdata);
++	else
++		list_for_each_entry(devdata, &i915->display.vbt.display_devices, node)
++			func(i915, devdata);
++#else
+ 	list_for_each_entry(devdata, &i915->display.vbt.display_devices, node)
+ 		func(i915, devdata);
++#endif
+ }

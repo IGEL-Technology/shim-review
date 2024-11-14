@@ -1,0 +1,14 @@
+diff -Naurp a/linux-6.6.38.igel/include/linux/usb.h b/linux-6.6.38.igel/include/linux/usb.h
+--- a/linux-6.6.38.igel/include/linux/usb.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/linux/usb.h	2024-08-02 15:41:31.567491872 +0200
+@@ -729,6 +729,10 @@ struct usb_device {
+ 
+ 	u16 hub_delay;
+ 	unsigned use_generic_driver:1;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* IGEL to prevent driver disconnect */
++	unsigned disable_disconnect:1;
++#endif
+ };
+ 
+ #define to_usb_device(__dev)	container_of_const(__dev, struct usb_device, dev)

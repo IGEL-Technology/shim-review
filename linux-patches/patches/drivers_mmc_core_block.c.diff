@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/mmc/core/block.c b/linux-6.6.38.igel/drivers/mmc/core/block.c
+--- a/linux-6.6.38.igel/drivers/mmc/core/block.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/mmc/core/block.c	2024-08-02 15:41:31.551491490 +0200
+@@ -2534,6 +2534,11 @@ static struct mmc_blk_data *mmc_blk_allo
+ 	 * messages to tell when the card is present.
+ 	 */
+ 
++#ifdef CONFIG_IGEL_MARK_MMC_SD_CARD_REMOVEABLE
++	/* gottwald@igel.com set removable flag if MMC type is SD card (cardreader in laptop for example) */
++	if (card->type == MMC_TYPE_SD_COMBO || card->type == MMC_TYPE_SD || card->type == MMC_TYPE_SDIO)
++		md->disk->flags |= GENHD_FL_REMOVABLE;
++#endif
+ 	snprintf(md->disk->disk_name, sizeof(md->disk->disk_name),
+ 		 "mmcblk%u%s", card->host->index, subname ? subname : "");
+ 

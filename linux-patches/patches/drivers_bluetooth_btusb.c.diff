@@ -1,0 +1,93 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/bluetooth/btusb.c b/linux-6.6.38.igel/drivers/bluetooth/btusb.c
+--- a/linux-6.6.38.igel/drivers/bluetooth/btusb.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/bluetooth/btusb.c	2024-08-02 15:41:31.535491108 +0200
+@@ -65,6 +65,9 @@ static struct usb_driver btusb_driver;
+ #define BTUSB_INTEL_BROKEN_INITIAL_NCMD BIT(25)
+ #define BTUSB_INTEL_NO_WBS_SUPPORT	BIT(26)
+ #define BTUSB_ACTIONS_SEMI		BIT(27)
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++#define BTUSB_LOWER_LESCAN_INTERVAL	BIT(28)
++#endif
+ 
+ static const struct usb_device_id btusb_table[] = {
+ 	/* Generic Bluetooth USB device */
+@@ -468,6 +471,9 @@ static const struct usb_device_id quirks
+ 	{ USB_DEVICE(0x1286, 0x2044), .driver_info = BTUSB_MARVELL },
+ 	{ USB_DEVICE(0x1286, 0x2046), .driver_info = BTUSB_MARVELL },
+ 	{ USB_DEVICE(0x1286, 0x204e), .driver_info = BTUSB_MARVELL },
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	{ USB_DEVICE(0x1286, 0x204c), .driver_info = BTUSB_LOWER_LESCAN_INTERVAL },
++#endif
+ 
+ 	/* Intel Bluetooth devices */
+ 	{ USB_DEVICE(0x8087, 0x0025), .driver_info = BTUSB_INTEL_COMBINED },
+@@ -3246,9 +3252,18 @@ done:
+ static int btusb_mtk_shutdown(struct hci_dev *hdev)
+ {
+ 	struct btmtk_hci_wmt_params wmt_params;
++#ifdef CONFIG_IGEL_MT7921E_BLUETOOTH_QUIRK
++	struct btusb_data *data = hci_get_drvdata(hdev);
++#endif
+ 	u8 param = 0;
+ 	int err;
+ 
++#ifdef CONFIG_IGEL_MT7921E_BLUETOOTH_QUIRK
++	err = usb_autopm_get_interface(data->intf);
++	if (err < 0)
++		return err;
++#endif
++
+ 	/* Disable the device */
+ 	wmt_params.op = BTMTK_WMT_FUNC_CTRL;
+ 	wmt_params.flag = 0;
+@@ -3259,9 +3274,15 @@ static int btusb_mtk_shutdown(struct hci
+ 	err = btusb_mtk_hci_wmt_sync(hdev, &wmt_params);
+ 	if (err < 0) {
+ 		bt_dev_err(hdev, "Failed to send wmt func ctrl (%d)", err);
++#ifdef CONFIG_IGEL_MT7921E_BLUETOOTH_QUIRK
++		usb_autopm_put_interface(data->intf);
++#endif
+ 		return err;
+ 	}
+ 
++#ifdef CONFIG_IGEL_MT7921E_BLUETOOTH_QUIRK
++	usb_autopm_put_interface(data->intf);
++#endif
+ 	return 0;
+ }
+ 
+@@ -4393,6 +4414,21 @@ static int btusb_probe(struct usb_interf
+ 	if (id->driver_info & BTUSB_MARVELL)
+ 		hdev->set_bdaddr = btusb_set_bdaddr_marvell;
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* The Marvell 88W8897 combined wifi and bluetooth card is known for
++	 * very bad bt+wifi coexisting performance.
++	 *
++	 * Decrease the passive BT Low Energy scan interval a bit
++	 * (0x0190 * 0.625 msec = 250 msec) and make the scan window shorter
++	 * (0x000a * 0,625 msec = 6.25 msec). This allows for significantly
++	 * higher wifi throughput while passively scanning for BT LE devices.
++	 */
++	if (id->driver_info & BTUSB_LOWER_LESCAN_INTERVAL) {
++		hdev->le_scan_interval = 0x0190;
++		hdev->le_scan_window = 0x000a;
++	}
++#endif
++
+ 	if (IS_ENABLED(CONFIG_BT_HCIBTUSB_MTK) &&
+ 	    (id->driver_info & BTUSB_MEDIATEK)) {
+ 		hdev->setup = btusb_mtk_setup;
+@@ -4410,6 +4446,12 @@ static int btusb_probe(struct usb_interf
+ 		set_bit(HCI_QUIRK_BROKEN_LOCAL_COMMANDS, &hdev->quirks);
+ 	}
+ 
++#ifdef CONFIG_IGEL_MT7630E_BLUETOOTH_QUIRK
++	if (id->driver_info & BTUSB_MEDIATEK) {
++		set_bit(HCI_QUIRK_BROKEN_LOCAL_COMMANDS, &hdev->quirks);
++	}
++#endif
++
+ 	if (id->driver_info & BTUSB_INTEL_BOOT) {
+ 		hdev->manufacturer = 2;
+ 		set_bit(HCI_QUIRK_RAW_DEVICE, &hdev->quirks);

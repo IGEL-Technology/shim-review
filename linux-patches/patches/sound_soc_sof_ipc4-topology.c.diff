@@ -1,0 +1,35 @@
+diff -Naurp a/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.c b/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.c
+--- a/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/soc/sof/ipc4-topology.c	2024-08-02 15:41:31.579492158 +0200
+@@ -2121,12 +2121,30 @@ static int sof_ipc4_control_load_volume(
+ 	msg->primary |= SOF_IPC4_MSG_DIR(SOF_IPC4_MSG_REQUEST);
+ 	msg->primary |= SOF_IPC4_MSG_TARGET(SOF_IPC4_MODULE_MSG);
+ 
++#ifndef CONFIG_IGEL_LENOVO_MTL_MIC_MUTE_LED_FIX
+ 	msg->extension = SOF_IPC4_MOD_EXT_MSG_PARAM_ID(SOF_IPC4_GAIN_PARAM_ID);
++#else
++	/* volume controls with range 0-1 (off/on) are switch controls */
++	if (scontrol->max == 1)
++		msg->extension = SOF_IPC4_MOD_EXT_MSG_PARAM_ID(SOF_IPC4_SWITCH_CONTROL_PARAM_ID);
++	else
++		msg->extension = SOF_IPC4_MOD_EXT_MSG_PARAM_ID(SOF_IPC4_GAIN_PARAM_ID);
++#endif
+ 
+-	/* set default volume values to 0dB in control */
+ 	for (i = 0; i < scontrol->num_channels; i++) {
+ 		control_data->chanv[i].channel = i;
++#ifndef CONFIG_IGEL_LENOVO_MTL_MIC_MUTE_LED_FIX
+ 		control_data->chanv[i].value = SOF_IPC4_VOL_ZERO_DB;
++#else
++		/*
++		 * Default, initial values:
++		 * - 0dB for volume controls
++		 * - off (0) for switch controls - value already zero after
++		 *				   memory allocation
++		 */
++		if (scontrol->max > 1)
++			control_data->chanv[i].value = SOF_IPC4_VOL_ZERO_DB;
++#endif
+ 	}
+ 
+ 	return 0;

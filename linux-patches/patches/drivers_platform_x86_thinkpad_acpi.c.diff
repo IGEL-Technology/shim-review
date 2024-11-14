@@ -1,0 +1,202 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/platform/x86/thinkpad_acpi.c b/linux-6.6.38.igel/drivers/platform/x86/thinkpad_acpi.c
+--- a/linux-6.6.38.igel/drivers/platform/x86/thinkpad_acpi.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/platform/x86/thinkpad_acpi.c	2024-08-02 15:41:31.559491681 +0200
+@@ -413,6 +413,12 @@ static int dbg_uwbemul;
+ static bool tpacpi_uwb_emulstate;
+ #endif
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++static bool wwan_rfkill = 1;
++static bool wlan_rfkill = 1;
++static bool bluetooth_rfkill = 1;
++#endif
++
+ 
+ /*************************************************************************
+  *  Debugging helpers
+@@ -1937,6 +1943,10 @@ static int hotkey_get_wlsw(void)
+ 	if (!tp_features.hotkey_wlsw)
+ 		return -ENODEV;
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!wlan_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_wlswemul)
+ 		return (tpacpi_wlsw_emulstate) ?
+@@ -4274,6 +4284,10 @@ static int bluetooth_get_status(void)
+ {
+ 	int status;
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!bluetooth_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_bluetoothemul)
+ 		return (tpacpi_bluetooth_emulstate) ?
+@@ -4528,7 +4542,27 @@ enum {
+ static int wan_get_status(void)
+ {
+ 	int status;
++#ifdef CONFIG_IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
++	const char *vendor;
++	const char *version;
++#endif
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!wwan_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ 
++#ifdef CONFIG_IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
++	/* gottwald@igel.com rfkill for wwan is invalid for Lenovo ThinkPad L480 */
++	vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++	version = dmi_get_system_info(DMI_PRODUCT_VERSION);
++
++	if (vendor != NULL && version != NULL) {
++		if (strstr(vendor, "LENOVO") &&
++                    strstr(version, "ThinkPad L480")) {
++			return TPACPI_RFK_RADIO_ON;
++		}
++	}
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_wwanemul)
+ 		return (tpacpi_wwan_emulstate) ?
+@@ -10862,6 +10896,93 @@ static struct ibm_struct dprc_driver_dat
+ 	.name = "dprc",
+ };
+ 
++#ifdef CONFIG_IGEL_THINKPAD_MAC_PASSTHROUGH
++
++/*
++ * Auxmac
++ *
++ * This auxiliary mac address is enabled in the bios through the
++ * MAC Address Pass-through feature. In most cases, there are three
++ * possibilities: Internal Mac, Second Mac, and disabled.
++ *
++ */
++
++#define AUXMAC_LEN 12
++#define AUXMAC_START 9
++#define AUXMAC_STRLEN 22
++#define AUXMAC_BEGIN_MARKER 8
++#define AUXMAC_END_MARKER 21
++
++static char auxmac[AUXMAC_LEN + 1];
++
++static int auxmac_init(struct ibm_init_struct *iibm)
++{
++	acpi_status status;
++	struct acpi_buffer buffer = { ACPI_ALLOCATE_BUFFER, NULL };
++	union acpi_object *obj;
++
++	status = acpi_evaluate_object(NULL, "\\MACA", NULL, &buffer);
++
++	if (ACPI_FAILURE(status))
++		return -ENODEV;
++
++	obj = buffer.pointer;
++
++	if (obj->type != ACPI_TYPE_STRING || obj->string.length != AUXMAC_STRLEN) {
++		pr_info("Invalid buffer for MAC address pass-through.\n");
++		goto auxmacinvalid;
++	}
++
++	if (obj->string.pointer[AUXMAC_BEGIN_MARKER] != '#' ||
++	    obj->string.pointer[AUXMAC_END_MARKER] != '#') {
++		pr_info("Invalid header for MAC address pass-through.\n");
++		goto auxmacinvalid;
++	}
++
++	if (strncmp(obj->string.pointer + AUXMAC_START, "XXXXXXXXXXXX", AUXMAC_LEN) != 0)
++		strscpy(auxmac, obj->string.pointer + AUXMAC_START, sizeof(auxmac));
++	else
++		strscpy(auxmac, "disabled", sizeof(auxmac));
++
++free:
++	kfree(obj);
++	return 0;
++
++auxmacinvalid:
++	strscpy(auxmac, "unavailable", sizeof(auxmac));
++	goto free;
++}
++
++static struct ibm_struct auxmac_data = {
++	.name = "auxmac",
++};
++
++static ssize_t auxmac_show(struct device *dev,
++			   struct device_attribute *attr,
++			   char *buf)
++{
++	return sysfs_emit(buf, "%s\n", auxmac);
++}
++static DEVICE_ATTR_RO(auxmac);
++
++static umode_t auxmac_attr_is_visible(struct kobject *kobj,
++				      struct attribute *attr, int n)
++{
++	return auxmac[0] == 0 ? 0 : attr->mode;
++}
++
++static struct attribute *auxmac_attributes[] = {
++	&dev_attr_auxmac.attr,
++	NULL
++};
++
++static const struct attribute_group auxmac_attr_group = {
++	.is_visible = auxmac_attr_is_visible,
++	.attrs = auxmac_attributes,
++};
++
++#endif // CONFIG_IGEL_THINKPAD_MAC_PASSTHROUGH
++
+ /* --------------------------------------------------------------------- */
+ 
+ static struct attribute *tpacpi_driver_attributes[] = {
+@@ -10920,6 +11041,9 @@ static const struct attribute_group *tpa
+ 	&proxsensor_attr_group,
+ 	&kbdlang_attr_group,
+ 	&dprc_attr_group,
++#ifdef CONFIG_IGEL_THINKPAD_MAC_PASSTHROUGH
++	&auxmac_attr_group,
++#endif
+ 	NULL,
+ };
+ 
+@@ -11491,6 +11615,12 @@ static struct ibm_init_struct ibms_init[
+ 		.init = tpacpi_dprc_init,
+ 		.data = &dprc_driver_data,
+ 	},
++#ifdef CONFIG_IGEL_THINKPAD_MAC_PASSTHROUGH
++	{
++		.init = auxmac_init,
++		.data = &auxmac_data,
++	},
++#endif
+ };
+ 
+ static int __init set_ibm_param(const char *val, const struct kernel_param *kp)
+@@ -11608,6 +11738,18 @@ MODULE_PARM_DESC(uwb_state,
+ 		 "Initial state of the emulated UWB switch");
+ #endif
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++module_param(wwan_rfkill, bool, 0444);
++MODULE_PARM_DESC(wwan_rfkill,
++		 "If set to false the rfkill for WWAN get disabled (rfkill switch setting get ignored)");
++module_param(wlan_rfkill, bool, 0444);
++MODULE_PARM_DESC(wlan_rfkill,
++		 "If set to false the rfkill for WLAN get disabled (rfkill switch setting get ignored)");
++module_param(bluetooth_rfkill, bool, 0444);
++MODULE_PARM_DESC(bluetooth_rfkill,
++		 "If set to false the rfkill for Bluetooth get disabled (rfkill switch setting get ignored)");
++#endif
++
+ module_param(profile_force, int, 0444);
+ MODULE_PARM_DESC(profile_force, "Force profile mode. -1=off, 1=MMC, 2=PSC");
+ 

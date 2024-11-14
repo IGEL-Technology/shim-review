@@ -1,0 +1,94 @@
+diff -Naurp a/linux-6.6.38.igel/sound/soc/intel/boards/cht_bsw_rt5645.c b/linux-6.6.38.igel/sound/soc/intel/boards/cht_bsw_rt5645.c
+--- a/linux-6.6.38.igel/sound/soc/intel/boards/cht_bsw_rt5645.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/soc/intel/boards/cht_bsw_rt5645.c	2024-08-02 15:41:31.579492158 +0200
+@@ -31,6 +31,10 @@
+ #define CHT_CODEC_DAI1	"rt5645-aif1"
+ #define CHT_CODEC_DAI2	"rt5645-aif2"
+ 
++#ifdef CONFIG_IGEL_HP_T240_SOUND_FIXES
++extern unsigned int rt5645_jack_option;
++#endif
++
+ struct cht_acpi_card {
+ 	char *codec_id;
+ 	int codec_type;
+@@ -90,6 +94,21 @@ static int platform_clock_control(struct
+ 			return ret;
+ 		}
+ 	} else {
++#ifdef CONFIG_IGEL_HP_T240_SOUND_FIXES
++		if (rt5645_jack_option == 0) {
++			/* Set codec sysclk source to its internal clock because codec PLL will
++			 * be off when idle and MCLK will also be off when codec is
++			 * runtime suspended. Codec needs clock for jack detection and button
++			 * press. MCLK is turned off with clock framework or ACPI.
++			 */
++			ret = snd_soc_dai_set_sysclk(codec_dai, RT5645_SCLK_S_RCCLK,
++						48000 * 512, SND_SOC_CLOCK_IN);
++			if (ret < 0) {
++				dev_err(card->dev, "can't set codec sysclk: %d\n", ret);
++				return ret;
++			}
++		}
++#else
+ 		/* Set codec sysclk source to its internal clock because codec PLL will
+ 		 * be off when idle and MCLK will also be off when codec is
+ 		 * runtime suspended. Codec needs clock for jack detection and button
+@@ -101,7 +120,7 @@ static int platform_clock_control(struct
+ 			dev_err(card->dev, "can't set codec sysclk: %d\n", ret);
+ 			return ret;
+ 		}
+-
++#endif
+ 		clk_disable_unprepare(ctx->mclk);
+ 	}
+ 
+@@ -118,6 +137,21 @@ static const struct snd_soc_dapm_widget
+ 			platform_clock_control, SND_SOC_DAPM_PRE_PMU | SND_SOC_DAPM_POST_PMD),
+ };
+ 
++#ifdef CONFIG_IGEL_HP_T240_SOUND_FIXES
++static const struct snd_soc_dapm_route cht_rt5645_split_jack_audio_map[] = {
++	{"IN1P", NULL, "Headset Mic"},
++	{"IN1N", NULL, "Headset Mic"},
++	{"IN2P", NULL, "Headset Mic"},
++	{"IN2N", NULL, "Headset Mic"},
++	{"IN1P", NULL, "micbias1"},
++	{"IN2P", NULL, "micbias2"},
++	{"Headphone", NULL, "HPOL"},
++	{"Headphone", NULL, "HPOR"},
++	{"Headphone", NULL, "Platform Clock"},
++	{"Headset Mic", NULL, "Platform Clock"},
++};
++#endif
++
+ static const struct snd_soc_dapm_route cht_rt5645_audio_map[] = {
+ 	{"IN1P", NULL, "Headset Mic"},
+ 	{"IN1N", NULL, "Headset Mic"},
+@@ -542,6 +576,10 @@ static int snd_cht_mc_probe(struct platf
+ 	int i;
+ 	const char *mclk_name;
+ 
++#ifdef CONFIG_IGEL_HP_T240_SOUND_FIXES
++	pr_info("%s: rt5645_jack_option=%d\n", __func__, rt5645_jack_option);
++#endif
++
+ 	drv = devm_kzalloc(&pdev->dev, sizeof(*drv), GFP_KERNEL);
+ 	if (!drv)
+ 		return -ENOMEM;
+@@ -555,6 +593,15 @@ static int snd_cht_mc_probe(struct platf
+ 				"found codec %s\n", snd_soc_cards[i].codec_id);
+ 			card = snd_soc_cards[i].soc_card;
+ 			drv->acpi_card = &snd_soc_cards[i];
++#ifdef CONFIG_IGEL_HP_T240_SOUND_FIXES
++			if ((drv->acpi_card->codec_type == CODEC_TYPE_RT5645) &&
++					(rt5645_jack_option == 1)) {
++						pr_info("%s: Using split jack audio map", __func__);
++						card->dapm_routes = cht_rt5645_split_jack_audio_map;
++						card->num_dapm_routes = ARRAY_SIZE(cht_rt5645_split_jack_audio_map);
++						card->fully_routed = 1;
++			}
++#endif
+ 			found = true;
+ 			break;
+ 		}

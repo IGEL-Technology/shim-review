@@ -1,0 +1,32 @@
+diff -Naurp a/linux-6.6.38.igel/security/apparmor/include/crypto.h b/linux-6.6.38.igel/security/apparmor/include/crypto.h
+--- a/linux-6.6.38.igel/security/apparmor/include/crypto.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/apparmor/include/crypto.h	2024-08-02 15:41:31.571491967 +0200
+@@ -14,6 +14,10 @@
+ 
+ #ifdef CONFIG_SECURITY_APPARMOR_HASH
+ unsigned int aa_hash_size(void);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++void aa_snprint_hashstr(char *out, unsigned char *hash, unsigned int hsize);
++char *aa_asprint_hashstr(unsigned char *hash, unsigned int hsize, gfp_t gfp);
++#endif
+ char *aa_calc_hash(void *data, size_t len);
+ int aa_calc_profile_hash(struct aa_profile *profile, u32 version, void *start,
+ 			 size_t len);
+@@ -32,6 +36,17 @@ static inline unsigned int aa_hash_size(
+ {
+ 	return 0;
+ }
++
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++void aa_snprint_hashstr(char *out, unsigned char *hash, unsigned int hsize)
++{
++}
++
++char *aa_asprint_hashstr(unsigned char *hash, unsigned int hsize, gfp_t gfp);
++{
++	return NULL;
++}
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ #endif
+ 
+ #endif /* __APPARMOR_CRYPTO_H */

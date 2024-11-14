@@ -1,0 +1,34 @@
+diff -Naurp a/linux-6.6.38.igel/security/safesetid/lsm.c b/linux-6.6.38.igel/security/safesetid/lsm.c
+--- a/linux-6.6.38.igel/security/safesetid/lsm.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/safesetid/lsm.c	2024-08-02 15:41:31.571491967 +0200
+@@ -261,6 +261,13 @@ static int safesetid_task_fix_setgroups(
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct lsm_id safesetid_lsmid __lsm_ro_after_init = {
++	.lsm  = "safesetid",
++	.slot = LSMBLOB_NOT_NEEDED
++};
++#endif
++
+ static struct security_hook_list safesetid_security_hooks[] = {
+ 	LSM_HOOK_INIT(task_fix_setuid, safesetid_task_fix_setuid),
+ 	LSM_HOOK_INIT(task_fix_setgid, safesetid_task_fix_setgid),
+@@ -270,9 +277,16 @@ static struct security_hook_list safeset
+ 
+ static int __init safesetid_security_init(void)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(safesetid_security_hooks,
++			   ARRAY_SIZE(safesetid_security_hooks),
++			   &safesetid_lsmid);
++#else
+ 	security_add_hooks(safesetid_security_hooks,
+ 			   ARRAY_SIZE(safesetid_security_hooks), "safesetid");
+ 
++#endif
++
+ 	/* Report that SafeSetID successfully initialized */
+ 	safesetid_initialized = 1;
+ 

@@ -1,0 +1,273 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_connectors.c b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_connectors.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_connectors.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_connectors.c	2024-08-02 15:41:31.547491394 +0200
+@@ -31,18 +31,45 @@
+ #include <drm/drm_probe_helper.h>
+ #include <drm/radeon_drm.h>
+ #include "radeon.h"
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include "radeon_drv.h"
++#endif
+ #include "radeon_audio.h"
+ #include "atom.h"
+ 
+ #include <linux/pm_runtime.h>
+ #include <linux/vga_switcheroo.h>
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++#include <linux/pci.h>
++#endif
+ 
+ void radeon_connector_hotplug(struct drm_connector *connector)
+ {
+ 	struct drm_device *dev = connector->dev;
+ 	struct radeon_device *rdev = dev->dev_private;
+ 	struct radeon_connector *radeon_connector = to_radeon_connector(connector);
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++	enum drm_connector_status status;
++#endif
++
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++	/* gottwald@igel.com update status of connector */
++
++	status = connector->status;
++
++	if (connector->force) {
++		if (connector->force == DRM_FORCE_ON)
++			connector->status = connector_status_connected;
++		else
++			connector->status = connector_status_disconnected;
++		if (connector->funcs->force)
++			connector->funcs->force(connector);
++	}
+ 
++	if (connector->status == connector_status_disconnected) {
++		drm_connector_update_edid_property(connector, NULL);
++	}
++#endif
+ 	/* bail if the connector does not have hpd pin, e.g.,
+ 	 * VGA, TV, etc.
+ 	 */
+@@ -73,6 +100,20 @@ void radeon_connector_hotplug(struct drm
+ 		if (dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT &&
+ 		    radeon_hpd_sense(rdev, radeon_connector->hpd.hpd) &&
+ 		    radeon_dp_needs_link_train(radeon_connector)) {
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++			/*
++			 * lang@igel:
++			 * fix monitor dpms on, when connector is disconnected 
++			 */
++			if (connector->status != connector_status_connected)  {
++				enum drm_connector_status new_status;
++
++				new_status = connector->funcs->detect(connector, false);
++				DRM_INFO("run %s detection during hotplug: %s\n", 
++					 connector->name,
++					 drm_get_connector_status_name(new_status));
++			}
++#endif
+ 			/* Don't start link training before we have the DPCD */
+ 			if (!radeon_dp_getdpcd(radeon_connector))
+ 				return;
+@@ -1271,6 +1312,12 @@ radeon_dvi_detect(struct drm_connector *
+ 		radeon_connector->detected_by_load = false;
+ 		radeon_connector_free_edid(connector);
+ 		radeon_connector_get_edid(connector);
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++		if (!radeon_connector->edid) {
++			msleep(500);
++			radeon_connector_get_edid(connector);
++		}
++#endif
+ 
+ 		if (!radeon_connector->edid) {
+ 			DRM_ERROR("%s: probed a monitor but no|invalid EDID\n",
+@@ -1294,9 +1341,18 @@ radeon_dvi_detect(struct drm_connector *
+ 			/* some oems have boards with separate digital and analog connectors
+ 			 * with a shared ddc line (often vga + hdmi)
+ 			 */
++#ifdef CONFIG_IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
++			if ((!radeon_connector->use_digital) &&
++			    (radeon_connector->shared_ddc || IS_IGEL_M340C)) {
++#else
+ 			if ((!radeon_connector->use_digital) && radeon_connector->shared_ddc) {
++#endif
+ 				radeon_connector_free_edid(connector);
+ 				ret = connector_status_disconnected;
++#ifdef CONFIG_IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
++				if (IS_IGEL_M340C)
++					goto out;
++#endif
+ 			} else {
+ 				ret = connector_status_connected;
+ 			}
+@@ -1329,6 +1385,21 @@ radeon_dvi_detect(struct drm_connector *
+ 		}
+ 	}
+ 
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	/* lang@igel: split DVI-I connector in analog + digital connector:
++	   check if EDID fits to device type */
++	if (radeon_connector->splitted_dvii && (ret == connector_status_connected)) {
++		if ( (radeon_connector->use_digital && 
++		      ((radeon_connector->devices & (ATOM_DEVICE_DFP_SUPPORT)) == 0)) ||
++		     (! radeon_connector->use_digital && 
++		      ((radeon_connector->devices & (ATOM_DEVICE_CRT_SUPPORT)) == 0)) )
++			ret = connector_status_disconnected;
++	}
++	/* lang@igel: reset detected_by_load flag after EDID check */
++	if (radeon_connector->splitted_dvii && (ret == connector_status_connected))
++		radeon_connector->detected_by_load = false;
++#endif
++
+ 	if ((ret == connector_status_connected) && (radeon_connector->use_digital == true))
+ 		goto out;
+ 
+@@ -1347,6 +1418,17 @@ radeon_dvi_detect(struct drm_connector *
+ 		goto out;
+ 	}
+ 
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	/* lang@igel: split DVI-I connector in analog + digital connector:
++	   never do destructive polling, you can see a black screen on analog output */
++	if (radeon_connector->splitted_dvii &&
++	    radeon_connector->detected_by_load &&
++	    (connector->status == connector_status_connected)) {
++		ret = connector->status;
++		goto out;
++	}
++#endif
++
+ 	/* find analog encoder */
+ 	if (radeon_connector->dac_load_detect) {
+ 		drm_connector_for_each_possible_encoder(connector, encoder) {
+@@ -1655,6 +1737,32 @@ radeon_dp_detect(struct drm_connector *c
+ 		goto out;
+ 	}
+ 
++#ifdef CONFIG_IGEL_RADEON_DP_DVI_ADAPTER_PROBE_WORKAROUND
++	if (radeon_dp_dvi_probe_workaround != 0 &&
++	    connector->connector_type == DRM_MODE_CONNECTOR_DisplayPort &&
++	    radeon_dig_connector->dp_sink_type != CONNECTOR_OBJECT_ID_DISPLAYPORT) {
++		if (connector->dpms == DRM_MODE_DPMS_OFF) {
++			ret = connector->status;
++			goto out;
++		} else {
++			msleep(200);
++			radeon_connector_free_edid(connector);
++			/* try non-aux ddc (DP to DVI/HDMI/etc. adapter) */
++			if (radeon_ddc_probe(radeon_connector, false)) {
++				ret = connector_status_connected;
++				radeon_connector_update_scratch_regs(connector, ret);
++
++				radeon_connector_get_edid(connector);
++				if ((radeon_audio != 0) && encoder) {
++					radeon_audio_detect(connector, encoder, ret);
++				}
++
++				goto out;
++			}
++		}
++	}
++#endif
++
+ 	radeon_connector_free_edid(connector);
+ 
+ 	if ((connector->connector_type == DRM_MODE_CONNECTOR_eDP) ||
+@@ -1704,8 +1812,18 @@ radeon_dp_detect(struct drm_connector *c
+ 		radeon_dig_connector->dp_sink_type = radeon_dp_getsinktype(radeon_connector);
+ 		if (radeon_hpd_sense(rdev, radeon_connector->hpd.hpd)) {
+ 			ret = connector_status_connected;
+-			if (radeon_dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT)
++			if (radeon_dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT) {
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++				/* lang@igel: if we do not get dpcd, the connector should be disconnected */
++				if (! radeon_dp_getdpcd(radeon_connector)) {
++					msleep(200);
++					if (! radeon_dp_getdpcd(radeon_connector))
++						ret = connector_status_disconnected;
++				}
++#else
+ 				radeon_dp_getdpcd(radeon_connector);
++#endif
++			}
+ 		} else {
+ 			if (radeon_dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT) {
+ 				if (radeon_dp_getdpcd(radeon_connector))
+@@ -1833,7 +1951,12 @@ radeon_add_atom_connector(struct drm_dev
+ 			  uint32_t igp_lane_info,
+ 			  uint16_t connector_object_id,
+ 			  struct radeon_hpd *hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			  struct radeon_router *router,
++			  int splitted_dvii)
++#else
+ 			  struct radeon_router *router)
++#endif
+ {
+ 	struct radeon_device *rdev = dev->dev_private;
+ 	struct drm_connector *connector;
+@@ -1846,6 +1969,12 @@ radeon_add_atom_connector(struct drm_dev
+ 	bool shared_ddc = false;
+ 	bool is_dp_bridge = false;
+ 	bool has_aux = false;
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++	struct pci_dev *pdev = to_pci_dev(dev->dev);
++#endif
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	bool dvii_shared = false;
++#endif
+ 
+ 	if (connector_type == DRM_MODE_CONNECTOR_Unknown)
+ 		return;
+@@ -1857,15 +1986,41 @@ radeon_add_atom_connector(struct drm_dev
+ 	    (radeon_tv == 0))
+ 		return;
+ 
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++	if (connector_type == DRM_MODE_CONNECTOR_VGA) {
++		/* gottwald@igel.com Samsung NC241, NC221 and TC2 workaround to not detect DVI monitor also as VGA */
++		if ((pdev->device == 0x9856 || pdev->device == 0x9851) &&
++		    (pdev->subsystem_vendor == 0x1022) &&
++		    (pdev->subsystem_device == 0x1234)) {
++			list_for_each_entry(connector, &dev->mode_config.connector_list, head)
++				if (connector->connector_type == DRM_MODE_CONNECTOR_DVII)
++					dvii_shared = true;
++		} else if (IS_SAMSUNG_TC2) {
++			list_for_each_entry(connector, &dev->mode_config.connector_list, head)
++				if (connector->connector_type == DRM_MODE_CONNECTOR_DVII)
++					dvii_shared = true;
++		}
++	}
++#endif
+ 	/* see if we already added it */
+ 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
+ 		radeon_connector = to_radeon_connector(connector);
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++		if ((radeon_connector->connector_id == connector_id) &&
++		     ! splitted_dvii) {
++#else
+ 		if (radeon_connector->connector_id == connector_id) {
++#endif
+ 			radeon_connector->devices |= supported_device;
+ 			return;
+ 		}
+ 		if (radeon_connector->ddc_bus && i2c_bus->valid) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			if (((radeon_connector->ddc_bus->rec.i2c_id == i2c_bus->i2c_id) 
++			      || dvii_shared) && ! splitted_dvii) {
++#else
+ 			if (radeon_connector->ddc_bus->rec.i2c_id == i2c_bus->i2c_id) {
++#endif
+ 				radeon_connector->shared_ddc = true;
+ 				shared_ddc = true;
+ 			}
+@@ -1903,6 +2058,9 @@ radeon_add_atom_connector(struct drm_dev
+ 	radeon_connector->shared_ddc = shared_ddc;
+ 	radeon_connector->connector_object_id = connector_object_id;
+ 	radeon_connector->hpd = *hpd;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	radeon_connector->splitted_dvii = splitted_dvii;
++#endif
+ 
+ 	radeon_connector->router = *router;
+ 	if (router->ddc_valid || router->cd_valid) {

@@ -1,0 +1,122 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+--- a/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.c	2024-08-02 15:41:31.555491585 +0200
+@@ -5348,8 +5348,14 @@ static void rt2800_config_txpower_rt28xx
+ 	 * maximum tx power. For other devices we take user power_level into
+ 	 * consideration on rt2800_compensate_txpower().
+ 	 */
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for control tx power */
++	delta += rt2800_get_txpower_reg_delta(rt2x00dev, power_level,
++					      chan->max_reg_power);
++#else
+ 	delta += rt2800_get_txpower_reg_delta(rt2x00dev, power_level,
+ 					      chan->max_power);
++#endif
+ 
+ 	/*
+ 	 * BBP_R1 controls TX power for all rates, it allow to set the following
+@@ -5365,6 +5371,12 @@ static void rt2800_config_txpower_rt28xx
+ 	} else if (delta <= -6) {
+ 		power_ctrl = 1;
+ 		delta += 6;
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for control tx power */
++	} else if (delta > 0) {
++		power_ctrl = 3;
++		delta -= 6;
++#endif
+ 	} else {
+ 		power_ctrl = 0;
+ 	}
+@@ -6030,7 +6042,16 @@ static int rt2800_init_registers(struct
+ 	rt2800_register_write(rt2x00dev, TX_TIMEOUT_CFG, reg);
+ 
+ 	reg = rt2800_register_read(rt2x00dev, MAX_LEN_CFG);
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for frame aggregation with one antenna */
++	if (rt2x00dev->default_ant.tx_chain_num < 2) {
++		rt2x00_set_field32(&reg, MAX_LEN_CFG_MAX_MPDU, DATA_FRAME_SIZE);
++	} else {
++		rt2x00_set_field32(&reg, MAX_LEN_CFG_MAX_MPDU, AGGREGATION_SIZE);
++	}
++#else
+ 	rt2x00_set_field32(&reg, MAX_LEN_CFG_MAX_MPDU, AGGREGATION_SIZE);
++#endif
+ 	if (rt2x00_is_usb(rt2x00dev)) {
+ 		drv_data->max_psdu = 3;
+ 	} else if (rt2x00_rt_rev_gte(rt2x00dev, RT2872, REV_RT2872E) ||
+@@ -11016,6 +11037,9 @@ static int rt2800_init_eeprom(struct rt2
+ 	u16 value;
+ 	u16 eeprom;
+ 	u16 rf;
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	int n;
++#endif
+ 
+ 	/*
+ 	 * Read EEPROM word for configuration.
+@@ -11080,10 +11104,24 @@ static int rt2800_init_eeprom(struct rt2
+ 	/*
+ 	 * Identify default antenna configuration.
+ 	 */
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	if ((n = rt2800_get_chain_number(rt2x00dev)) > 0) {
++		/* set chain number from the module parameter */
++		rt2x00dev->default_ant.tx_chain_num = n;
++		rt2x00dev->default_ant.rx_chain_num = n;
++	} else {
++		rt2x00dev->default_ant.tx_chain_num =
++		    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_TXPATH);
++		rt2x00dev->default_ant.rx_chain_num =
++		    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_RXPATH);
++	}
++#else
+ 	rt2x00dev->default_ant.tx_chain_num =
+ 	    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_TXPATH);
+ 	rt2x00dev->default_ant.rx_chain_num =
+ 	    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_RXPATH);
++#endif
+ 
+ 	eeprom = rt2800_eeprom_read(rt2x00dev, EEPROM_NIC_CONF1);
+ 
+@@ -11593,7 +11631,13 @@ static int rt2800_probe_hw_mode(struct r
+ 	 * Initialize all hw fields.
+ 	 */
+ 	ieee80211_hw_set(rt2x00dev->hw, REPORTS_TX_ACK_STATUS);
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for AMPDU with one antenna */
++	if (rt2x00dev->default_ant.tx_chain_num > 1)
++		ieee80211_hw_set(rt2x00dev->hw, AMPDU_AGGREGATION);
++#else
+ 	ieee80211_hw_set(rt2x00dev->hw, AMPDU_AGGREGATION);
++#endif
+ 	ieee80211_hw_set(rt2x00dev->hw, PS_NULLFUNC_STACK);
+ 	ieee80211_hw_set(rt2x00dev->hw, SIGNAL_DBM);
+ 	ieee80211_hw_set(rt2x00dev->hw, SUPPORTS_PS);
+@@ -11706,10 +11750,24 @@ static int rt2800_probe_hw_mode(struct r
+ 	/*
+ 	 * Initialize HT information.
+ 	 */
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	if (!rt2x00_rf(rt2x00dev, RF2020)) {
++		if (rt2800_ht_disabled(rt2x00dev)) {
++			spec->ht.ht_supported = false;
++			rt2x00_info(rt2x00dev, "HT is disabled.\n");
++		} else {
++			spec->ht.ht_supported = true;
++		}
++	} else {
++		spec->ht.ht_supported = false;
++	}
++#else
+ 	if (!rt2x00_rf(rt2x00dev, RF2020))
+ 		spec->ht.ht_supported = true;
+ 	else
+ 		spec->ht.ht_supported = false;
++#endif
+ 
+ 	spec->ht.cap =
+ 	    IEEE80211_HT_CAP_SUP_WIDTH_20_40 |

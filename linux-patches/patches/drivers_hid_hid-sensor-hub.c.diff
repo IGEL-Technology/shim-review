@@ -1,0 +1,23 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/hid/hid-sensor-hub.c b/linux-6.6.38.igel/drivers/hid/hid-sensor-hub.c
+--- a/linux-6.6.38.igel/drivers/hid/hid-sensor-hub.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/hid/hid-sensor-hub.c	2024-08-02 15:41:31.547491394 +0200
+@@ -506,11 +506,19 @@ static int sensor_hub_raw_event(struct h
+ 		hid_dbg(hdev, "collection->usage %x\n",
+ 					collection->usage);
+ 
++#ifdef IGEL_APPLE_HID_CHANGES
++		callback = sensor_hub_get_callback(hdev,
++				report->field[i]->physical ?:
++					report->field[i]->application,
++				report->field[i]->usage[0].collection_index,
++				&hsdev, &priv);
++#else
+ 		callback = sensor_hub_get_callback(hdev,
+ 				report->field[i]->physical ? report->field[i]->physical :
+ 							     report->field[i]->application,
+ 				report->field[i]->usage[0].collection_index,
+ 				&hsdev, &priv);
++#endif
+ 		if (!callback) {
+ 			ptr += sz;
+ 			continue;

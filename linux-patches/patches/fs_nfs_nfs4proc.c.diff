@@ -1,0 +1,18 @@
+diff -Naurp a/linux-6.6.38.igel/fs/nfs/nfs4proc.c b/linux-6.6.38.igel/fs/nfs/nfs4proc.c
+--- a/linux-6.6.38.igel/fs/nfs/nfs4proc.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/fs/nfs/nfs4proc.c	2024-08-02 15:41:31.567491872 +0200
+@@ -3893,8 +3893,14 @@ static int _nfs4_server_capabilities(str
+ 		if (res.attr_bitmask[2] & FATTR4_WORD2_SECURITY_LABEL)
+ 			server->caps |= NFS_CAP_SECURITY_LABEL;
+ #endif
++#ifdef CONFIG_IGEL_NFS_QNAP_WORKAROUND
++		/* Restrict FS_LOCATIONS to NFS v4.3+ to work aroundi Qnap knfsd-3.4.6 bug */
++		if (minorversion >= 3 && (res.attr_bitmask[0] & FATTR4_WORD0_FS_LOCATIONS))
++			server->caps |= NFS_CAP_FS_LOCATIONS;
++#else
+ 		if (res.attr_bitmask[0] & FATTR4_WORD0_FS_LOCATIONS)
+ 			server->caps |= NFS_CAP_FS_LOCATIONS;
++#endif
+ 		if (!(res.attr_bitmask[0] & FATTR4_WORD0_FILEID))
+ 			server->fattr_valid &= ~NFS_ATTR_FATTR_FILEID;
+ 		if (!(res.attr_bitmask[1] & FATTR4_WORD1_MODE))

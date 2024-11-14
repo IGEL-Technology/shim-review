@@ -1,0 +1,62 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/media/pci/intel/ipu3/ipu3-cio2.c b/linux-6.6.38.igel/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+--- a/linux-6.6.38.igel/drivers/media/pci/intel/ipu3/ipu3-cio2.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/media/pci/intel/ipu3/ipu3-cio2.c	2024-08-02 15:41:31.551491490 +0200
+@@ -1388,7 +1388,11 @@ static int cio2_notifier_bound(struct v4
+ 	struct cio2_device *cio2 = to_cio2_device(notifier);
+ 	struct sensor_async_subdev *s_asd = to_sensor_asd(asd);
+ 	struct cio2_queue *q;
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	struct device *dev = &cio2->pci_dev->dev;
++	unsigned int pad;
+ 	int ret;
++#endif
+ 
+ 	if (cio2->queue[s_asd->csi2.port].sensor)
+ 		return -EBUSY;
+@@ -1403,7 +1407,30 @@ static int cio2_notifier_bound(struct v4
+ 	q->sensor = sd;
+ 	q->csi_rx_base = cio2->base + CIO2_REG_PIPE_BASE(q->csi2.port);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	for (pad = 0; pad < q->sensor->entity.num_pads; pad++)
++		if (q->sensor->entity.pads[pad].flags &
++					MEDIA_PAD_FL_SOURCE)
++			break;
++
++	if (pad == q->sensor->entity.num_pads) {
++		dev_err(dev, "failed to find src pad for %s\n",
++			q->sensor->name);
++		return -ENXIO;
++	}
++
++	ret = media_create_pad_link(&q->sensor->entity, pad, &q->subdev.entity,
++				    CIO2_PAD_SINK, 0);
++	if (ret) {
++		dev_err(dev, "failed to create link for %s\n",
++			q->sensor->name);
++		return ret;
++	}
++
++	return v4l2_device_register_subdev_nodes(&cio2->v4l2_dev);
++#else
+ 	return 0;
++#endif
+ }
+ 
+ /* The .unbind callback */
+@@ -1421,6 +1448,7 @@ static void cio2_notifier_unbind(struct
+ static int cio2_notifier_complete(struct v4l2_async_notifier *notifier)
+ {
+ 	struct cio2_device *cio2 = to_cio2_device(notifier);
++#ifndef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
+ 	struct device *dev = &cio2->pci_dev->dev;
+ 	struct sensor_async_subdev *s_asd;
+ 	struct v4l2_async_connection *asd;
+@@ -1449,6 +1477,7 @@ static int cio2_notifier_complete(struct
+ 			return ret;
+ 		}
+ 	}
++#endif
+ 
+ 	return v4l2_device_register_subdev_nodes(&cio2->v4l2_dev);
+ }

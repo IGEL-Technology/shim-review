@@ -1,0 +1,19 @@
+diff -Naurp a/linux-6.6.38.igel/include/drm/drm_connector.h b/linux-6.6.38.igel/include/drm/drm_connector.h
+--- a/linux-6.6.38.igel/include/drm/drm_connector.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/drm/drm_connector.h	2024-08-02 15:41:31.567491872 +0200
+@@ -1335,6 +1335,15 @@ struct drm_connector_funcs {
+ 	 * Allows connectors to create connector-specific debugfs files.
+ 	 */
+ 	void (*debugfs_init)(struct drm_connector *connector, struct dentry *root);
++
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++	/* schneider@igel.com SDVO register save function */
++	/* Save CRTC state */
++	void (*save)(struct drm_connector *connector); /* suspend? */
++	/* schneider@igel.com SDVO register restore function */
++	/* Restore CRTC state */
++	void (*restore)(struct drm_connector *connector); /* resume? */
++#endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
+ };
+ 
+ /**

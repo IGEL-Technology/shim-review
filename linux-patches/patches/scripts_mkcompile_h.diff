@@ -1,0 +1,18 @@
+diff -Naurp a/linux-6.6.38.igel/scripts/mkcompile_h b/linux-6.6.38.igel/scripts/mkcompile_h
+--- a/linux-6.6.38.igel/scripts/mkcompile_h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/scripts/mkcompile_h	2024-08-02 15:41:31.567491872 +0200
+@@ -6,12 +6,12 @@ CC_VERSION="$2"
+ LD=$3
+ 
+ if test -z "$KBUILD_BUILD_USER"; then
+-	LINUX_COMPILE_BY=$(whoami | sed 's/\\/\\\\/')
++	LINUX_COMPILE_BY="IGEL"
+ else
+ 	LINUX_COMPILE_BY=$KBUILD_BUILD_USER
+ fi
+ if test -z "$KBUILD_BUILD_HOST"; then
+-	LINUX_COMPILE_HOST=`uname -n`
++	LINUX_COMPILE_HOST="ITGA"
+ else
+ 	LINUX_COMPILE_HOST=$KBUILD_BUILD_HOST
+ fi

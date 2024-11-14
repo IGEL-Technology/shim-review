@@ -1,0 +1,30 @@
+diff -Naurp a/linux-6.6.38.igel/security/tomoyo/tomoyo.c b/linux-6.6.38.igel/security/tomoyo/tomoyo.c
+--- a/linux-6.6.38.igel/security/tomoyo/tomoyo.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/tomoyo/tomoyo.c	2024-08-02 15:41:31.575492063 +0200
+@@ -542,6 +542,13 @@ static void tomoyo_task_free(struct task
+ 	}
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct lsm_id tomoyo_lsmid __lsm_ro_after_init = {
++	.lsm  = "tomoyo",
++	.slot = LSMBLOB_NOT_NEEDED
++};
++#endif
++
+ /*
+  * tomoyo_security_ops is a "struct security_operations" which is used for
+  * registering TOMOYO.
+@@ -596,7 +603,12 @@ static int __init tomoyo_init(void)
+ 	struct tomoyo_task *s = tomoyo_task(current);
+ 
+ 	/* register ourselves with the security framework */
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(tomoyo_hooks, ARRAY_SIZE(tomoyo_hooks),
++			   &tomoyo_lsmid);
++#else
+ 	security_add_hooks(tomoyo_hooks, ARRAY_SIZE(tomoyo_hooks), "tomoyo");
++#endif
+ 	pr_info("TOMOYO Linux initialized\n");
+ 	s->domain_info = &tomoyo_kernel_domain;
+ 	atomic_inc(&tomoyo_kernel_domain.users);

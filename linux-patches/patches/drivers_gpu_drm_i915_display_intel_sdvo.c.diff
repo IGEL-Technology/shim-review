@@ -1,0 +1,160 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_sdvo.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_sdvo.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_sdvo.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_sdvo.c	2024-08-02 15:41:31.543491299 +0200
+@@ -124,6 +124,13 @@ struct intel_sdvo {
+ 	 * the sdvo flag gets lost in round trip: dtd->adjusted_mode->dtd
+ 	 */
+ 	u8 dtd_sdvo_flags;
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++	/**
++	 * schneider@igel.com: Vendor registers for save/restore (suspend/resume)
++	 */
++	bool    vendor_regs_valid;
++	uint8_t vendor_regs[0x100-SDVO_I2C_VENDOR_BEGIN];
++#endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
+ };
+ 
+ struct intel_sdvo_connector {
+@@ -277,6 +284,32 @@ static bool intel_sdvo_read_byte(struct
+ 	return false;
+ }
+ 
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++/* schneider@igel.com: intel_sdvo_write_byte allows to write single SDVO registers */
++static bool intel_sdvo_write_byte(struct intel_sdvo *intel_sdvo, u8 addr, u8 val)
++{
++	int ret;
++	uint8_t out_buf[2];
++	struct i2c_msg msg[] = {
++		{
++			.addr = intel_sdvo->slave_addr,
++			.flags = 0,
++			.len = 2,
++			.buf = out_buf,
++		}
++	};
++
++	out_buf[0] = addr;
++	out_buf[1] = val;
++
++	if ((ret = i2c_transfer(intel_sdvo->i2c, msg, 1)) == 1)
++		return true;
++
++	DRM_DEBUG_KMS("i2c WRITE transfer returned %d\n", ret);
++	return false;
++}
++#endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
++
+ #define SDVO_CMD_NAME_ENTRY(cmd_) { .cmd = SDVO_CMD_ ## cmd_, .name = #cmd_ }
+ 
+ /** Mapping of command numbers to names, for debug output */
+@@ -2179,6 +2212,19 @@ intel_sdvo_detect(struct drm_connector *
+ 		}
+ 	}
+ 
++#ifdef CONFIG_IGEL_LVDS_CONNECTED_ON_TC215
++	/* lang@igel.de: fix dual monitor with TC215 hardware */
++	if ((ret != connector_status_connected) &&
++	    (response & SDVO_LVDS_MASK)) {
++		struct intel_connector *intel_connector = to_intel_connector(connector);
++		if (intel_connector->panel.vbt.sdvo_lvds_vbt_mode != NULL) {
++			DRM_INFO("%s: set LVDS connector_status_connected "
++			  "- VBT mode available\n", SDVO_NAME(intel_sdvo));
++			ret = connector_status_connected;
++		}
++	}
++#endif
++
+ 	return ret;
+ }
+ 
+@@ -2489,6 +2535,78 @@ intel_sdvo_connector_unregister(struct d
+ 	intel_connector_unregister(connector);
+ }
+ 
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++
++/* schneider@igel.com: SDVO register save function for given connector */
++static void intel_sdvo_connector_save(struct drm_connector *connector)
++{
++    struct intel_connector *intel_conn =
++    	   to_intel_connector(connector);
++    struct intel_sdvo *intel_sdvo = intel_attached_sdvo(intel_conn);
++    int i;
++
++	/* Read the vendor regs */
++    for (i = SDVO_I2C_VENDOR_BEGIN; i < 0x100; i++) {
++        if (!intel_sdvo_read_byte(intel_sdvo, i, &intel_sdvo->vendor_regs[i-SDVO_I2C_VENDOR_BEGIN])) {
++            DRM_DEBUG_KMS("No SDVO device found on %s\n",
++                    SDVO_NAME(intel_sdvo));
++            break;
++        }
++        DRM_DEBUG_KMS("%s: %s: REG 0x%02X=0x%02X [READ]\n", __FUNCTION__, SDVO_NAME(intel_sdvo), i, intel_sdvo->vendor_regs[i-SDVO_I2C_VENDOR_BEGIN]);
++    }
++    intel_sdvo->vendor_regs_valid = true;
++}
++
++/* schneider@igel.com: SDVO register save function */
++void intel_sdvo_save(struct drm_device *dev)
++{
++    struct drm_connector *connector;
++
++    list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
++        if(connector->funcs->save == intel_sdvo_connector_save) {
++            intel_sdvo_connector_save(connector);
++        }
++    }
++}
++
++/* schneider@igel.com: SDVO register restore function for given connector */
++static void intel_sdvo_connector_restore(struct drm_connector* connector)
++{
++    struct intel_connector *intel_conn =
++    	   to_intel_connector(connector);
++    struct intel_sdvo *intel_sdvo = intel_attached_sdvo(intel_conn);
++    int i;
++
++    if(!intel_sdvo->vendor_regs_valid) {
++        DRM_DEBUG_KMS("SDVO %s vendor regs have not been saved bevore\n",
++                SDVO_NAME(intel_sdvo));
++        return;
++    }
++
++	/* Write back the vendor regs */
++    for (i = SDVO_I2C_VENDOR_BEGIN; i < 0x100; i++) {
++        if (!intel_sdvo_write_byte(intel_sdvo, i, intel_sdvo->vendor_regs[i-SDVO_I2C_VENDOR_BEGIN])) {
++            DRM_DEBUG_KMS("No SDVO device found on %s\n",
++                    SDVO_NAME(intel_sdvo));
++            break;
++        }
++        DRM_DEBUG_KMS("%s: %s: REG 0x%02X=0x%02X [WRITE]\n", __FUNCTION__, SDVO_NAME(intel_sdvo), i, intel_sdvo->vendor_regs[i-SDVO_I2C_VENDOR_BEGIN]);
++    }
++}
++
++/* schneider@igel.com: SDVO register restore function */
++void intel_sdvo_restore(struct drm_device *dev)
++{
++    struct drm_connector *connector;
++
++    list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
++        if(connector->funcs->restore == intel_sdvo_connector_restore) {
++            intel_sdvo_connector_restore(connector);
++        }
++    }
++}
++# endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
++
+ static struct drm_connector_state *
+ intel_sdvo_connector_duplicate_state(struct drm_connector *connector)
+ {
+@@ -2512,6 +2630,10 @@ static const struct drm_connector_funcs
+ 	.destroy = intel_connector_destroy,
+ 	.atomic_destroy_state = drm_atomic_helper_connector_destroy_state,
+ 	.atomic_duplicate_state = intel_sdvo_connector_duplicate_state,
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++	.save = intel_sdvo_connector_save, /* schneider@igel.com: SDVO suspend helper */
++	.restore = intel_sdvo_connector_restore, /* schneider@igel.com: SDVO resume helper */	
++#endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
+ };
+ 
+ static int intel_sdvo_atomic_check(struct drm_connector *conn,

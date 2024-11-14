@@ -1,0 +1,20 @@
+diff -Naurp a/linux-6.6.38.igel/fs/namei.c b/linux-6.6.38.igel/fs/namei.c
+--- a/linux-6.6.38.igel/fs/namei.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/fs/namei.c	2024-08-02 15:41:31.563491776 +0200
+@@ -1027,9 +1027,15 @@ static inline void put_link(struct namei
+ 	if (!(nd->flags & LOOKUP_RCU))
+ 		path_put(&last->link);
+ }
+-
++#ifdef CONFIG_IGEL_SYSCTL_PROTECT_SYMLINKS_AND_HARDLINKS
++/* gottwald@igel.com : Enable Link security restrictions by default
++ * Patch taken from debian Change some defaults for security reasons */
++static int sysctl_protected_symlinks __read_mostly = 1;
++static int sysctl_protected_hardlinks __read_mostly = 1;
++#else
+ static int sysctl_protected_symlinks __read_mostly;
+ static int sysctl_protected_hardlinks __read_mostly;
++#endif
+ static int sysctl_protected_fifos __read_mostly;
+ static int sysctl_protected_regular __read_mostly;
+ 

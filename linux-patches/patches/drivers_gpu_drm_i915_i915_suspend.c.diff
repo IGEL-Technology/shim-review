@@ -1,0 +1,37 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_suspend.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_suspend.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_suspend.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_suspend.c	2024-08-02 15:41:31.543491299 +0200
+@@ -27,6 +27,9 @@
+ #include "display/intel_de.h"
+ #include "display/intel_gmbus.h"
+ #include "display/intel_vga.h"
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++#include "display/intel_sdvo.h"
++#endif
+ 
+ #include "i915_drv.h"
+ #include "i915_reg.h"
+@@ -37,6 +40,11 @@ static void intel_save_swf(struct drm_i9
+ {
+ 	int i;
+ 
++	/* schneider@igel.com: SDVO state save */
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++	intel_sdvo_save(&dev_priv->drm);
++#endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
++
+ 	/* Scratch space */
+ 	if (GRAPHICS_VER(dev_priv) == 2 && IS_MOBILE(dev_priv)) {
+ 		for (i = 0; i < 7; i++) {
+@@ -62,6 +70,11 @@ static void intel_restore_swf(struct drm
+ {
+ 	int i;
+ 
++	/* schneider@igel.com: SDVO state save */
++#ifdef CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO
++	intel_sdvo_restore(&dev_priv->drm);
++#endif /* CONFIG_IGEL_DRM_I915_SAVE_RESTORE_SDVO */
++
+ 	/* Scratch space */
+ 	if (GRAPHICS_VER(dev_priv) == 2 && IS_MOBILE(dev_priv)) {
+ 		for (i = 0; i < 7; i++) {

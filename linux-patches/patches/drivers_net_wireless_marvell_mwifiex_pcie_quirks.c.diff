@@ -1,0 +1,129 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+--- a/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c	2024-08-02 15:41:31.555491585 +0200
+@@ -13,7 +13,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 4"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Pro 5",
+@@ -22,7 +28,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_1796"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Pro 5 (LTE)",
+@@ -31,7 +43,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_1807"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Pro 6",
+@@ -39,7 +57,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 6"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Book 1",
+@@ -47,7 +71,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Book"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Book 2",
+@@ -55,7 +85,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Book 2"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Laptop 1",
+@@ -63,7 +99,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Laptop"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Laptop 2",
+@@ -71,7 +113,13 @@ static const struct dmi_system_id mwifie
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Laptop 2"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{}
+ };
+@@ -89,6 +137,13 @@ void mwifiex_initialize_quirks(struct pc
+ 		dev_info(&pdev->dev, "no quirks enabled\n");
+ 	if (card->quirks & QUIRK_FW_RST_D3COLD)
+ 		dev_info(&pdev->dev, "quirk reset_d3cold enabled\n");
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	if (card->quirks & QUIRK_DO_FLR_ON_BRIDGE)
++		dev_info(&pdev->dev, "quirk do_flr_on_bridge enabled\n");
++	if (card->quirks & QUIRK_NO_BRIDGE_D3)
++		dev_info(&pdev->dev,
++			 "quirk no_brigde_d3 enabled\n");
++#endif
+ }
+ 
+ static void mwifiex_pcie_set_power_d3cold(struct pci_dev *pdev)

@@ -1,0 +1,12 @@
+diff -Naurp a/linux-6.6.38.igel/scripts/setlocalversion b/linux-6.6.38.igel/scripts/setlocalversion
+--- a/linux-6.6.38.igel/scripts/setlocalversion	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/scripts/setlocalversion	2024-08-02 15:41:31.567491872 +0200
+@@ -29,7 +29,7 @@ fi
+ if test $# -gt 0 -o ! -d "$srctree"; then
+ 	usage
+ fi
+-
++exit 0
+ scm_version()
+ {
+ 	local short=false

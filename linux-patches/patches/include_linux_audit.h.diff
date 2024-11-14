@@ -1,0 +1,32 @@
+diff -Naurp a/linux-6.6.38.igel/include/linux/audit.h b/linux-6.6.38.igel/include/linux/audit.h
+--- a/linux-6.6.38.igel/include/linux/audit.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/linux/audit.h	2024-08-02 15:41:31.567491872 +0200
+@@ -12,6 +12,9 @@
+ #include <linux/sched.h>
+ #include <linux/ptrace.h>
+ #include <linux/audit_arch.h>
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++#include <linux/security.h>
++#endif
+ #include <uapi/linux/audit.h>
+ #include <uapi/linux/netfilter/nf_tables.h>
+ #include <uapi/linux/fanotify.h>
+@@ -66,10 +69,18 @@ struct audit_field {
+ 		u32			val;
+ 		kuid_t			uid;
+ 		kgid_t			gid;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		struct {
++			bool		lsm_isset;
++			char		*lsm_str;
++			void		*lsm_rules[LSMBLOB_ENTRIES];
++		};
++#else
+ 		struct {
+ 			char		*lsm_str;
+ 			void		*lsm_rule;
+ 		};
++#endif
+ 	};
+ 	u32				op;
+ };

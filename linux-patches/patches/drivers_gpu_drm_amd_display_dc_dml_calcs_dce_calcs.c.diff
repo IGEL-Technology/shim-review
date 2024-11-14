@@ -1,0 +1,16 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dml/calcs/dce_calcs.c b/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dml/calcs/dce_calcs.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dml/calcs/dce_calcs.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/amd/display/dc/dml/calcs/dce_calcs.c	2024-08-02 15:41:31.539491203 +0200
+@@ -2528,7 +2528,12 @@ void bw_calcs_init(struct bw_calcs_dceip
+ 	case BW_CALCS_VERSION_STONEY:
+ 		vbios->memory_type = bw_def_gddr5;
+ 		vbios->dram_channel_width_in_bits = 64;
++#ifdef CONFIG_IGEL_FAKE_DUAL_CHANNEL_ON_AMD_STONEY
++		/* gottwald@igel.com fake dual channel RAM */
++		vbios->number_of_dram_channels = 2;
++#else
+ 		vbios->number_of_dram_channels = asic_id.vram_width / vbios->dram_channel_width_in_bits;
++#endif
+ 		vbios->number_of_dram_banks = 8;
+ 		vbios->high_yclk = bw_int_to_fixed(1866);
+ 		vbios->mid_yclk = bw_int_to_fixed(1866);

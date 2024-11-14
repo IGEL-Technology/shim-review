@@ -1,0 +1,629 @@
+diff -Naurp a/linux-6.6.38.igel/security/security.c b/linux-6.6.38.igel/security/security.c
+--- a/linux-6.6.38.igel/security/security.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/security.c	2024-08-02 15:41:31.571491967 +0200
+@@ -30,6 +30,9 @@
+ #include <linux/string.h>
+ #include <linux/msg.h>
+ #include <net/flow.h>
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++#include <net/sock.h>
++#endif
+ 
+ /* How many LSMs were built into the kernel? */
+ #define LSM_COUNT (__end_lsm_info - __start_lsm_info)
+@@ -80,7 +83,18 @@ static struct kmem_cache *lsm_file_cache
+ static struct kmem_cache *lsm_inode_cache;
+ 
+ char *lsm_names;
++
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/*
++ * The task blob includes the "display" slot used for
++ * chosing which module presents contexts.
++ */
++static struct lsm_blob_sizes blob_sizes __lsm_ro_after_init = {
++	.lbs_task = sizeof(int),
++};
++#else
+ static struct lsm_blob_sizes blob_sizes __ro_after_init;
++#endif
+ 
+ /* Boot-time LSM user choice */
+ static __initdata const char *chosen_lsm_order;
+@@ -209,6 +223,9 @@ static void __init lsm_set_blob_sizes(st
+ 	lsm_set_blob_size(&needed->lbs_ipc, &blob_sizes.lbs_ipc);
+ 	lsm_set_blob_size(&needed->lbs_msg_msg, &blob_sizes.lbs_msg_msg);
+ 	lsm_set_blob_size(&needed->lbs_superblock, &blob_sizes.lbs_superblock);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	lsm_set_blob_size(&needed->lbs_sock, &blob_sizes.lbs_sock);
++#endif
+ 	lsm_set_blob_size(&needed->lbs_task, &blob_sizes.lbs_task);
+ 	lsm_set_blob_size(&needed->lbs_xattr_count,
+ 			  &blob_sizes.lbs_xattr_count);
+@@ -377,7 +394,13 @@ static void __init ordered_lsm_init(void
+ 	init_debug("ipc blob size        = %d\n", blob_sizes.lbs_ipc);
+ 	init_debug("msg_msg blob size    = %d\n", blob_sizes.lbs_msg_msg);
+ 	init_debug("superblock blob size = %d\n", blob_sizes.lbs_superblock);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	init_debug("sock blob size       = %d\n", blob_sizes.lbs_sock);
++#endif
+ 	init_debug("task blob size       = %d\n", blob_sizes.lbs_task);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	init_debug("lsmblob size       = %zu\n", sizeof(struct lsmblob));
++#endif
+ 	init_debug("xattr slots          = %d\n", blob_sizes.lbs_xattr_count);
+ 
+ 	/*
+@@ -509,6 +532,53 @@ static int lsm_append(const char *new, c
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/*
++ * Current index to use while initializing the lsmblob secid list.
++ * Pointers to the LSM id structures for local use.
++ */
++static int lsm_slot __lsm_ro_after_init;
++static struct lsm_id *lsm_slotlist[LSMBLOB_ENTRIES];
++
++/**
++ * security_add_hooks - Add a modules hooks to the hook lists.
++ * @hooks: the hooks to add
++ * @count: the number of hooks to add
++ * @lsmid: the the identification information for the security module
++ *
++ * Each LSM has to register its hooks with the infrastructure.
++ * If the LSM is using hooks that export secids allocate a slot
++ * for it in the lsmblob.
++ */
++void __init security_add_hooks(struct security_hook_list *hooks, int count,
++			       struct lsm_id *lsmid)
++{
++	int i;
++
++	if (lsmid->slot == LSMBLOB_NEEDED) {
++		if (lsm_slot >= LSMBLOB_ENTRIES)
++			panic("%s Too many LSMs registered.\n", __func__);
++		lsm_slotlist[lsm_slot] = lsmid;
++		lsmid->slot = lsm_slot++;
++		init_debug("%s assigned lsmblob slot %d\n", lsmid->lsm,
++			   lsmid->slot);
++	}
++
++	for (i = 0; i < count; i++) {
++		hooks[i].lsmid = lsmid;
++		hlist_add_tail_rcu(&hooks[i].list, hooks[i].head);
++	}
++
++	/*
++	 * Don't try to append during early_security_init(), we'll come back
++	 * and fix this up afterwards.
++	 */
++	if (slab_is_available()) {
++		if (lsm_append(lsmid->lsm, &lsm_names) < 0)
++			panic("%s - Cannot get early memory.\n", __func__);
++	}
++}
++#else /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ /**
+  * security_add_hooks - Add a modules hooks to the hook lists.
+  * @hooks: the hooks to add
+@@ -536,6 +606,7 @@ void __init security_add_hooks(struct se
+ 			panic("%s - Cannot get early memory.\n", __func__);
+ 	}
+ }
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ 
+ int call_blocking_lsm_notifier(enum lsm_event event, void *data)
+ {
+@@ -646,6 +717,9 @@ int lsm_inode_alloc(struct inode *inode)
+  */
+ static int lsm_task_alloc(struct task_struct *task)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	int *display;
++#endif
+ 	if (blob_sizes.lbs_task == 0) {
+ 		task->security = NULL;
+ 		return 0;
+@@ -654,6 +728,17 @@ static int lsm_task_alloc(struct task_st
+ 	task->security = kzalloc(blob_sizes.lbs_task, GFP_KERNEL);
+ 	if (task->security == NULL)
+ 		return -ENOMEM;
++
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	/*
++	 * The start of the task blob contains the "display" LSM slot number.
++	 * Start with it set to the invalid slot number, indicating that the
++	 * default first registered LSM be displayed.
++	 */
++	display = task->security;
++	*display = LSMBLOB_INVALID;
++#endif
++
+ 	return 0;
+ }
+ 
+@@ -699,6 +784,30 @@ static int lsm_msg_msg_alloc(struct msg_
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/**
++ * lsm_sock_alloc - allocate a composite sock blob
++ * @sock: the sock that needs a blob
++ * @priority: allocation mode
++ *
++ * Allocate the sock blob for all the modules
++ *
++ * Returns 0, or -ENOMEM if memory can't be allocated.
++ */
++static int lsm_sock_alloc(struct sock *sock, gfp_t priority)
++{
++	if (blob_sizes.lbs_sock == 0) {
++		sock->sk_security = NULL;
++		return 0;
++	}
++
++	sock->sk_security = kzalloc(blob_sizes.lbs_sock, priority);
++	if (sock->sk_security == NULL)
++		return -ENOMEM;
++	return 0;
++}
++#endif
++
+ /**
+  * lsm_early_task - during initialization allocate a composite task blob
+  * @task: the task that needs a blob
+@@ -713,6 +822,59 @@ static void __init lsm_early_task(struct
+ 		panic("%s: Early task alloc failed.\n", __func__);
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/**
++ * append_ctx - append a lsm/context pair to a compound context
++ * @ctx: the existing compound context
++ * @ctxlen: size of the old context, including terminating nul byte
++ * @lsm: new lsm name, nul terminated
++ * @new: new context, possibly nul terminated
++ * @newlen: maximum size of @new
++ *
++ * replace @ctx with a new compound context, appending @newlsm and @new
++ * to @ctx. On exit the new data replaces the old, which is freed.
++ * @ctxlen is set to the new size, which includes a trailing nul byte.
++ *
++ * Returns 0 on success, -ENOMEM if no memory is available.
++ */
++static int append_ctx(char **ctx, int *ctxlen, const char *lsm, char *new,
++		      int newlen)
++{
++	char *final;
++	size_t llen;
++	size_t nlen;
++	size_t flen;
++
++	llen = strlen(lsm) + 1;
++	/*
++	 * A security module may or may not provide a trailing nul on
++	 * when returning a security context. There is no definition
++	 * of which it should be, and there are modules that do it
++	 * each way.
++	 */
++	nlen = strnlen(new, newlen);
++
++	flen = *ctxlen + llen + nlen + 1;
++	final = kzalloc(flen, GFP_KERNEL);
++
++	if (final == NULL)
++		return -ENOMEM;
++
++	if (*ctxlen)
++		memcpy(final, *ctx, *ctxlen);
++
++	memcpy(final + *ctxlen, lsm, llen);
++	memcpy(final + *ctxlen + llen, new, nlen);
++
++	kfree(*ctx);
++
++	*ctx = final;
++	*ctxlen = flen;
++
++	return 0;
++}
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
++
+ /**
+  * lsm_superblock_alloc - allocate a composite superblock blob
+  * @sb: the superblock that needs a blob
+@@ -2873,6 +3035,31 @@ int security_file_truncate(struct file *
+ 	return call_int_hook(file_truncate, 0, file);
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++int security_task_alloc(struct task_struct *task, unsigned long clone_flags)
++{
++	int *odisplay = current->security;
++	int *ndisplay;
++	int rc = lsm_task_alloc(task);
++
++	if (unlikely(rc))
++		return rc;
++
++	rc = call_int_hook(task_alloc, 0, task, clone_flags);
++	if (unlikely(rc)) {
++		security_task_free(task);
++		return rc;
++	}
++
++	if (odisplay) {
++		ndisplay = task->security;
++		if (ndisplay)
++			*ndisplay = *odisplay;
++	}
++
++	return 0;
++}
++#else /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ /**
+  * security_task_alloc() - Allocate a task's LSM blob
+  * @task: the task
+@@ -2893,6 +3080,7 @@ int security_task_alloc(struct task_stru
+ 		security_task_free(task);
+ 	return rc;
+ }
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ 
+ /**
+  * security_task_free() - Free a task's LSM blob and related resources
+@@ -3833,15 +4021,149 @@ int security_getprocattr(struct task_str
+ 			 const char *name, char **value)
+ {
+ 	struct security_hook_list *hp;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	char *final = NULL;
++	char *cp;
++	int rc = 0;
++	int finallen = 0;
++	int display = lsm_task_display(current);
++	int slot = 0;
++
++	if (!strcmp(name, "display")) {
++		/*
++		 * lsm_slot will be 0 if there are no displaying modules.
++		 */
++		if (lsm_slot == 0)
++			return -EINVAL;
++
++		/*
++		 * Only allow getting the current process' display.
++		 * There are too few reasons to get another process'
++		 * display and too many LSM policy issues.
++		 */
++		if (current != p)
++			return -EINVAL;
++
++		display = lsm_task_display(p);
++		if (display != LSMBLOB_INVALID)
++			slot = display;
++		*value = kstrdup(lsm_slotlist[slot]->lsm, GFP_KERNEL);
++		if (*value)
++			return strlen(*value);
++		return -ENOMEM;
++	}
++
++	if (!strcmp(name, "context")) {
++		hlist_for_each_entry(hp, &security_hook_heads.getprocattr,
++				     list) {
++			rc = hp->hook.getprocattr(p, "context", &cp);
++			if (rc == -EINVAL)
++				continue;
++			if (rc < 0) {
++				kfree(final);
++				return rc;
++			}
++			rc = append_ctx(&final, &finallen, hp->lsmid->lsm,
++					cp, rc);
++			kfree(cp);
++			if (rc < 0) {
++				kfree(final);
++				return rc;
++			}
++		}
++		if (final == NULL)
++			return -EINVAL;
++		*value = final;
++		return finallen;
++	}
+ 
+ 	hlist_for_each_entry(hp, &security_hook_heads.getprocattr, list) {
++		if (lsm != NULL && strcmp(lsm, hp->lsmid->lsm))
++			continue;
++		if (lsm == NULL && display != LSMBLOB_INVALID &&
++		    display != hp->lsmid->slot)
++#else /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
++	hlist_for_each_entry(hp, &security_hook_heads.getprocattr, list) {
+ 		if (lsm != NULL && strcmp(lsm, hp->lsm))
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ 			continue;
+ 		return hp->hook.getprocattr(p, name, value);
+ 	}
+ 	return LSM_RET_DEFAULT(getprocattr);
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/**
++ * security_setprocattr - Set process attributes via /proc
++ * @lsm: name of module involved, or NULL
++ * @name: name of the attribute
++ * @value: value to set the attribute to
++ * @size: size of the value
++ *
++ * Set the process attribute for the specified security module
++ * to the specified value. Note that this can only be used to set
++ * the process attributes for the current, or "self" process.
++ * The /proc code has already done this check.
++ *
++ * Returns 0 on success, an appropriate code otherwise.
++ */
++int security_setprocattr(const char *lsm, const char *name, void *value,
++			 size_t size)
++{
++	struct security_hook_list *hp;
++	char *termed;
++	char *copy;
++	int *display = current->security;
++	int rc = -EINVAL;
++	int slot = 0;
++
++	if (!strcmp(name, "display")) {
++		/*
++		 * Change the "display" value only if all the security
++		 * modules that support setting a procattr allow it.
++		 * It is assumed that all such security modules will be
++		 * cooperative.
++		 */
++		if (size == 0)
++			return -EINVAL;
++
++		hlist_for_each_entry(hp, &security_hook_heads.setprocattr,
++				     list) {
++			rc = hp->hook.setprocattr(name, value, size);
++			if (rc < 0)
++				return rc;
++		}
++
++		rc = -EINVAL;
++
++		copy = kmemdup_nul(value, size, GFP_KERNEL);
++		if (copy == NULL)
++			return -ENOMEM;
++
++		termed = strsep(&copy, " \n");
++
++		for (slot = 0; slot < lsm_slot; slot++)
++			if (!strcmp(termed, lsm_slotlist[slot]->lsm)) {
++				*display = lsm_slotlist[slot]->slot;
++				rc = size;
++				break;
++			}
++
++		kfree(termed);
++		return rc;
++	}
++
++	hlist_for_each_entry(hp, &security_hook_heads.setprocattr, list) {
++		if (lsm != NULL && strcmp(lsm, hp->lsmid->lsm))
++			continue;
++		if (lsm == NULL && *display != LSMBLOB_INVALID &&
++		    *display != hp->lsmid->slot)
++			continue;
++		return hp->hook.setprocattr(name, value, size);
++	}
++	return LSM_RET_DEFAULT(setprocattr);
++}
++#else /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ /**
+  * security_setprocattr() - Set an attribute for a task
+  * @lsm: LSM name
+@@ -3866,6 +4188,7 @@ int security_setprocattr(const char *lsm
+ 	}
+ 	return LSM_RET_DEFAULT(setprocattr);
+ }
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ 
+ /**
+  * security_netlink_send() - Save info and check if netlink sending is allowed
+@@ -3915,16 +4238,25 @@ EXPORT_SYMBOL(security_ismaclabel);
+ int security_secid_to_secctx(u32 secid, char **secdata, u32 *seclen)
+ {
+ 	struct security_hook_list *hp;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	int display = lsm_task_display(current);
++#else
+ 	int rc;
++#endif
+ 
+ 	/*
+ 	 * Currently, only one LSM can implement secid_to_secctx (i.e this
+ 	 * LSM hook is not "stackable").
+ 	 */
+ 	hlist_for_each_entry(hp, &security_hook_heads.secid_to_secctx, list) {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		if (display == LSMBLOB_INVALID || display == hp->lsmid->slot)
++			return hp->hook.secid_to_secctx(secid, secdata, seclen);
++#else
+ 		rc = hp->hook.secid_to_secctx(secid, secdata, seclen);
+ 		if (rc != LSM_RET_DEFAULT(secid_to_secctx))
+ 			return rc;
++#endif
+ 	}
+ 
+ 	return LSM_RET_DEFAULT(secid_to_secctx);
+@@ -3943,8 +4275,20 @@ EXPORT_SYMBOL(security_secid_to_secctx);
+  */
+ int security_secctx_to_secid(const char *secdata, u32 seclen, u32 *secid)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct security_hook_list *hp;
++	int display = lsm_task_display(current);
++#endif
+ 	*secid = 0;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	hlist_for_each_entry(hp, &security_hook_heads.secid_to_secctx, list) {
++		if (display == LSMBLOB_INVALID || display == hp->lsmid->slot)
++			return call_int_hook(secctx_to_secid, 0, secdata, seclen, secid);
++	}
++	return 0;
++#else
+ 	return call_int_hook(secctx_to_secid, 0, secdata, seclen, secid);
++#endif
+ }
+ EXPORT_SYMBOL(security_secctx_to_secid);
+ 
+@@ -3957,7 +4301,18 @@ EXPORT_SYMBOL(security_secctx_to_secid);
+  */
+ void security_release_secctx(char *secdata, u32 seclen)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct security_hook_list *hp;
++	int display = lsm_task_display(current);
++
++	hlist_for_each_entry(hp, &security_hook_heads.release_secctx, list)
++		if (display == LSMBLOB_INVALID || display == hp->lsmid->slot) {
++			hp->hook.release_secctx(secdata, seclen);
++			return;
++		}
++#else
+ 	call_void_hook(release_secctx, secdata, seclen);
++#endif
+ }
+ EXPORT_SYMBOL(security_release_secctx);
+ 
+@@ -4399,6 +4754,17 @@ EXPORT_SYMBOL(security_sock_rcv_skb);
+ int security_socket_getpeersec_stream(struct socket *sock, sockptr_t optval,
+ 				      sockptr_t optlen, unsigned int len)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	int display = lsm_task_display(current);
++	struct security_hook_list *hp;
++
++	hlist_for_each_entry(hp, &security_hook_heads.socket_getpeersec_stream,
++			     list)
++		if (display == LSMBLOB_INVALID || display == hp->lsmid->slot)
++			return hp->hook.socket_getpeersec_stream(sock, optval,
++								 optlen, len);
++	return -ENOPROTOOPT;
++#else
+ 	struct security_hook_list *hp;
+ 	int rc;
+ 
+@@ -4413,6 +4779,7 @@ int security_socket_getpeersec_stream(st
+ 			return rc;
+ 	}
+ 	return LSM_RET_DEFAULT(socket_getpeersec_stream);
++#endif
+ }
+ 
+ /**
+@@ -4461,7 +4828,18 @@ EXPORT_SYMBOL(security_socket_getpeersec
+  */
+ int security_sk_alloc(struct sock *sk, int family, gfp_t priority)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	int rc = lsm_sock_alloc(sk, priority);
++
++	if (unlikely(rc))
++		return rc;
++	rc = call_int_hook(sk_alloc_security, 0, sk, family, priority);
++	if (unlikely(rc))
++		security_sk_free(sk);
++	return rc;
++#else
+ 	return call_int_hook(sk_alloc_security, 0, sk, family, priority);
++#endif
+ }
+ 
+ /**
+@@ -4473,6 +4851,10 @@ int security_sk_alloc(struct sock *sk, i
+ void security_sk_free(struct sock *sk)
+ {
+ 	call_void_hook(sk_free_security, sk);
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	kfree(sk->sk_security);
++	sk->sk_security = NULL;
++#endif
+ }
+ 
+ /**
+@@ -5124,7 +5506,28 @@ int security_key_getsecurity(struct key
+  */
+ int security_audit_rule_init(u32 field, u32 op, char *rulestr, void **lsmrule)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct security_hook_list *hp;
++	bool one_is_good = false;
++	int rc = 0;
++	int trc;
++
++	hlist_for_each_entry(hp, &security_hook_heads.audit_rule_init, list) {
++		if (WARN_ON(hp->lsmid->slot < 0 || hp->lsmid->slot >= lsm_slot))
++			continue;
++		trc = hp->hook.audit_rule_init(field, op, rulestr,
++					       &lsmrule[hp->lsmid->slot]);
++		if (trc == 0)
++			one_is_good = true;
++		else
++			rc = trc;
++	}
++	if (one_is_good)
++		return 0;
++	return rc;
++#else
+ 	return call_int_hook(audit_rule_init, 0, field, op, rulestr, lsmrule);
++#endif
+ }
+ 
+ /**
+@@ -5141,6 +5544,34 @@ int security_audit_rule_known(struct aud
+ 	return call_int_hook(audit_rule_known, 0, krule);
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++void security_audit_rule_free(void **lsmrule)
++{
++	struct security_hook_list *hp;
++
++	hlist_for_each_entry(hp, &security_hook_heads.audit_rule_free, list) {
++		if (WARN_ON(hp->lsmid->slot < 0 || hp->lsmid->slot >= lsm_slot))
++			continue;
++		hp->hook.audit_rule_free(lsmrule[hp->lsmid->slot]);
++	}
++}
++
++int security_audit_rule_match(u32 secid, u32 field, u32 op, void **lsmrule)
++{
++	struct security_hook_list *hp;
++	int rc;
++
++	hlist_for_each_entry(hp, &security_hook_heads.audit_rule_match, list) {
++		if (WARN_ON(hp->lsmid->slot < 0 || hp->lsmid->slot >= lsm_slot))
++			continue;
++		rc = hp->hook.audit_rule_match(secid, field, op,
++					       &lsmrule[hp->lsmid->slot]);
++		if (rc)
++			return rc;
++	}
++	return 0;
++}
++#else /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ /**
+  * security_audit_rule_free() - Free an LSM audit rule struct
+  * @lsmrule: audit rule struct
+@@ -5170,6 +5601,7 @@ int security_audit_rule_match(u32 secid,
+ {
+ 	return call_int_hook(audit_rule_match, 0, secid, field, op, lsmrule);
+ }
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
+ #endif /* CONFIG_AUDIT */
+ 
+ #ifdef CONFIG_BPF_SYSCALL

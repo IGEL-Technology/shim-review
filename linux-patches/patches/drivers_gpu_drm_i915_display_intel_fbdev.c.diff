@@ -1,0 +1,39 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_fbdev.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_fbdev.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_fbdev.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_fbdev.c	2024-08-02 15:41:31.543491299 +0200
+@@ -233,6 +233,26 @@ static int intelfb_create(struct drm_fb_
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef CONFIG_IGEL_I915_ALWAYS_RESIZE_FRAMEBUFFER
++	if (intel_fb &&
++	    (sizes->fb_width != intel_fb->base.width ||
++	     sizes->fb_height != intel_fb->base.height)) {
++		drm_dbg_kms(&dev_priv->drm,
++			    "BIOS fb (%dx%d) do not match the required (%dx%d),"
++			    " releasing it\n",
++			    intel_fb->base.width, intel_fb->base.height,
++			    sizes->fb_width, sizes->fb_height);
++#else
++# ifdef CONFIG_IGEL_APPLE_FRAMEBUF
++	if (intel_fb &&
++	    (sizes->fb_width != intel_fb->base.width ||
++	     sizes->fb_height != intel_fb->base.height)) {
++		drm_dbg_kms(&dev_priv->drm,
++			    "BIOS fb not valid (%dx%d), we require (%dx%d),"
++			    " releasing it\n",
++			    intel_fb->base.width, intel_fb->base.height,
++			    sizes->fb_width, sizes->fb_height);
++# else
+ 	if (intel_fb &&
+ 	    (sizes->fb_width > intel_fb->base.width ||
+ 	     sizes->fb_height > intel_fb->base.height)) {
+@@ -241,6 +261,8 @@ static int intelfb_create(struct drm_fb_
+ 			    " releasing it\n",
+ 			    intel_fb->base.width, intel_fb->base.height,
+ 			    sizes->fb_width, sizes->fb_height);
++# endif
++#endif
+ 		drm_framebuffer_put(&intel_fb->base);
+ 		intel_fb = ifbdev->fb = NULL;
+ 	}

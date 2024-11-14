@@ -1,0 +1,42 @@
+diff -Naurp a/linux-6.6.38.igel/sound/usb/quirks.c b/linux-6.6.38.igel/sound/usb/quirks.c
+--- a/linux-6.6.38.igel/sound/usb/quirks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/sound/usb/quirks.c	2024-08-02 15:41:31.579492158 +0200
+@@ -1837,6 +1837,17 @@ void snd_usb_ctl_msg_quirk(struct usb_de
+ 	if (!chip || (requesttype & USB_TYPE_MASK) != USB_TYPE_CLASS)
+ 		return;
+ 
++#ifdef CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS
++	/* Sennheiser headsets need a delay */
++	if (USB_ID_VENDOR(chip->usb_id) == 0x1395) {
++		if (UAC_SET_CUR == request) {
++			msleep(50);
++		} else {
++			msleep(20);
++		}
++	}
++#endif
++
+ 	if (chip->quirk_flags & QUIRK_FLAG_CTL_MSG_DELAY)
+ 		msleep(20);
+ 	else if (chip->quirk_flags & QUIRK_FLAG_CTL_MSG_DELAY_1M)
+@@ -2025,6 +2036,20 @@ static const struct usb_audio_quirk_flag
+ 		   QUIRK_FLAG_DISABLE_AUTOSUSPEND),
+ 	DEVICE_FLG(0x046d, 0x084c, /* Logitech ConferenceCam Connect */
+ 		   QUIRK_FLAG_GET_SAMPLE_RATE | QUIRK_FLAG_CTL_MSG_DELAY_1M),
++#ifdef CONFIG_IGEL_USB_SOUND_SENNHEISER_QUIRKS
++	DEVICE_FLG(0x1395, 0x0036, /* Sennheiser SC630 */
++		   QUIRK_FLAG_GET_SAMPLE_RATE),
++	DEVICE_FLG(0x1395, 0x0037, /* Sennheiser SC660 */
++		   QUIRK_FLAG_GET_SAMPLE_RATE),
++	DEVICE_FLG(0x1395, 0x0050, /* Sennheiser SC260 */
++		   QUIRK_FLAG_GET_SAMPLE_RATE),
++	DEVICE_FLG(0x1395, 0x005a, /* Sennheiser SC60 */
++		   QUIRK_FLAG_GET_SAMPLE_RATE),
++	DEVICE_FLG(0x1395, 0x0060, /* Sennheiser SC45/S */
++		   QUIRK_FLAG_GET_SAMPLE_RATE),
++	DEVICE_FLG(0x1395, 0x002d, /* Sennheiser BTD800 */
++		   QUIRK_FLAG_GET_SAMPLE_RATE),
++#endif
+ 	DEVICE_FLG(0x046d, 0x0991, /* Logitech QuickCam Pro */
+ 		   QUIRK_FLAG_CTL_MSG_DELAY_1M | QUIRK_FLAG_IGNORE_CTL_ERROR),
+ 	DEVICE_FLG(0x046d, 0x09a4, /* Logitech QuickCam E 3500 */

@@ -1,0 +1,80 @@
+diff -Naurp a/linux-6.6.38.igel/include/linux/lsm_hooks.h b/linux-6.6.38.igel/include/linux/lsm_hooks.h
+--- a/linux-6.6.38.igel/include/linux/lsm_hooks.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/include/linux/lsm_hooks.h	2024-08-02 15:41:31.567491872 +0200
+@@ -42,6 +42,16 @@ struct security_hook_heads {
+ 	#undef LSM_HOOK
+ } __randomize_layout;
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/*
++ * Information that identifies a security module.
++ */
++struct lsm_id {
++	const char	*lsm;	/* Name of the LSM */
++	int		slot;	/* Slot in lsmblob if one is allocated */
++};
++#endif
++
+ /*
+  * Security module hook list structure.
+  * For use with generic list macros for common operations.
+@@ -50,7 +60,11 @@ struct security_hook_list {
+ 	struct hlist_node		list;
+ 	struct hlist_head		*head;
+ 	union security_list_options	hook;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct lsm_id			*lsmid;
++#else
+ 	const char			*lsm;
++#endif
+ } __randomize_layout;
+ 
+ /*
+@@ -61,6 +75,9 @@ struct lsm_blob_sizes {
+ 	int	lbs_file;
+ 	int	lbs_inode;
+ 	int	lbs_superblock;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	int	lbs_sock;
++#endif
+ 	int	lbs_ipc;
+ 	int	lbs_msg_msg;
+ 	int	lbs_task;
+@@ -103,8 +120,13 @@ static inline struct xattr *lsm_get_xatt
+ extern struct security_hook_heads security_hook_heads;
+ extern char *lsm_names;
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++extern void security_add_hooks(struct security_hook_list *hooks, int count,
++			       struct lsm_id *lsmid);
++#else
+ extern void security_add_hooks(struct security_hook_list *hooks, int count,
+ 				const char *lsm);
++#endif
+ 
+ #define LSM_FLAG_LEGACY_MAJOR	BIT(0)
+ #define LSM_FLAG_EXCLUSIVE	BIT(1)
+@@ -139,4 +161,23 @@ extern struct lsm_info __start_early_lsm
+ 
+ extern int lsm_inode_alloc(struct inode *inode);
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/**
++ * lsm_task_display - the "display" LSM for this task
++ * @task: The task to report on
++ *
++ * Returns the task's display LSM slot.
++ */
++static inline int lsm_task_display(struct task_struct *task)
++{
++#ifdef CONFIG_SECURITY
++	int *display = task->security;
++
++	if (display)
++		return *display;
++#endif
++	return LSMBLOB_INVALID;
++}
++#endif /* CONFIG_IGEL_APPARMOR_DBUS_SUPPORT */
++
+ #endif /* ! __LINUX_LSM_HOOKS_H */

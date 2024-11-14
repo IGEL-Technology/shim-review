@@ -1,0 +1,17 @@
+diff -Naurp a/linux-6.6.38.igel/security/smack/smack_netfilter.c b/linux-6.6.38.igel/security/smack/smack_netfilter.c
+--- a/linux-6.6.38.igel/security/smack/smack_netfilter.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/smack/smack_netfilter.c	2024-08-02 15:41:31.575492063 +0200
+@@ -26,8 +26,13 @@ static unsigned int smack_ip_output(void
+ 	struct socket_smack *ssp;
+ 	struct smack_known *skp;
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	if (sk && smack_sock(sk)) {
++		ssp = smack_sock(sk);
++#else
+ 	if (sk && sk->sk_security) {
+ 		ssp = sk->sk_security;
++#endif
+ 		skp = ssp->smk_out;
+ 		skb->secmark = skp->smk_secid;
+ 	}

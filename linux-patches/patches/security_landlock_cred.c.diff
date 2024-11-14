@@ -1,0 +1,29 @@
+diff -Naurp a/linux-6.6.38.igel/security/landlock/cred.c b/linux-6.6.38.igel/security/landlock/cred.c
+--- a/linux-6.6.38.igel/security/landlock/cred.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/landlock/cred.c	2024-08-02 15:41:31.571491967 +0200
+@@ -14,6 +14,13 @@
+ #include "ruleset.h"
+ #include "setup.h"
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct lsm_id landlock_lsmid __lsm_ro_after_init = {
++	.lsm  = "landlock",
++	.slot = LSMBLOB_NEEDED
++};
++#endif
++
+ static int hook_cred_prepare(struct cred *const new,
+ 			     const struct cred *const old, const gfp_t gfp)
+ {
+@@ -41,6 +48,11 @@ static struct security_hook_list landloc
+ 
+ __init void landlock_add_cred_hooks(void)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(landlock_hooks, ARRAY_SIZE(landlock_hooks),
++			   &landlock_lsmid);
++#else
+ 	security_add_hooks(landlock_hooks, ARRAY_SIZE(landlock_hooks),
+ 			   LANDLOCK_NAME);
++#endif
+ }

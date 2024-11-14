@@ -1,0 +1,45 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/ethernet/realtek/r8169_main.c b/linux-6.6.38.igel/drivers/net/ethernet/realtek/r8169_main.c
+--- a/linux-6.6.38.igel/drivers/net/ethernet/realtek/r8169_main.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/ethernet/realtek/r8169_main.c	2024-08-02 15:41:31.555491585 +0200
+@@ -1421,7 +1421,16 @@ static void rtl8169_get_wol(struct net_d
+ {
+ 	struct rtl8169_private *tp = netdev_priv(dev);
+ 
++#ifdef CONFIG_IGEL_FIX_R8169_WOL
++	/*
++	 *  waffler@igel.de :  for some reason the chip doesn't wake up
++	 *                     by any method if BCAST is involved
++	 *                     the hotfix is not to declare WAKE_BCAST as supported
++	 */
++	wol->supported = WAKE_ANY & (~WAKE_BCAST);
++#else
+ 	wol->supported = WAKE_ANY;
++#endif
+ 	wol->wolopts = tp->saved_wolopts;
+ }
+ 
+@@ -2544,7 +2553,12 @@ static void rtl_enable_rxdvgate(struct r
+ 
+ static void rtl_wol_enable_rx(struct rtl8169_private *tp)
+ {
++#ifdef CONFIG_IGEL_FIX_R8169_WOL
++	/* IGEL change use suspend quirk for more devices */
++	if (tp->mac_version >= RTL_GIGA_MAC_VER_18)
++#else
+ 	if (tp->mac_version >= RTL_GIGA_MAC_VER_25)
++#endif
+ 		RTL_W32(tp, RxConfig, RTL_R32(tp, RxConfig) |
+ 			AcceptBroadcast | AcceptMulticast | AcceptMyPhys);
+ 
+@@ -5334,6 +5348,11 @@ static int rtl_init_one(struct pci_dev *
+ 
+ 	tp->irq = pci_irq_vector(pdev, 0);
+ 
++#ifdef CONFIG_IGEL_FIX_R8169_WOL
++	/* IGEL change: set WOL to zero first */
++	__rtl8169_set_wol(tp, 0);
++#endif
++
+ 	INIT_WORK(&tp->wk.work, rtl_task);
+ 
+ 	rtl_init_mac_address(tp);

@@ -1,0 +1,31 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_drv.h b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_drv.h
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_drv.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_drv.h	2024-08-02 15:41:31.543491299 +0200
+@@ -64,11 +64,27 @@
+ #include "intel_step.h"
+ #include "intel_uncore.h"
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++/* nagel@igel.com: define enum for IGEL platforms,
++ * that require special treatment. */
++enum igel_platforms {
++	NO_IGEL_PLATFORM = -1,
++	IGEL_H830C,
++	IGEL_TC215B
++};
++extern enum igel_platforms igel_platform;
++#define IS_IGEL_H830C (igel_platform==IGEL_H830C)
++#define IS_IGEL_TC215B (igel_platform==IGEL_TC215B)
++#endif
++
+ struct drm_i915_clock_gating_funcs;
+ struct vlv_s0ix_state;
+ struct intel_pxp;
+ 
+ #define GEM_QUIRK_PIN_SWIZZLED_PAGES	BIT(0)
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++#define QUIRK_SKIP_DP_DPMS_D3 (1<<15)
++#endif
+ 
+ /* Data Stolen Memory (DSM) aka "i915 stolen memory" */
+ struct i915_dsm {

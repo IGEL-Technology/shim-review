@@ -1,0 +1,410 @@
+diff -Naurp a/linux-6.6.38.igel/security/selinux/hooks.c b/linux-6.6.38.igel/security/selinux/hooks.c
+--- a/linux-6.6.38.igel/security/selinux/hooks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/selinux/hooks.c	2024-08-02 15:41:31.575492063 +0200
+@@ -4567,7 +4567,11 @@ static int socket_sockcreate_sid(const s
+ 
+ static int sock_has_perm(struct sock *sk, u32 perms)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct common_audit_data ad;
+ 	struct lsm_network_audit net;
+ 
+@@ -4620,7 +4624,11 @@ static int selinux_socket_post_create(st
+ 	isec->initialized = LABEL_INITIALIZED;
+ 
+ 	if (sock->sk) {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		sksec = selinux_sock(sock->sk);
++#else
+ 		sksec = sock->sk->sk_security;
++#endif
+ 		sksec->sclass = sclass;
+ 		sksec->sid = sid;
+ 		/* Allows detection of the first association on this socket */
+@@ -4636,8 +4644,13 @@ static int selinux_socket_post_create(st
+ static int selinux_socket_socketpair(struct socket *socka,
+ 				     struct socket *sockb)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec_a = selinux_sock(socka->sk);
++	struct sk_security_struct *sksec_b = selinux_sock(sockb->sk);
++#else
+ 	struct sk_security_struct *sksec_a = socka->sk->sk_security;
+ 	struct sk_security_struct *sksec_b = sockb->sk->sk_security;
++#endif
+ 
+ 	sksec_a->peer_sid = sksec_b->sid;
+ 	sksec_b->peer_sid = sksec_a->sid;
+@@ -4652,7 +4665,11 @@ static int selinux_socket_socketpair(str
+ static int selinux_socket_bind(struct socket *sock, struct sockaddr *address, int addrlen)
+ {
+ 	struct sock *sk = sock->sk;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	u16 family;
+ 	int err;
+ 
+@@ -4792,7 +4809,11 @@ static int selinux_socket_connect_helper
+ 					 struct sockaddr *address, int addrlen)
+ {
+ 	struct sock *sk = sock->sk;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	int err;
+ 
+ 	err = sock_has_perm(sk, SOCKET__CONNECT);
+@@ -4970,9 +4991,15 @@ static int selinux_socket_unix_stream_co
+ 					      struct sock *other,
+ 					      struct sock *newsk)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec_sock = selinux_sock(sock);
++	struct sk_security_struct *sksec_other = selinux_sock(other);
++	struct sk_security_struct *sksec_new = selinux_sock(newsk);
++#else
+ 	struct sk_security_struct *sksec_sock = sock->sk_security;
+ 	struct sk_security_struct *sksec_other = other->sk_security;
+ 	struct sk_security_struct *sksec_new = newsk->sk_security;
++#endif
+ 	struct common_audit_data ad;
+ 	struct lsm_network_audit net;
+ 	int err;
+@@ -5001,8 +5028,13 @@ static int selinux_socket_unix_stream_co
+ static int selinux_socket_unix_may_send(struct socket *sock,
+ 					struct socket *other)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *ssec = selinux_sock(sock->sk);
++	struct sk_security_struct *osec = selinux_sock(other->sk);
++#else
+ 	struct sk_security_struct *ssec = sock->sk->sk_security;
+ 	struct sk_security_struct *osec = other->sk->sk_security;
++#endif
+ 	struct common_audit_data ad;
+ 	struct lsm_network_audit net;
+ 
+@@ -5039,7 +5071,11 @@ static int selinux_sock_rcv_skb_compat(s
+ 				       u16 family)
+ {
+ 	int err = 0;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	u32 sk_sid = sksec->sid;
+ 	struct common_audit_data ad;
+ 	struct lsm_network_audit net;
+@@ -5068,7 +5104,11 @@ static int selinux_sock_rcv_skb_compat(s
+ static int selinux_socket_sock_rcv_skb(struct sock *sk, struct sk_buff *skb)
+ {
+ 	int err, peerlbl_active, secmark_active;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	u16 family = sk->sk_family;
+ 	u32 sk_sid = sksec->sid;
+ 	struct common_audit_data ad;
+@@ -5136,7 +5176,11 @@ static int selinux_socket_getpeersec_str
+ 	int err = 0;
+ 	char *scontext = NULL;
+ 	u32 scontext_len;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sock->sk);
++#else
+ 	struct sk_security_struct *sksec = sock->sk->sk_security;
++#endif
+ 	u32 peer_sid = SECSID_NULL;
+ 
+ 	if (sksec->sclass == SECCLASS_UNIX_STREAM_SOCKET ||
+@@ -5194,34 +5238,51 @@ out:
+ 
+ static int selinux_sk_alloc_security(struct sock *sk, int family, gfp_t priority)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec;
+ 
+ 	sksec = kzalloc(sizeof(*sksec), priority);
+ 	if (!sksec)
+ 		return -ENOMEM;
++#endif
+ 
+ 	sksec->peer_sid = SECINITSID_UNLABELED;
+ 	sksec->sid = SECINITSID_UNLABELED;
+ 	sksec->sclass = SECCLASS_SOCKET;
+ 	selinux_netlbl_sk_security_reset(sksec);
++#ifndef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
+ 	sk->sk_security = sksec;
++#endif
+ 
+ 	return 0;
+ }
+ 
+ static void selinux_sk_free_security(struct sock *sk)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++
++	selinux_netlbl_sk_security_free(sksec);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
+ 
+ 	sk->sk_security = NULL;
+ 	selinux_netlbl_sk_security_free(sksec);
+ 	kfree(sksec);
++#endif
+ }
+ 
+ static void selinux_sk_clone_security(const struct sock *sk, struct sock *newsk)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++	struct sk_security_struct *newsksec = selinux_sock(newsk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
+ 	struct sk_security_struct *newsksec = newsk->sk_security;
++#endif
+ 
+ 	newsksec->sid = sksec->sid;
+ 	newsksec->peer_sid = sksec->peer_sid;
+@@ -5235,8 +5296,11 @@ static void selinux_sk_getsecid(const st
+ 	if (!sk)
+ 		*secid = SECINITSID_ANY_SOCKET;
+ 	else {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		const struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 		const struct sk_security_struct *sksec = sk->sk_security;
+-
++#endif
+ 		*secid = sksec->sid;
+ 	}
+ }
+@@ -5245,7 +5309,11 @@ static void selinux_sock_graft(struct so
+ {
+ 	struct inode_security_struct *isec =
+ 		inode_security_novalidate(SOCK_INODE(parent));
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 
+ 	if (sk->sk_family == PF_INET || sk->sk_family == PF_INET6 ||
+ 	    sk->sk_family == PF_UNIX)
+@@ -5262,7 +5330,11 @@ static int selinux_sctp_process_new_asso
+ {
+ 	struct sock *sk = asoc->base.sk;
+ 	u16 family = sk->sk_family;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	struct common_audit_data ad;
+ 	struct lsm_network_audit net;
+ 	int err;
+@@ -5449,8 +5521,13 @@ static int selinux_sctp_bind_connect(str
+ static void selinux_sctp_sk_clone(struct sctp_association *asoc, struct sock *sk,
+ 				  struct sock *newsk)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++	struct sk_security_struct *newsksec = selinux_sock(newsk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
+ 	struct sk_security_struct *newsksec = newsk->sk_security;
++#endif
+ 
+ 	/* If policy does not support SECCLASS_SCTP_SOCKET then call
+ 	 * the non-sctp clone version.
+@@ -5482,7 +5559,11 @@ static int selinux_mptcp_add_subflow(str
+ static int selinux_inet_conn_request(const struct sock *sk, struct sk_buff *skb,
+ 				     struct request_sock *req)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	int err;
+ 	u16 family = req->rsk_ops->family;
+ 	u32 connsid;
+@@ -5503,7 +5584,11 @@ static int selinux_inet_conn_request(con
+ static void selinux_inet_csk_clone(struct sock *newsk,
+ 				   const struct request_sock *req)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *newsksec = selinux_sock(newsk);
++#else
+ 	struct sk_security_struct *newsksec = newsk->sk_security;
++#endif
+ 
+ 	newsksec->sid = req->secid;
+ 	newsksec->peer_sid = req->peer_secid;
+@@ -5520,7 +5605,11 @@ static void selinux_inet_csk_clone(struc
+ static void selinux_inet_conn_established(struct sock *sk, struct sk_buff *skb)
+ {
+ 	u16 family = sk->sk_family;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 
+ 	/* handle mapped IPv4 packets arriving via IPv6 sockets */
+ 	if (family == PF_INET6 && skb->protocol == htons(ETH_P_IP))
+@@ -5601,7 +5690,11 @@ static int selinux_tun_dev_attach_queue(
+ static int selinux_tun_dev_attach(struct sock *sk, void *security)
+ {
+ 	struct tun_security_struct *tunsec = security;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 
+ 	/* we don't currently perform any NetLabel based labeling here and it
+ 	 * isn't clear that we would want to do so anyway; while we could apply
+@@ -5724,7 +5817,11 @@ static unsigned int selinux_ip_output(vo
+ 			return NF_ACCEPT;
+ 
+ 		/* standard practice, label using the parent socket */
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		sksec = selinux_sock(sk);
++#else
+ 		sksec = sk->sk_security;
++#endif
+ 		sid = sksec->sid;
+ 	} else
+ 		sid = SECINITSID_KERNEL;
+@@ -5747,7 +5844,11 @@ static unsigned int selinux_ip_postroute
+ 	sk = skb_to_full_sk(skb);
+ 	if (sk == NULL)
+ 		return NF_ACCEPT;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	sksec = selinux_sock(sk);
++#else
+ 	sksec = sk->sk_security;
++#endif
+ 
+ 	ad_net_init_from_iif(&ad, &net, state->out->ifindex, state->pf);
+ 	if (selinux_parse_skb(skb, &ad, NULL, 0, &proto))
+@@ -5836,7 +5937,11 @@ static unsigned int selinux_ip_postroute
+ 		u32 skb_sid;
+ 		struct sk_security_struct *sksec;
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		sksec = selinux_sock(sk);
++#else
+ 		sksec = sk->sk_security;
++#endif
+ 		if (selinux_skb_peerlbl_sid(skb, family, &skb_sid))
+ 			return NF_DROP;
+ 		/* At this point, if the returned skb peerlbl is SECSID_NULL
+@@ -5865,7 +5970,11 @@ static unsigned int selinux_ip_postroute
+ 	} else {
+ 		/* Locally generated packet, fetch the security label from the
+ 		 * associated socket. */
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++		struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 		struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 		peer_sid = sksec->sid;
+ 		secmark_perm = PACKET__SEND;
+ 	}
+@@ -5908,7 +6017,11 @@ static int selinux_netlink_send(struct s
+ 	unsigned int data_len = skb->len;
+ 	unsigned char *data = skb->data;
+ 	struct nlmsghdr *nlh;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	struct sk_security_struct *sksec = selinux_sock(sk);
++#else
+ 	struct sk_security_struct *sksec = sk->sk_security;
++#endif
+ 	u16 sclass = sksec->sclass;
+ 	u32 perm;
+ 
+@@ -6330,7 +6443,11 @@ static int selinux_getprocattr(struct ta
+ 			goto bad;
+ 	}
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	if (!strcmp(name, "current") || !strcmp(name, "context"))
++#else
+ 	if (!strcmp(name, "current"))
++#endif
+ 		sid = __tsec->sid;
+ 	else if (!strcmp(name, "prev"))
+ 		sid = __tsec->osid;
+@@ -6372,6 +6489,18 @@ static int selinux_setprocattr(const cha
+ 	/*
+ 	 * Basic control over ability to set these attributes at all.
+ 	 */
++
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	/*
++	 * For setting display, we only perform a permission check;
++	 * the actual update to the display value is handled by the
++	 * LSM framework.
++	 */
++	if (!strcmp(name, "display"))
++		return avc_has_perm(&selinux_state,
++				    mysid, mysid, SECCLASS_PROCESS2,
++				    PROCESS2__SETDISPLAY, NULL);
++#endif
+ 	if (!strcmp(name, "exec"))
+ 		error = avc_has_perm(mysid, mysid, SECCLASS_PROCESS,
+ 				     PROCESS__SETEXEC, NULL);
+@@ -6863,6 +6992,9 @@ struct lsm_blob_sizes selinux_blob_sizes
+ 	.lbs_ipc = sizeof(struct ipc_security_struct),
+ 	.lbs_msg_msg = sizeof(struct msg_security_struct),
+ 	.lbs_superblock = sizeof(struct superblock_security_struct),
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	.lbs_sock = sizeof(struct sk_security_struct),
++#endif
+ 	.lbs_xattr_count = SELINUX_INODE_INIT_XATTRS,
+ };
+ 
+@@ -6978,6 +7110,13 @@ static int selinux_uring_cmd(struct io_u
+ }
+ #endif /* CONFIG_IO_URING */
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static struct lsm_id selinux_lsmid __lsm_ro_after_init = {
++	.lsm  = "selinux",
++	.slot = LSMBLOB_NEEDED
++};
++#endif
++
+ /*
+  * IMPORTANT NOTE: When adding new hooks, please be careful to keep this order:
+  * 1. any hooks that don't belong to (2.) or (3.) below,
+@@ -7299,7 +7438,12 @@ static __init int selinux_init(void)
+ 
+ 	hashtab_cache_init();
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(selinux_hooks, ARRAY_SIZE(selinux_hooks),
++			   &selinux_lsmid);
++#else
+ 	security_add_hooks(selinux_hooks, ARRAY_SIZE(selinux_hooks), "selinux");
++#endif
+ 
+ 	if (avc_add_callback(selinux_netcache_avc_callback, AVC_CALLBACK_RESET))
+ 		panic("SELinux: Unable to register AVC netcache callback\n");

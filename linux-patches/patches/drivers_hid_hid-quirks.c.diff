@@ -1,0 +1,41 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/hid/hid-quirks.c b/linux-6.6.38.igel/drivers/hid/hid-quirks.c
+--- a/linux-6.6.38.igel/drivers/hid/hid-quirks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/hid/hid-quirks.c	2024-08-02 15:41:31.547491394 +0200
+@@ -226,6 +226,10 @@ static const struct hid_device_id hid_qu
+  * used as a driver. See hid_scan_report().
+  */
+ static const struct hid_device_id hid_have_special_driver[] = {
++#ifdef CONFIG_IGEL_3DCONNEXION_BATTERY_QUIRK
++	{ HID_USB_DEVICE(USB_VENDOR_ID_3DCONNEXION, USB_DEVICE_ID_3DCONNEXION_SM_W) },
++	{ HID_USB_DEVICE(USB_VENDOR_ID_3DCONNEXION, USB_DEVIDE_ID_3DCONNEXION_SM_PRO_W) },
++#endif
+ #if IS_ENABLED(CONFIG_HID_A4TECH)
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_A4TECH, USB_DEVICE_ID_A4TECH_WCP32PU) },
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_A4TECH, USB_DEVICE_ID_A4TECH_X5_005D) },
+@@ -328,6 +332,11 @@ static const struct hid_device_id hid_ha
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_GEYSER1_TP_ONLY) },
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_MAGIC_KEYBOARD_2021) },
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_MAGIC_KEYBOARD_FINGERPRINT_2021) },
++#endif
++#if IS_ENABLED(CONFIG_HID_APPLE_IBRIDGE)
++	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_IBRIDGE) },
++#endif
++#if IS_ENABLED(CONFIG_HID_APPLE_TOUCHBAR)
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_TOUCHBAR_BACKLIGHT) },
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, USB_DEVICE_ID_APPLE_TOUCHBAR_DISPLAY) },
+ #endif
+@@ -979,6 +988,14 @@ bool hid_ignore(struct hid_device *hdev)
+ 		return true;
+ 
+ 	switch (hdev->vendor) {
++#ifdef CONFIG_IGEL_WACOM_BAMBOO_QUIRK
++	/* gottwald@igel.com Better to use standard HID for this WACOM devices */
++	case USB_VENDOR_ID_WACOM:
++		if (hdev->product == USB_DEVICE_ID_WACOM_BAMBOO_PAD_CTH301 ||
++			hdev->product == USB_DEVICE_ID_WACOM_BAMBOO_PAD_CTH300)
++			return false;
++		break;
++#endif
+ 	case USB_VENDOR_ID_CODEMERCS:
+ 		/* ignore all Code Mercenaries IOWarrior devices */
+ 		if (hdev->product >= USB_DEVICE_ID_CODEMERCS_IOW_FIRST &&

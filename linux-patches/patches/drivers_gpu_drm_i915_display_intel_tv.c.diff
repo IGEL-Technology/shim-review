@@ -1,0 +1,18 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_tv.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_tv.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_tv.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_tv.c	2024-08-02 15:41:31.543491299 +0200
+@@ -1948,6 +1948,14 @@ intel_tv_init(struct drm_i915_private *d
+ 		return;
+ 	}
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++	/* lang@igel.de: Skip init if TV is disabled */
++	if (! i915_modparams.tv) {
++		DRM_INFO("Integrated TV is disabled by module parameter\n");
++		return;
++	}
++#endif
++
+ 	/*
+ 	 * Sanity check the TV output by checking to see if the
+ 	 * DAC register holds a value

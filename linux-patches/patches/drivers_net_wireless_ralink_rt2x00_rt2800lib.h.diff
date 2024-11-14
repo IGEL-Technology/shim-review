@@ -1,0 +1,47 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.h b/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.h
+--- a/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/net/wireless/ralink/rt2x00/rt2800lib.h	2024-08-02 15:41:31.555491585 +0200
+@@ -76,6 +76,12 @@ struct rt2800_ops {
+ 	int (*drv_init_registers)(struct rt2x00_dev *rt2x00dev);
+ 	__le32 *(*drv_get_txwi)(struct queue_entry *entry);
+ 	unsigned int (*drv_get_dma_done)(struct data_queue *queue);
++
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	bool (*ht_disabled)(struct rt2x00_dev *rt2x00dev);
++	int (*get_chain_number)(struct rt2x00_dev *rt2x00dev);
++#endif
+ };
+ 
+ static inline u32 rt2800_register_read(struct rt2x00_dev *rt2x00dev,
+@@ -155,6 +161,30 @@ static inline bool rt2800_hwcrypt_disabl
+ 	return rt2800ops->hwcrypt_disabled(rt2x00dev);
+ }
+ 
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++/* hamburg@igel.com adapted for using with one antenna */
++
++static inline bool rt2800_ht_disabled(struct rt2x00_dev *rt2x00dev)
++{
++	const struct rt2800_ops *rt2800ops = rt2x00dev->ops->drv;
++	if (NULL == rt2800ops->ht_disabled) {
++		return false;
++	}
++	return rt2800ops->ht_disabled(rt2x00dev);
++}
++
++/* hamburg@igel.com adapted for using with one antenna */
++
++static inline int rt2800_get_chain_number(struct rt2x00_dev *rt2x00dev)
++{
++	const struct rt2800_ops *rt2800ops = rt2x00dev->ops->drv;
++	if (NULL == rt2800ops->get_chain_number) {
++		return -1;
++	}
++	return rt2800ops->get_chain_number(rt2x00dev);
++}
++#endif
++
+ static inline int rt2800_drv_write_firmware(struct rt2x00_dev *rt2x00dev,
+ 					    const u8 *data, const size_t len)
+ {

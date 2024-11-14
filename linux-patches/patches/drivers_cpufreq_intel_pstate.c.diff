@@ -1,0 +1,89 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/cpufreq/intel_pstate.c b/linux-6.6.38.igel/drivers/cpufreq/intel_pstate.c
+--- a/linux-6.6.38.igel/drivers/cpufreq/intel_pstate.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/cpufreq/intel_pstate.c	2024-08-02 15:41:31.535491108 +0200
+@@ -25,6 +25,9 @@
+ #include <linux/acpi.h>
+ #include <linux/vmalloc.h>
+ #include <linux/pm_qos.h>
++#ifdef CONFIG_IGEL_MTL_CPU_POWERSAVE
++#include <linux/bitfield.h>
++#endif
+ #include <trace/events/power.h>
+ 
+ #include <asm/cpu.h>
+@@ -3406,6 +3409,7 @@ static bool intel_pstate_hwp_is_enabled(
+ 	return !!(value & 0x1);
+ }
+ 
++#ifndef CONFIG_IGEL_MTL_CPU_POWERSAVE
+ static const struct x86_cpu_id intel_epp_balance_perf[] = {
+ 	/*
+ 	 * Set EPP value as 102, this is the max suggested EPP
+@@ -3416,6 +3420,37 @@ static const struct x86_cpu_id intel_epp
+ 	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X, 32),
+ 	{}
+ };
++#else
++#define POWERSAVE_MASK			GENMASK(7, 0)
++#define BALANCE_POWER_MASK		GENMASK(15, 8)
++#define BALANCE_PERFORMANCE_MASK	GENMASK(23, 16)
++#define PERFORMANCE_MASK		GENMASK(31, 24)
++
++#define HWP_SET_EPP_VALUES(powersave, balance_power, balance_perf, performance) \
++	(FIELD_PREP_CONST(POWERSAVE_MASK, powersave) |\
++	 FIELD_PREP_CONST(BALANCE_POWER_MASK, balance_power) |\
++	 FIELD_PREP_CONST(BALANCE_PERFORMANCE_MASK, balance_perf) |\
++	 FIELD_PREP_CONST(PERFORMANCE_MASK, performance))
++
++#define HWP_SET_DEF_BALANCE_PERF_EPP(balance_perf) \
++	(HWP_SET_EPP_VALUES(HWP_EPP_POWERSAVE, HWP_EPP_BALANCE_POWERSAVE,\
++	 balance_perf, HWP_EPP_PERFORMANCE))
++
++static const struct x86_cpu_id intel_epp_default[] = {
++ 	/*
++ 	 * Set EPP value as 102, this is the max suggested EPP
++ 	 * which can result in one core turbo frequency for
++ 	 * AlderLake Mobile CPUs.
++ 	 */
++	X86_MATCH_INTEL_FAM6_MODEL(ALDERLAKE_L, HWP_SET_DEF_BALANCE_PERF_EPP(102)),
++	X86_MATCH_INTEL_FAM6_MODEL(SAPPHIRERAPIDS_X, HWP_SET_DEF_BALANCE_PERF_EPP(32)),
++	X86_MATCH_INTEL_FAM6_MODEL(METEORLAKE_L, HWP_SET_EPP_VALUES(HWP_EPP_POWERSAVE,
++								    HWP_EPP_BALANCE_POWERSAVE, 115, 16)),
++	X86_MATCH_INTEL_FAM6_MODEL(ARROWLAKE, HWP_SET_EPP_VALUES(HWP_EPP_POWERSAVE,
++								 HWP_EPP_BALANCE_POWERSAVE, 115, 16)),
++	{}
++};
++#endif /* CONFIG_IGEL_MTL_CPU_POWERSAVE */
+ 
+ static int __init intel_pstate_init(void)
+ {
+@@ -3506,10 +3541,29 @@ hwp_cpu_matched:
+ 	intel_pstate_sysfs_expose_params();
+ 
+ 	if (hwp_active) {
++#ifdef CONFIG_IGEL_MTL_CPU_POWERSAVE
++		const struct x86_cpu_id *id = x86_match_cpu(intel_epp_default);
++		if (id) {
++			epp_values[EPP_INDEX_POWERSAVE] =
++					FIELD_GET(POWERSAVE_MASK, id->driver_data);
++			epp_values[EPP_INDEX_BALANCE_POWERSAVE] =
++					FIELD_GET(BALANCE_POWER_MASK, id->driver_data);
++			epp_values[EPP_INDEX_BALANCE_PERFORMANCE] =
++					FIELD_GET(BALANCE_PERFORMANCE_MASK, id->driver_data);
++			epp_values[EPP_INDEX_PERFORMANCE] =
++					FIELD_GET(PERFORMANCE_MASK, id->driver_data);
++			pr_debug("Updated EPPs powersave:%x balanced power:%x balanced perf:%x performance:%x\n",
++				 epp_values[EPP_INDEX_POWERSAVE],
++				 epp_values[EPP_INDEX_BALANCE_POWERSAVE],
++				 epp_values[EPP_INDEX_BALANCE_PERFORMANCE],
++				 epp_values[EPP_INDEX_PERFORMANCE]);
++		}
++#else /* CONFIG_IGEL_MTL_CPU_POWERSAVE */
+ 		const struct x86_cpu_id *id = x86_match_cpu(intel_epp_balance_perf);
+ 
+ 		if (id)
+ 			epp_values[EPP_INDEX_BALANCE_PERFORMANCE] = id->driver_data;
++#endif /* CONFIG_IGEL_MTL_CPU_POWERSAVE */
+ 	}
+ 
+ 	mutex_lock(&intel_pstate_driver_lock);

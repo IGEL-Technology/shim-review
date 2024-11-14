@@ -1,0 +1,89 @@
+diff -Naurp a/linux-6.6.38.igel/kernel/auditsc.c b/linux-6.6.38.igel/kernel/auditsc.c
+--- a/linux-6.6.38.igel/kernel/auditsc.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/kernel/auditsc.c	2024-08-02 15:41:31.567491872 +0200
+@@ -667,7 +667,11 @@ static int audit_filter_rules(struct tas
+ 			   match for now to avoid losing information that
+ 			   may be wanted.   An error message will also be
+ 			   logged upon error */
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++			if (f->lsm_isset) {
++#else
+ 			if (f->lsm_rule) {
++#endif
+ 				if (need_sid) {
+ 					/* @tsk should always be equal to
+ 					 * @current with the exception of
+@@ -681,9 +685,15 @@ static int audit_filter_rules(struct tas
+ 					security_current_getsecid_subj(&sid);
+ 					need_sid = 0;
+ 				}
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++				result = security_audit_rule_match(sid, f->type,
++								   f->op,
++								   f->lsm_rules);
++#else
+ 				result = security_audit_rule_match(sid, f->type,
+ 								   f->op,
+ 								   f->lsm_rule);
++#endif
+ 			}
+ 			break;
+ 		case AUDIT_OBJ_USER:
+@@ -693,21 +703,41 @@ static int audit_filter_rules(struct tas
+ 		case AUDIT_OBJ_LEV_HIGH:
+ 			/* The above note for AUDIT_SUBJ_USER...AUDIT_SUBJ_CLR
+ 			   also applies here */
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++			if (f->lsm_isset) {
++#else
+ 			if (f->lsm_rule) {
++#endif
+ 				/* Find files that match */
+ 				if (name) {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++					result = security_audit_rule_match(
++								name->osid,
++								f->type,
++								f->op,
++								f->lsm_rules);
++#else
+ 					result = security_audit_rule_match(
+ 								name->osid,
+ 								f->type,
+ 								f->op,
+ 								f->lsm_rule);
++#endif
+ 				} else if (ctx) {
+ 					list_for_each_entry(n, &ctx->names_list, list) {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++						if (security_audit_rule_match(
++								n->osid,
++								f->type,
++								f->op,
++								f->lsm_rules)) {
++#else
+ 						if (security_audit_rule_match(
+ 								n->osid,
+ 								f->type,
+ 								f->op,
+ 								f->lsm_rule)) {
++#endif
+ 							++result;
+ 							break;
+ 						}
+@@ -716,9 +746,15 @@ static int audit_filter_rules(struct tas
+ 				/* Find ipc objects that match */
+ 				if (!ctx || ctx->type != AUDIT_IPC)
+ 					break;
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++				if (security_audit_rule_match(ctx->ipc.osid,
++							      f->type, f->op,
++							      f->lsm_rules))
++#else
+ 				if (security_audit_rule_match(ctx->ipc.osid,
+ 							      f->type, f->op,
+ 							      f->lsm_rule))
++#endif
+ 					++result;
+ 			}
+ 			break;

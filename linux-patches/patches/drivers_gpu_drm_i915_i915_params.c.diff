@@ -1,0 +1,71 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_params.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_params.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_params.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/i915_params.c	2024-08-02 15:41:31.543491299 +0200
+@@ -130,7 +130,11 @@ i915_param_named_unsafe(force_probe, cha
+ 
+ i915_param_named_unsafe(disable_power_well, int, 0400,
+ 	"Disable display power wells when possible "
++#ifdef CONFIG_IGEL_I915_CHANGE_DEFAULT_POWER_WELL_OPTION
++	"(-1=auto, 0=power wells always on [default], 1=power wells disabled when possible)");
++#else
+ 	"(-1=auto [default], 0=power wells always on, 1=power wells disabled when possible)");
++#endif
+ 
+ i915_param_named_unsafe(enable_ips, int, 0400, "Enable IPS (default: true)");
+ 
+@@ -228,6 +232,55 @@ i915_param_named_unsafe(lmem_size, uint,
+ i915_param_named_unsafe(lmem_bar_size, uint, 0400,
+ 			"Set the lmem bar size(in MiB).");
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION
++i915_param_named(lvds, int, 0444,
++	"LVDS enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++i915_param_named(tv, int, 0444,
++	"TV enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION
++/* gottwald@igel.com: sometimes a dp is wrongly detected as edp which makes
++ * problems with hotplug. Try to determine this automatically failed so
++ * added module param to fix this. */
++i915_param_named(edp_is_dp, bool, 0444,
++	"eDP is DP (0 = disable, 1 = edp is dp)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION
++/* gottwald@igel.com: sometimes the max dp link speed is not detected correctly
++ * to prevent black screen issues this parameter can be used to limit the
++ * max DisplayPort link speed */
++i915_param_named(limit_dp_max_rate, int, 0644,
++	"DP port max link rate (0 = not set (default), 162000, 216000, 270000, 324000, 432000, 540000, 648000, 810000)");
++#endif
++
++/* gottwald@igel.com: some devices have problems with higher resolutions and
++ * DP audio where the screen will get black if the DP audio get initialized
++ * to be able to work around this you can use this option to disable DP audio.
++ * Add the same option for HDMI also just to be sure... */
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION
++i915_param_named(disable_dp_audio, bool, 0644,
++	"Disable DP audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
++i915_param_named(disable_hdmi_audio, bool, 0644,
++	"Disable HDMI audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION
++/* gottwald@igel.com: M250C workaround to fix color space limit problems */
++i915_param_named(m250c_no_limited_color_range, bool, 0444,
++	"Do not use limited color range for DP1 on M250C (0 = not set (default), 1 = do not use limited color range)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER
++i915_param_named(reverse_enum_order, bool, 0444,
++	"Reverse connector enumeration order (0 = not set (default), 1 = do not use limited color range)");
++#endif
++
+ static void _param_print_bool(struct drm_printer *p, const char *name,
+ 			      bool val)
+ {

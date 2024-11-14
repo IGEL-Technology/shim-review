@@ -1,0 +1,15 @@
+diff -Naurp a/linux-6.6.38.igel/security/selinux/include/objsec.h b/linux-6.6.38.igel/security/selinux/include/objsec.h
+--- a/linux-6.6.38.igel/security/selinux/include/objsec.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/selinux/include/objsec.h	2024-08-02 15:41:31.575492063 +0200
+@@ -194,4 +194,11 @@ static inline struct superblock_security
+ 	return superblock->s_security + selinux_blob_sizes.lbs_superblock;
+ }
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++static inline struct sk_security_struct *selinux_sock(const struct sock *sock)
++{
++	return sock->sk_security + selinux_blob_sizes.lbs_sock;
++}
++#endif
++
+ #endif /* _SELINUX_OBJSEC_H_ */

@@ -1,0 +1,18 @@
+diff -Naurp a/linux-6.6.38.igel/fs/squashfs/super.c b/linux-6.6.38.igel/fs/squashfs/super.c
+--- a/linux-6.6.38.igel/fs/squashfs/super.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/fs/squashfs/super.c	2024-08-02 15:41:31.567491872 +0200
+@@ -316,6 +316,14 @@ static int squashfs_fill_super(struct su
+ 
+ 	err = -ENOMEM;
+ 
++#ifdef CONFIG_IGEL_GENERATE_UUID_FOR_SQUASHFS
++	memcpy(&sb->s_uuid.b[0], &sblk->inodes, 4);
++	memcpy(&sb->s_uuid.b[4], &sblk->mkfs_time, 4);
++	memcpy(&sb->s_uuid.b[8], &sblk->fragments, 4);
++	memcpy(&sb->s_uuid.b[12], &sblk->compression, 2);
++	memcpy(&sb->s_uuid.b[14], &sblk->block_log, 2);
++#endif
++
+ 	msblk->block_cache = squashfs_cache_init("metadata",
+ 			SQUASHFS_CACHED_BLKS, SQUASHFS_METADATA_SIZE);
+ 	if (msblk->block_cache == NULL)

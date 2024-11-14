@@ -1,0 +1,23 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.h b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.h
+--- a/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.h	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/radeon/radeon_drv.h	2024-08-02 15:41:31.547491394 +0200
+@@ -115,6 +115,19 @@
+ #define DRIVER_MINOR		34
+ #define DRIVER_PATCHLEVEL	0
+ 
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++/* gottwald@igel.com: define enum for IGEL platforms,
++ * that require special treatment. Also in radeon.h */
++enum igel_platforms {
++	NO_IGEL_PLATFORM = -1,
++	IGEL_M340C,
++	SAMSUNG_TC2,
++};
++extern enum igel_platforms igel_platform;
++#define IS_IGEL_M340C (igel_platform==IGEL_M340C)
++#define IS_SAMSUNG_TC2 (igel_platform==SAMSUNG_TC2)
++#endif
++
+ long radeon_drm_ioctl(struct file *filp,
+ 		      unsigned int cmd, unsigned long arg);
+ 

@@ -1,0 +1,29 @@
+diff -Naurp a/linux-6.6.38.igel/security/bpf/hooks.c b/linux-6.6.38.igel/security/bpf/hooks.c
+--- a/linux-6.6.38.igel/security/bpf/hooks.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/security/bpf/hooks.c	2024-08-02 15:41:31.571491967 +0200
+@@ -15,9 +15,25 @@ static struct security_hook_list bpf_lsm
+ 	LSM_HOOK_INIT(task_free, bpf_task_storage_free),
+ };
+ 
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++/*
++ * slot has to be LSMBLOB_NEEDED because some of the hooks
++ * supplied by this module require a slot.
++ */
++struct lsm_id bpf_lsmid __lsm_ro_after_init = {
++	.lsm = "bpf",
++	.slot = LSMBLOB_NEEDED
++};
++#endif
++
+ static int __init bpf_lsm_init(void)
+ {
++#ifdef CONFIG_IGEL_APPARMOR_DBUS_SUPPORT
++	security_add_hooks(bpf_lsm_hooks, ARRAY_SIZE(bpf_lsm_hooks),
++			   &bpf_lsmid);
++#else
+ 	security_add_hooks(bpf_lsm_hooks, ARRAY_SIZE(bpf_lsm_hooks), "bpf");
++#endif
+ 	pr_info("LSM support for eBPF active\n");
+ 	return 0;
+ }

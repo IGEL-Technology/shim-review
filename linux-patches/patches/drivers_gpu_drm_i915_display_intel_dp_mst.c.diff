@@ -1,0 +1,11 @@
+diff -Naurp a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_dp_mst.c b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_dp_mst.c
+--- a/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_dp_mst.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/drivers/gpu/drm/i915/display/intel_dp_mst.c	2024-08-02 15:41:31.543491299 +0200
+@@ -266,6 +266,7 @@ static int intel_dp_dsc_mst_compute_link
+ 
+ 	return 0;
+ }
++
+ static int intel_dp_mst_update_slots(struct intel_encoder *encoder,
+ 				     struct intel_crtc_state *crtc_state,
+ 				     struct drm_connector_state *conn_state)

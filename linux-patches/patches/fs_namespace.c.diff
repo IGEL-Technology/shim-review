@@ -1,0 +1,21 @@
+diff -Naurp a/linux-6.6.38.igel/fs/namespace.c b/linux-6.6.38.igel/fs/namespace.c
+--- a/linux-6.6.38.igel/fs/namespace.c	2024-07-09 11:44:29.000000000 +0200
++++ b/linux-6.6.38.igel/fs/namespace.c	2024-08-02 15:41:31.563491776 +0200
+@@ -2791,6 +2791,7 @@ static void set_mount_attributes(struct
+ 
+ static void mnt_warn_timestamp_expiry(struct path *mountpoint, struct vfsmount *mnt)
+ {
++#ifndef CONFIG_IGEL_NO_TIMESTAMP_WARNING
+ 	struct super_block *sb = mnt->mnt_sb;
+ 
+ 	if (!__mnt_is_readonly(mnt) &&
+@@ -2808,6 +2809,9 @@ static void mnt_warn_timestamp_expiry(st
+ 		free_page((unsigned long)buf);
+ 		sb->s_iflags |= SB_I_TS_EXPIRY_WARNED;
+ 	}
++#else
++	return;
++#endif
+ }
+ 
+ /*
