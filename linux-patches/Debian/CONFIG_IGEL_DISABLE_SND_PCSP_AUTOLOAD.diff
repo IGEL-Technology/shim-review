@@ -1,0 +1,19 @@
+IGEL_DISABLE_SND_PCSP_AUTOLOAD
+	  Disable autoloading of snd-pcsp, the module can still be loaded
+	  manually with modprobe snd-pcsp.
+
+	  Source: Debian
+	  URL: https://salsa.debian.org/kernel-team/linux/-/blob/debian/6.18/forky/debian/patches/debian/snd-pcsp-disable-autoload.patch?ref_type=heads
+diff --git a/sound/drivers/pcsp/pcsp.c b/sound/drivers/pcsp/pcsp.c
+index ff6bb375c900..d95380a38611 100644
+--- a/sound/drivers/pcsp/pcsp.c
+@@ -22,7 +22,9 @@
+ MODULE_AUTHOR("Stas Sergeev <stsp@users.sourceforge.net>");
+ MODULE_DESCRIPTION("PC-Speaker driver");
+ MODULE_LICENSE("GPL");
++#ifndef CONFIG_IGEL_DISABLE_SND_PCSP_AUTOLOAD
+ MODULE_ALIAS("platform:pcspkr");
++#endif /* CONFIG_IGEL_DISABLE_SND_PCSP_AUTOLOAD */
+ 
+ static int index = SNDRV_DEFAULT_IDX1;	/* Index 0-MAX */
+ static char *id = SNDRV_DEFAULT_STR1;	/* ID for this card */

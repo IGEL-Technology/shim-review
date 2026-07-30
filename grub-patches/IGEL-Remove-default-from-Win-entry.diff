@@ -1,0 +1,21 @@
+Index: grub2/grub-core/fs/igelfs.c
+===================================================================
+--- grub2.orig/grub-core/fs/igelfs.c	2025-10-08 12:39:55.256238396 +0200
++++ grub2/grub-core/fs/igelfs.c	2025-10-08 12:43:36.910203698 +0200
+@@ -351,14 +351,14 @@
+    fi\n\
+ fi\n\
+ if [ ! -e %s/EFI/igel_no_bootnext ]; then\n\
+-   menuentry 'Windows (default)' --class windows {\n\
++   menuentry 'Windows' --class windows {\n\
+       find_win_boot_id --set=bootid\n\
+       if [ \"$bootid\" != \"\" ]; then\n\
+          set_next_boot $bootid\n\
+       fi\n\
+    }\n\
+ else\n\
+-   menuentry 'Windows (default)' --class windows {\n\
++   menuentry 'Windows' --class windows {\n\
+       set root=%s\n\
+       chainloader /EFI/Microsoft/Boot/bootmgfw.efi\n\
+    }\n\

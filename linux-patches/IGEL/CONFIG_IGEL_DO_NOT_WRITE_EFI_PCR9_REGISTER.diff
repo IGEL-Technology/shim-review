@@ -1,0 +1,47 @@
+IGEL_DO_NOT_WRITE_EFI_PCR9_REGISTER
+	  Do not write initrd measurement into PCR9 register as this breaks our
+	  TPM handling with newer grub versions.
+
+	  Source: IGEL
+diff --git a/drivers/firmware/efi/libstub/efi-stub-helper.c b/drivers/firmware/efi/libstub/efi-stub-helper.c
+index 7aa2f9ad2935..8f7ce7b487c1 100644
+--- a/drivers/firmware/efi/libstub/efi-stub-helper.c
+@@ -227,6 +227,7 @@ static const struct {
+ 		STR_WITH_SIZE("LOADED_IMAGE::LoadOptions")
+ 	},
+ };
++#ifndef CONFIG_IGEL_DO_NOT_WRITE_EFI_PCR9_REGISTER
+ 
+ static_assert(sizeof(efi_tcg2_event_t) == sizeof(efi_cc_event_t));
+ 
+diff --git a/drivers/firmware/efi/libstub/efi-stub-helper.c b/drivers/firmware/efi/libstub/efi-stub-helper.c
+index 7aa2f9ad2935..8f7ce7b487c1 100644
+--- a/drivers/firmware/efi/libstub/efi-stub-helper.c
+@@ -337,9 +339,11 @@ char *efi_convert_cmdline(efi_loaded_image_t *image)
+ 	efi_status_t status;
+ 	u32 options_chars;
+ 
++	#ifndef CONFIG_IGEL_DO_NOT_WRITE_EFI_PCR9_REGISTER
+ 	if (options_size > 0)
+ 		efi_measure_tagged_event((unsigned long)options, options_size,
+ 					 EFISTUB_EVT_LOAD_OPTIONS);
++	#endif
+ 
+ 	efi_apply_loadoptions_quirk((const void **)&options, &options_size);
+ 	options_chars = options_size / sizeof(efi_char16_t);
+diff --git a/drivers/firmware/efi/libstub/efi-stub-helper.c b/drivers/firmware/efi/libstub/efi-stub-helper.c
+index 7aa2f9ad2935..8f7ce7b487c1 100644
+--- a/drivers/firmware/efi/libstub/efi-stub-helper.c
+@@ -632,10 +636,12 @@ efi_status_t efi_load_initrd(efi_loaded_image_t *image,
+ 	if (status != EFI_SUCCESS)
+ 		goto failed;
+ 
++#ifndef CONFIG_IGEL_DO_NOT_WRITE_EFI_PCR9_REGISTER
+ 	if (initrd.size > 0 &&
+ 	    efi_measure_tagged_event(initrd.base, initrd.size,
+ 				     EFISTUB_EVT_INITRD) == EFI_SUCCESS)
+ 		efi_info("Measured initrd data into PCR 9\n");
++#endif
+ 
+ 	status = efi_bs_call(allocate_pool, EFI_LOADER_DATA, sizeof(initrd),
+ 			     (void **)&tbl);

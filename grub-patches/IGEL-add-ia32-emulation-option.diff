@@ -1,0 +1,17 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -685,6 +685,14 @@ fi\n\n", efidev, efidev, efidev, efidev)
+ 
+   test_and_free(val);
+ 
++  bootreg_get(bt_data, "ia32_emulation", &val);
++  if (val != NULL && val[0] == '1')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " ia32_emulation=true");
++  else if (val != NULL && val[0] == '0')
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " ia32_emulation=false");
++
++  test_and_free(val);
++
+   bootreg_get(bt_data, "nohz", &val);
+   if (val != NULL && val[0] == 'o' && val[1] == 'n')
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " nohz=on");

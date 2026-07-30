@@ -1,0 +1,28 @@
+IGEL_XHCI_THINKCENTRE_M73_REBOOT_QUIRK
+	  The Lenovo ThinkCentre M73 has an Intel Lynxpoint XHCI chip which needs
+	  the XHCI_SPURIOUS_REBOOT quirk otherwise it would reboot shortly after a
+	  shutdown which is not acceptable. The fix will set the quirk for all
+	  devices having this XHCI USB chip.
+
+	  Source: IGEL-downgraded
+	  version: 3.12
+	  commit: 638298dc66ea36623dbc2757a24fc2c4ab41b016
+	  URL: https://lists.ubuntu.com/archives/kernel-team/2013-October/033091.html
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index f67a4d956204..8a5141fd442b 100644
+--- a/drivers/usb/host/xhci-pci.c
+@@ -511,6 +519,14 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
+ 	if (xhci->hci_version >= 0x120)
+ 		xhci->quirks |= XHCI_DEFAULT_PM_RUNTIME_ALLOW;
+ 
++#ifdef CONFIG_IGEL_XHCI_THINKCENTRE_M73_REBOOT_QUIRK
++	/* gottwald@igel: quirk Lenovo ThinkCentre M73 to avoid superious reboot after shutdown problems */
++	if (pdev->vendor == PCI_VENDOR_ID_INTEL &&
++		pdev->device == PCI_DEVICE_ID_INTEL_LYNXPOINT_XHCI) {
++		xhci->quirks |= XHCI_SPURIOUS_REBOOT;
++	}
++#endif
++
+ 	if (xhci->quirks & XHCI_RESET_ON_RESUME)
+ 		xhci_dbg_trace(xhci, trace_xhci_dbg_quirks,
+ 				"QUIRK: Resetting on resume");

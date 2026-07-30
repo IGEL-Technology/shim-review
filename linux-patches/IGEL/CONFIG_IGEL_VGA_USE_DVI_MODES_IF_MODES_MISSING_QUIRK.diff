@@ -1,0 +1,19 @@
+IGEL_VGA_USE_DVI_MODES_IF_MODES_MISSING_QUIRK
+	  Ensure to get valid EDID data also for VGA by calling fb_probe() another
+	  time to allow the VGA to use the DVI modes if there is no VGA EDID
+	  found.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/drm_fb_helper.c b/drivers/gpu/drm/drm_fb_helper.c
+index 0b3ee008523d..3415780d90bd 100644
+--- a/drivers/gpu/drm/drm_fb_helper.c
+@@ -1640,6 +1655,9 @@ static int drm_fb_helper_single_fb_probe(struct drm_fb_helper *fb_helper)
+ 
+ 	/* push down into drivers */
+ 	ret = dev->driver->fbdev_probe(fb_helper, &sizes);
++#ifdef CONFIG_IGEL_VGA_USE_DVI_MODES_IF_MODES_MISSING_QUIRK
++	ret = dev->driver->fbdev_probe(fb_helper, &sizes);
++#endif
+ 	if (ret < 0)
+ 		return ret;
+ 

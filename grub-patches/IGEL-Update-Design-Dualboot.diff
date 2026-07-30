@@ -1,0 +1,605 @@
+Index: grub2/grub-core/fs/igelfs.c
+===================================================================
+--- grub2.orig/grub-core/fs/igelfs.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/fs/igelfs.c	2026-05-05 15:10:19.215822842 +0200
+@@ -247,7 +247,7 @@
+ {
+   int size_params = 0, content_size = 4096;
+   char *cmdline = (char *) grub_zalloc(4097); //allocate to heap to avoid unaligned pointer problem
+-  char *winchain = (char *) grub_zalloc(600);
++  char *winchain = (char *) grub_zalloc(900); /* must hold full dualboot menuentry template + etext strings */
+   char *menuprefix = (char *) grub_zalloc(200);
+   char splash[100];
+   char *val = NULL;
+@@ -340,13 +340,13 @@
+   dualboot = grub_env_get ("dualboot");
+   if (dualboot != NULL && dualboot[0] == '1') {
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " dualboot");
+-    grub_snprintf(menuprefix, 200, "set menu_prefix=\"IGEL OS \"\n\
++    grub_snprintf(menuprefix, 200, "set menu_prefix=\"OS 12 \"\n\
+ if [ ! -e %s/EFI/igel_show_menu ]; then\n\
+    set show_menu=\"\"\n\
+ else\n\
+    set show_menu=\"1\"\n\
+ fi\n\n", efidev);
+-    grub_snprintf(winchain, 600, "set win_default=0\n\n\
++    grub_snprintf(winchain, 900, "set win_default=0\n\n\
+ if [ ! -e %s/EFI/boot_igel ]; then\n\
+    if [ ! -e %s/EFI/boot_igel_once ]; then\n\
+       if [ \"$igel_boot\" != \"1\" ]; then\n\
+@@ -355,7 +355,7 @@
+    fi\n\
+ fi\n\
+ if [ ! -e %s/EFI/igel_no_bootnext ]; then\n\
+-   menuentry 'Windows' --class windows {\n\
++   menuentry 'Windows' 'Primary operation system configured for standard,' 'everyday use.' --class windows {\n\
+       find_win_boot_id --set=bootid\n\
+       if [ \"$bootid\" != \"\" ]; then\n\
+          set_next_boot $bootid\n\
+@@ -864,11 +864,10 @@
+ 
+   grub_dprintf("igelfs", "writing the config\n");
+ 
+-
+   if (dualboot != NULL && dualboot[0] == '1') {
+     grub_snprintf((char *) *content, content_size, "%s\n\
+ if [ \"$show_menu\" != \"\" ]; then\n\
+-	set timeout=5\n\
++	set timeout=10\n\
+ 	set timeout_style=menu\n\
+ else\n\
+ 	set timeout=1\n\
+@@ -886,6 +885,7 @@
+ set kernel2_suffix=\"%s\"\n\
+ set kernel2=\"$device/${kernel2_file}\"\n\
+ set kernel2_name=\"%s\"\n\
++set theme=${theme_device}${themedir}/${themefile}.txt\n\
+ \n\
+ find_udp_boot_id --set=udp_bootid\n\
+ \n\
+@@ -920,17 +920,11 @@
+ %s\n\
+ \n\
+ if [ -f $kernel ]; then\n\
+-	menuentry \"${menu_prefix}Dual Boot$kernel_name\" --class os12 {\n\
++	menuentry 'OS 12' 'A secure, Linux-based endpoint OS designed for' 'centralized management and virtual desktop access.' --class igel {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel $default_opts %s %s\n\
+ 	}\n\
+-\n\
+-	if [ \"$udp_bootid\" != \"\" ]; then\n\
+-		menuentry \"${menu_prefix}USB Boot UD Pocket\" --class usb {\n\
+-			set_next_boot $udp_bootid\n\
+-		}\n\
+-  	fi\n\
+ fi\n\
+ \n\
+ if [ -f $kernel2 ]; then\n\
+@@ -954,53 +948,74 @@
+ 	export menu_prefix\n\
+ 	export sys_minor\n\
+ 	export dev\n\
+-	export igel_dr_background\n\
+-	export theme\n\
++	export theme_device\n\
++	export themedir\n\
++	export themefile\n\
+ 	\n\
+-	submenu \"Advanced Options\" --class advanced {\n\
++	submenu \"${menu_prefix}Advanced Options\" 'Access recovery tools, diagnostic utilities and' 'system configuration settings.' --class advanced {\n\
+ 		set default=0\n\
++		set theme=${theme_device}${themedir}/${themefile}_adv.txt\n\
+ 		\n\
+-		menuentry \"<< Return back to Main Menu\" {\n\
++		menuentry \"<< Main Boot options\" {\n\
+ 			configfile \"/boot/grub/grub.cfg\"\n\
+ 		}\n\
+ 		\n\
+-		menuentry \"${menu_prefix}Verbose boot$kernel_name\" {\n\
++		menuentry \"${menu_prefix}Verbose boot$kernel_name\" '               A boot mode that displays detailed start up logs' '               and allows you to run debugging commands' {\n\
+ 			set gfxpayload=keep\n\
+ 			insmod part_igel\n\
+ 			linux $kernel systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
+ 		}\n\
+ 		\n\
+-		menuentry \"${menu_prefix}VESA only boot$kernel_name\" {\n\
++		menuentry \"${menu_prefix}VESA only boot$kernel_name\" '               Useful when the device cannot boot normally due' '               to display driver or GPU issues.' {\n\
+ 			set gfxpayload=keep\n\
+ 			insmod part_igel\n\
+ 			linux $kernel nomodeset igel_syslog=quiet %s %s\n\
+ 		}\n\
+ 		\n\
+-		menuentry \"${menu_prefix}Emergency boot (setup only)$kernel_name\" {\n\
++		menuentry \"${menu_prefix}Emergency boot (setup only)$kernel_name\" '               Minimal boot for adjusting configuration when' '               normal start up fails.' {\n\
+ 			set gfxpayload=keep\n\
+ 			insmod part_igel\n\
+ 			linux $kernel systemd.unit=igel-emergency-boot.target igel_syslog=emergency quiet %s %s\n\
+ 		}\n\
+ 		\n\
+-		menuentry \"${menu_prefix}Failsafe boot with CRC check$kernel_name\" {\n\
+-			set igel_part_check=true\n\
+-			set gfxpayload=keep\n\
+-			insmod part_igel\n\
+-			ls ${dev}igel*)\n\
+-			set failsafe_kernel=\"${dev}igel${sys_minor})/${kernel_file}\"\n\
+-			linux $failsafe_kernel igel_syslog=quiet failsafe %s\n\
+-		}\n\
++		export kernel\n\
++		export kernel_name\n\
++		export kernel_file\n\
++		export menu_prefix\n\
++		export sys_minor\n\
++		export dev\n\
++		export theme_device\n\
++		export themedir\n\
++		export themefile\n\
+ 		\n\
+-		menuentry \"${menu_prefix}Reset to factory defaults$kernel_name\" {\n\
+-			set gfxpayload=keep\n\
+-			insmod part_igel\n\
+-			linux $kernel systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
+-		}\n\
+-		\n\
+-		menuentry \"${menu_prefix}Custom boot command$kernel_name\" {\n\
+-			set gfxpayload=keep\n\
+-			insmod part_igel\n\
+-			linux $kernel igel_syslog=quiet quiet %s %s %s\n\
++		submenu \"More advanced options >>\" {\n\
++			set default=0\n\
++			set theme=${theme_device}${themedir}/${themefile}_adv2.txt\n\
++			\n\
++			menuentry \"<< Back\" {\n\
++				configfile \"/boot/grub/grub.cfg\"\n\
++			}\n\
++			\n\
++			menuentry \"${menu_prefix}Failsafe boot with CRC check$kernel_name\" '               A recovery boot mode that checks OS integrity' '               using a safe fallback if corruption is detected.' {\n\
++				set igel_part_check=true\n\
++				set gfxpayload=keep\n\
++				insmod part_igel\n\
++				ls ${dev}igel*)\n\
++				set failsafe_kernel=\"${dev}igel${sys_minor})/${kernel_file}\"\n\
++				linux $failsafe_kernel igel_syslog=quiet failsafe %s\n\
++			}\n\
++			\n\
++			menuentry \"${menu_prefix}Reset to factory defaults$kernel_name\" '               Erase all settings and restore the original IGEL OS' '               configuration.' {\n\
++				set gfxpayload=keep\n\
++				insmod part_igel\n\
++				linux $kernel systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
++			}\n\
++			\n\
++			menuentry \"${menu_prefix}Custom boot command$kernel_name\" '               Boot with custom kernel options for' '               troubleshooting.' {\n\
++				set gfxpayload=keep\n\
++				insmod part_igel\n\
++				linux $kernel igel_syslog=quiet quiet %s %s %s\n\
++			}\n\
+ 		}\n\
+ 	}\n\
+ fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, splash, cmdline, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, bootcmd_fltr);
+@@ -1008,7 +1023,7 @@
+   else {
+     grub_snprintf((char *) *content, content_size, "%s\n\
+ if [ \"$show_menu\" != \"\" ]; then\n\
+-	set timeout=5\n\
++	set timeout=10\n\
+ 	set timeout_style=menu\n\
+ else\n\
+ 	set timeout=1\n\
+Index: grub2/include/grub/menu.h
+===================================================================
+--- grub2.orig/include/grub/menu.h	2026-05-05 15:10:19.219823000 +0200
++++ grub2/include/grub/menu.h	2026-05-05 15:10:19.215822842 +0200
+@@ -32,6 +32,10 @@
+   /* The title name.  */
+   const char *title;
+ 
++  /* The explanation text.  */
++  const char *etext_1;
++  const char *etext_2;
++
+   /* The identifier.  */
+   const char *id;
+ 
+Index: grub2/grub-core/normal/main.c
+===================================================================
+--- grub2.orig/grub-core/normal/main.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/normal/main.c	2026-05-05 15:10:19.215822842 +0200
+@@ -70,6 +70,8 @@
+       grub_free ((void *) entry->id);
+       grub_free ((void *) entry->users);
+       grub_free ((void *) entry->title);
++      grub_free ((void *) entry->etext_1);
++      grub_free ((void *) entry->etext_2);
+       grub_free ((void *) entry->sourcecode);
+       grub_free (entry);
+       entry = next_entry;
+Index: grub2/grub-core/normal/menu_text.c
+===================================================================
+--- grub2.orig/grub-core/normal/menu_text.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/normal/menu_text.c	2026-05-05 15:10:19.215822842 +0200
+@@ -219,8 +219,14 @@
+ {
+   const char *title;
+   grub_size_t title_len;
+-  grub_ssize_t len;
++  grub_ssize_t len[3];
+   grub_uint32_t *unicode_title;
++  const char *etext_1;
++  grub_size_t etext_len_1;
++  grub_uint32_t *unicode_etext_1;
++  const char *etext_2;
++  grub_size_t etext_len_2;
++  grub_uint32_t *unicode_etext_2;
+   grub_ssize_t i;
+   grub_uint8_t old_color_normal, old_color_highlight;
+ 
+@@ -231,15 +237,47 @@
+     /* XXX How to show this error?  */
+     return;
+ 
+-  len = grub_utf8_to_ucs4 (unicode_title, title_len,
++  len[0] = grub_utf8_to_ucs4 (unicode_title, title_len,
+                            (grub_uint8_t *) title, -1, 0);
+-  if (len < 0)
++  if (len[0] < 0)
+     {
+       /* It is an invalid sequence.  */
+       grub_free (unicode_title);
+       return;
+     }
+ 
++  etext_1 = (entry && entry->etext_1) ? entry->etext_1 : "";
++  etext_len_1 = grub_strlen (etext_1);
++  unicode_etext_1 = grub_calloc ((etext_len_1 + 1), sizeof (*unicode_etext_1));
++  if (! unicode_etext_1)
++    /* XXX How to show this error?  */
++    return;
++
++  len[1] = grub_utf8_to_ucs4 (unicode_etext_1, etext_len_1,
++                           (grub_uint8_t *) etext_1, -1, 0);
++  if (len[1] < 0)
++    {
++      /* It is an invalid sequence.  */
++      grub_free (unicode_etext_1);
++      return;
++    }
++
++  etext_2 = (entry && entry->etext_2) ? entry->etext_2 : "";
++  etext_len_2 = grub_strlen (etext_2);
++  unicode_etext_2 = grub_calloc ((etext_len_2 + 1), sizeof (*unicode_etext_2));
++  if (! unicode_etext_2)
++    /* XXX How to show this error?  */
++    return;
++
++  len[2] = grub_utf8_to_ucs4 (unicode_etext_2, etext_len_2,
++                           (grub_uint8_t *) etext_2, -1, 0);
++  if (len[2] < 0)
++    {
++      /* It is an invalid sequence.  */
++      grub_free (unicode_etext_2);
++      return;
++    }
++
+   old_color_normal = grub_term_normal_color;
+   old_color_highlight = grub_term_highlight_color;
+   grub_term_normal_color = grub_color_menu_normal;
+@@ -251,16 +289,40 @@
+   grub_term_gotoxy (data->term, (struct grub_term_coordinate) {
+       data->geo.first_entry_x, y });
+ 
+-  for (i = 0; i < len; i++)
++  for (i = 0; i < len[0]; i++)
+     if (unicode_title[i] == '\n' || unicode_title[i] == '\b'
+ 	|| unicode_title[i] == '\r' || unicode_title[i] == '\e')
+       unicode_title[i] = ' ';
+ 
++  for (i = 0; i < len[1]; i++)
++    if (unicode_etext_1[i] == '\n' || unicode_etext_1[i] == '\b'
++	|| unicode_etext_1[i] == '\r' || unicode_etext_1[i] == '\e')
++      unicode_etext_1[i] = ' ';
++
++  for (i = 0; i < len[2]; i++)
++    if (unicode_etext_2[i] == '\n' || unicode_etext_2[i] == '\b'
++	|| unicode_etext_2[i] == '\r' || unicode_etext_2[i] == '\e')
++      unicode_etext_2[i] = ' ';
++
+   if (data->geo.num_entries > 1)
+     grub_putcode (highlight ? '*' : ' ', data->term);
+ 
+   grub_print_ucs4_menu (unicode_title,
+-			unicode_title + len,
++			unicode_title + len[0],
++			0,
++			data->geo.right_margin,
++			data->term, 0, 1,
++			GRUB_UNICODE_RIGHTARROW, 0);
++
++  grub_print_ucs4_menu (unicode_etext_1,
++			unicode_etext_1 + len[1],
++			0,
++			data->geo.right_margin,
++			data->term, 0, 1,
++			GRUB_UNICODE_RIGHTARROW, 0);
++
++  grub_print_ucs4_menu (unicode_etext_2,
++			unicode_etext_2 + len[2],
+ 			0,
+ 			data->geo.right_margin,
+ 			data->term, 0, 1,
+@@ -276,6 +338,8 @@
+ 
+   grub_term_setcolorstate (data->term, GRUB_TERM_COLOR_NORMAL);
+   grub_free (unicode_title);
++  grub_free (unicode_etext_1);
++  grub_free (unicode_etext_2);
+ }
+ 
+ static void
+Index: grub2/grub-core/gfxmenu/gui_list.c
+===================================================================
+--- grub2.orig/grub-core/gfxmenu/gui_list.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/gfxmenu/gui_list.c	2026-05-05 15:10:40.288653007 +0200
+@@ -24,6 +24,7 @@
+ #include <grub/gfxmenu_view.h>
+ #include <grub/gfxwidgets.h>
+ #include <grub/color.h>
++#include <grub/env.h>
+ 
+ enum scrollbar_slice_mode {
+   SCROLLBAR_SLICE_WEST,
+@@ -49,6 +50,7 @@
+   grub_font_t item_font;
+   int selected_item_font_inherit;
+   grub_font_t selected_item_font;
++  grub_font_t item_font_etext;
+   grub_video_rgba_color_t item_color;
+   int selected_item_color_inherit;
+   grub_video_rgba_color_t selected_item_color;
+@@ -360,10 +362,14 @@
+ 
+   int cwidth = oviewport.width - 2 * boxpad;
+ 
+-  itembox->set_content_size (itembox, cwidth - item_border_width,
+-                             text_box_height);
+-  selbox->set_content_size (selbox, cwidth - sel_border_width,
+-                            text_box_height);
++  {
++    const char *dualboot = grub_env_get ("dualboot");
++    int extra = (dualboot != NULL && dualboot[0] == '1') ? 40 : 0;
++    itembox->set_content_size (itembox, cwidth - item_border_width,
++                               text_box_height + extra);
++    selbox->set_content_size (selbox, cwidth - sel_border_width,
++                              text_box_height + extra);
++  }
+ 
+   int text_left_offset = self->icon_width + icon_text_space;
+   int item_text_top_offset = (text_box_height - (ascent + descent)) / 2 + ascent;
+@@ -443,6 +449,111 @@
+                              text_top_offset);
+       grub_gui_restore_viewport (&svpsave);
+ 
++      const char *item_etext_1 =
++        grub_menu_get_entry (self->view->menu, menu_index)->etext_1;
++
++      sviewport.x -= self->icon_width;
++      sviewport.height += 32;
++      sviewport.width = viewport_width + self->icon_width;
++      grub_gui_set_viewport (&sviewport, &svpsave);
++      if (item_etext_1)
++      {
++        int etext_max = viewport_width + self->icon_width;
++        grub_uint32_t full_w = grub_font_get_string_width (self->item_font_etext,
++                                                            item_etext_1);
++        if ((int)full_w <= etext_max)
++          {
++            grub_font_draw_string (item_etext_1,
++                                   self->item_font_etext,
++                                   color,
++                                   0,
++                                   (text_top_offset+32));
++          }
++        else if (full_w > 0)
++          {
++            /* Single measurement + integer math – no repeated font calls.
++             * Since the font is monospaced, each character has a width of LW / L pixels.
++             * The total amount of characters we can fit per line is floor (M / (LW / L)).
++             * Written another way, this is floor ((M * L) / LW).
++             * With integer arithmetic, this is simplified to (M * L) / LW
++             * here: M = etext_max; L = elen; LW = full_w
++             */
++            grub_size_t elen = grub_strlen (item_etext_1);
++            grub_size_t keep = elen * (grub_size_t)etext_max / (grub_size_t)full_w;
++            if (keep > 0)
++              {
++                char *ebuf = grub_malloc (keep + 1);
++                if (ebuf)
++                  {
++                    grub_memcpy (ebuf, item_etext_1, keep);
++                    ebuf[keep] = '\0';
++                    grub_font_draw_string (ebuf,
++                                           self->item_font_etext,
++                                           color,
++                                           0,
++                                           (text_top_offset+32));
++                    grub_free (ebuf);
++                  }
++                /* On malloc failure: skip draw. Never draw overflowing string. */
++              }
++          }
++      }
++      grub_gui_restore_viewport (&svpsave);
++
++      const char *item_etext_2 =
++        grub_menu_get_entry (self->view->menu, menu_index)->etext_2;
++
++      sviewport.height += 18;
++      grub_gui_set_viewport (&sviewport, &svpsave);
++      if (item_etext_2)
++      {
++        int etext_max = viewport_width + self->icon_width;
++        grub_uint32_t full_w = grub_font_get_string_width (self->item_font_etext,
++                                                            item_etext_2);
++        if ((int)full_w <= etext_max)
++          {
++            grub_font_draw_string (item_etext_2,
++                                   self->item_font_etext,
++                                   color,
++                                   0,
++                                   (text_top_offset+50));
++          }
++        else if (full_w > 0)
++          {
++            /* Single measurement + integer math – no repeated font calls.
++             * Since the font is monospaced, each character has a width of LW / L pixels.
++             * The total amount of characters we can fit per line is floor (M / (LW / L)).
++             * Written another way, this is floor ((M * L) / LW).
++             * With integer arithmetic, this is simplified to (M * L) / LW
++             * here: M = etext_max; L = elen; LW = full_w
++             */
++            grub_size_t elen = grub_strlen (item_etext_2);
++            grub_size_t keep = elen * (grub_size_t)etext_max / (grub_size_t)full_w;
++            if (keep > 0)
++              {
++                char *ebuf = grub_malloc (keep + 1);
++                if (ebuf)
++                  {
++                    grub_memcpy (ebuf, item_etext_2, keep);
++                    ebuf[keep] = '\0';
++                    grub_font_draw_string (ebuf,
++                                           self->item_font_etext,
++                                           color,
++                                           0,
++                                           (text_top_offset+50));
++                    grub_free (ebuf);
++                  }
++                /* On malloc failure: skip draw. Never draw overflowing string. */
++              }
++          }
++      }
++      grub_gui_restore_viewport (&svpsave);
++
++      /* reset viewport items for next entry */
++      sviewport.x += self->icon_width;
++      sviewport.height = text_box_height;
++      sviewport.width = viewport_width;
++
+       item_top += text_box_height + item_vspace;
+     }
+   grub_video_set_viewport (oviewport.x,
+@@ -666,6 +777,10 @@
+       if (self->selected_item_font_inherit)
+         self->selected_item_font = self->item_font;
+     }
++  else if (grub_strcmp (name, "item_font_etext") == 0)
++    {
++      self->item_font_etext = grub_font_get (value);
++    }
+   else if (grub_strcmp (name, "selected_item_font") == 0)
+     {
+       if (! value || grub_strcmp (value, "inherit") == 0)
+@@ -908,6 +1023,7 @@
+   self->item_icon_space = 4;
+   self->item_spacing = 16;
+   self->item_font = default_font;
++  self->item_font_etext = default_font;
+   self->selected_item_font_inherit = 1; /* Default to using the item_font.  */
+   self->selected_item_font = default_font;
+   self->item_color = default_fg_color;
+Index: grub2/grub-core/term/gfxterm.c
+===================================================================
+--- grub2.orig/grub-core/term/gfxterm.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/term/gfxterm.c	2026-05-05 15:10:19.215822842 +0200
+@@ -343,6 +343,16 @@
+   if (err)
+     return err;
+ 
++  /* set theme file depending on resolution */
++  if (mode_info.width >= 1920)
++          grub_env_set("themefile", "theme_1920x");
++  else if (mode_info.width >= 1280)
++          grub_env_set("themefile", "theme_1280x");
++  else if (mode_info.width >= 1024)
++          grub_env_set("themefile", "theme_1024x");
++  else
++          grub_env_set("themefile", "theme_800x");
++
+   grub_video_set_active_render_target (GRUB_VIDEO_RENDER_TARGET_DISPLAY);
+ 
+   double_redraw = mode_info.mode_type & GRUB_VIDEO_MODE_TYPE_DOUBLE_BUFFERED
+Index: grub2/grub-core/video/efi_gop.c
+===================================================================
+--- grub2.orig/grub-core/video/efi_gop.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/video/efi_gop.c	2026-05-05 15:10:19.215822842 +0200
+@@ -370,9 +370,8 @@
+       err = grub_gop_get_preferred_mode (&preferred_width, &preferred_height);
+       if (err || preferred_width >= 4096 || preferred_height >= 4096)
+ 	{
+-	  /* lang@igel: instead of 800x600 use 1024x768 for fall back */
+-	  preferred_width = 1024;
+-	  preferred_height = 768;
++	  preferred_width = 800;
++	  preferred_height = 600;
+ 	  grub_errno = GRUB_ERR_NONE;
+ 	}
+     }
+Index: grub2/grub-core/video/i386/pc/vbe.c
+===================================================================
+--- grub2.orig/grub-core/video/i386/pc/vbe.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/video/i386/pc/vbe.c	2026-05-05 15:10:19.215822842 +0200
+@@ -1002,9 +1002,9 @@
+ 	     mode supported by the graphics card may not be safe for the
+ 	     display device.  */
+ 	  grub_errno = GRUB_ERR_NONE;
+-	  /* lang@igel: instead of 640x480 use 1024x768 for fall back */
+-	  width = 1024;
+-	  height = 768;
++	  /* petersen@igel: instead of 640x480 use 800x600 for fall back */
++	  width = 800;
++	  height = 600;
+ 	}
+     }
+ 
+Index: grub2/grub-core/commands/menuentry.c
+===================================================================
+--- grub2.orig/grub-core/commands/menuentry.c	2026-05-05 15:10:19.219823000 +0200
++++ grub2/grub-core/commands/menuentry.c	2026-05-05 15:10:19.215822842 +0200
+@@ -84,6 +84,8 @@
+   char **menu_args = NULL;
+   char *menu_users = NULL;
+   char *menu_title = NULL;
++  char *menu_etext_1 = NULL;
++  char *menu_etext_2 = NULL;
+   char *menu_sourcecode = NULL;
+   char *menu_id = NULL;
+   struct grub_menu_entry_class *menu_classes = NULL;
+@@ -149,6 +151,12 @@
+   if (! menu_title)
+     goto fail;
+ 
++  if (argc >= 2)
++      menu_etext_1 = grub_strdup (args[1]);
++
++  if (argc >= 3)
++      menu_etext_2 = grub_strdup (args[2]);
++
+   menu_id = grub_strdup (id ? : menu_title);
+   if (! menu_id)
+     goto fail;
+@@ -178,6 +186,8 @@
+     goto fail;
+ 
+   (*last)->title = menu_title;
++  (*last)->etext_1 = menu_etext_1;
++  (*last)->etext_2 = menu_etext_2;
+   (*last)->id = menu_id;
+   (*last)->hotkey = menu_hotkey;
+   (*last)->classes = menu_classes;
+@@ -211,6 +221,8 @@
+ 
+   grub_free (menu_users);
+   grub_free (menu_title);
++  grub_free (menu_etext_1);
++  grub_free (menu_etext_2);
+   grub_free (menu_id);
+   return grub_errno;
+ }

@@ -1,0 +1,44 @@
+IGEL_FIX_ELO_I2_WIFI_ISSUE
+	  Fixed WiFi PCI issue for Elo i2.
+
+	  Source: upstream-kernel-reverted
+	  Version: 6.3
+	  Commit: 92597f97a40bf661bebceb92e26ff87c76d562d4
+diff --git a/drivers/pci/pci.c b/drivers/pci/pci.c
+index 0b6a23405f16..01423189342c 100644
+--- a/drivers/pci/pci.c
+@@ -2958,6 +2958,34 @@ static const struct dmi_system_id bridge_d3_blacklist[] = {
+ 			DMI_MATCH(DMI_BOARD_VERSION, "Continental Z2"),
+ 		},
+ 	},
++#ifdef CONFIG_IGEL_FIX_ELO_I2_WIFI_ISSUE
++	{
++		/*
++		* Downstream device is not accessible after putting a root port
++		* into D3cold and back into D0 on Elo i2.
++		*/
++		.ident = "Elo i2",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Elo Touch Solutions"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Elo i2"),
++			DMI_MATCH(DMI_PRODUCT_VERSION, "RevB"),
++		},
++	},
++#endif
++#ifdef CONFIG_IGEL_FIX_MT183_WIFI_ISSUE
++	{
++		/*
++		* Downstream device is not accessible after putting a root port
++		* into D3cold and back into D0 on mt183.
++		*/
++		.ident = "mt183",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Atrust Computer Corp."),
++			DMI_MATCH(DMI_PRODUCT_NAME, "mt183"),
++			DMI_MATCH(DMI_PRODUCT_VERSION, "1.0"),
++		},
++	},
++#endif
+ 	{
+ 		/*
+ 		 * Changing power state of root port dGPU is connected fails

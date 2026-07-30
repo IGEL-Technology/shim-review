@@ -1,0 +1,110 @@
+IGEL_SPLASH_FIX
+	  The IGEL bootsplash is shown after grub if you start a vga console
+	  then the splash get distorted. To avoid this we disable the VGA
+	  console until the X is started or DRM driver is loaded. In some
+	  cases this could be problematic so you can also disable this
+	  behaviour here.
+
+	  Source: IGEL
+diff --git a/drivers/video/console/vgacon.c b/drivers/video/console/vgacon.c
+index 37bd18730fe0..dfe945f6c396 100644
+--- a/drivers/video/console/vgacon.c
+@@ -94,6 +94,31 @@ static struct screen_info *vga_si;
+ static bool vga_hardscroll_enabled;
+ static bool vga_hardscroll_user_enable = true;
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++/* lang@igel.de: splash=<modenr> is set by our bootcode if splash is active */
++static int splash_mode = 0;
++
++static int __init setup_splash_mode(char *str)
++{
++	if (splash_mode == 0)
++		get_option(&str, &splash_mode);
++	return 1;
++}
++__setup("splash=", setup_splash_mode);
++
++/* gottwald@igel.com : make it possible to disable the splash fix with boot
++ *                     options as this could cause some problem in virtualized
++ *                     environments */
++
++static int __init no_splash_fix(char *str)
++{
++	splash_mode = -1;
++	return 1;
++}
++
++__setup("no_igel_splash_fix", no_splash_fix);
++#endif
++
+ static int __init no_scroll(char *str)
+ {
+ 	/*
+diff --git a/drivers/video/console/vgacon.c b/drivers/video/console/vgacon.c
+index 37bd18730fe0..dfe945f6c396 100644
+--- a/drivers/video/console/vgacon.c
+@@ -199,6 +224,14 @@ static const char *vgacon_startup(void)
+ #endif
+ 	}
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++	/* lang@igel.de: if splash is active do not configure a VGA console,
++	   because the boot splash is corrupted by a VGA console */
++	if (splash_mode > 0) {
++		goto no_vga;
++	}
++#endif
++
+ 	/* vga_si reasonably initialized? */
+ 	if ((vga_si->orig_video_lines == 0) ||
+ 	    (vga_si->orig_video_cols  == 0))
+diff --git a/drivers/video/fbdev/core/fbcon.c b/drivers/video/fbdev/core/fbcon.c
+index 8baad7ec1b85..f05259bdbb2e 100644
+--- a/drivers/video/fbdev/core/fbcon.c
+@@ -279,6 +279,30 @@ static int fbcon_get_rotate(struct fb_info *info)
+ 	return (par) ? par->rotate : 0;
+ }
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++static int igel_splash_fix = 1;
++
++/* lang@igel: our bootcode shows a boot splash, the splash
++   should not be destroyed by a frame buffer console */
++static inline int fbcon_fix_igel_splash(struct vc_data *vc)
++{
++	if (vc->vc_num != 0 || fg_console != 0 || ! (*vc->vc_display_fg == vc))
++		return 0;
++	/* remove splash fix after x server was started */
++	if (vc->vc_mode == KD_GRAPHICS) {
++		igel_splash_fix = 0;
++		printk("fbcon: remove igel boot splash fix\n");
++		return 0;
++	}
++	/* show the message only once ! */
++	if (igel_splash_fix == 1) {
++		printk("fbcon: fix igel boot splash\n");
++		igel_splash_fix = 2;
++	}
++	return (1);
++}
++#endif
++
+ static bool fbcon_skip_panic(struct fb_info *info)
+ {
+ 	return (info->skip_panic && unlikely(panic_in_progress()));
+diff --git a/drivers/video/fbdev/core/fbcon.c b/drivers/video/fbdev/core/fbcon.c
+index 8baad7ec1b85..f05259bdbb2e 100644
+--- a/drivers/video/fbdev/core/fbcon.c
+@@ -288,6 +312,11 @@ static inline bool fbcon_is_active(struct vc_data *vc, struct fb_info *info)
+ {
+ 	struct fbcon_par *par = info->fbcon_par;
+ 
++#ifdef CONFIG_IGEL_SPLASH_FIX
++	if (igel_splash_fix && fbcon_fix_igel_splash(vc))
++		return 0;
++#endif
++
+ 	return info->state == FBINFO_STATE_RUNNING &&
+ 		vc->vc_mode == KD_TEXT && !par->graphics && !fbcon_skip_panic(info);
+ }

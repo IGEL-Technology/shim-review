@@ -1,0 +1,27 @@
+IGEL_AMD_WORKAROUND_XHCI_S3_ISSUES
+	  Sometimes the wakeup of some AMD devices won't work due to a XHCI issue
+	  this option should fix the issue.
+
+	  Source: AMD
+diff --git a/drivers/usb/host/xhci-pci.c b/drivers/usb/host/xhci-pci.c
+index f67a4d956204..8a5141fd442b 100644
+--- a/drivers/usb/host/xhci-pci.c
+@@ -323,10 +323,18 @@ static void xhci_pci_quirks(struct device *dev, struct xhci_hcd *xhci)
+ 	    (pdev->device == 0x15e0 || pdev->device == 0x15e1))
+ 		xhci->quirks |= XHCI_SNPS_BROKEN_SUSPEND;
+ 
++#ifdef CONFIG_IGEL_AMD_WORKAROUND_XHCI_S3_ISSUES
++	if (pdev->vendor == PCI_VENDOR_ID_AMD &&
++            (pdev->device == 0x15e0 || pdev->device == 0x15e1 || pdev->device == 0x15e5)) {
++		xhci->quirks |= XHCI_DISABLE_SPARSE;
++		xhci->quirks |= XHCI_RESET_ON_RESUME;
++	}
++#else
+ 	if (pdev->vendor == PCI_VENDOR_ID_AMD && pdev->device == 0x15e5) {
+ 		xhci->quirks |= XHCI_DISABLE_SPARSE;
+ 		xhci->quirks |= XHCI_RESET_ON_RESUME;
+ 	}
++#endif
+ 
+ 	if (pdev->vendor == PCI_VENDOR_ID_AMD && pdev->device == 0x43f7)
+ 		xhci->quirks |= XHCI_DEFAULT_PM_RUNTIME_ALLOW;

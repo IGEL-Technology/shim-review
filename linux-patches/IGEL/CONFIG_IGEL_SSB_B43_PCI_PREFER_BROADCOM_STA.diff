@@ -1,0 +1,38 @@
+IGEL_SSB_B43_PCI_PREFER_BROADCOM_STA
+	  Switch of hardware detection (PCI ID) for hardware devices
+	  which are handled by the broadcom sta driver.
+
+	  Source: IGEL
+diff --git a/drivers/ssb/b43_pci_bridge.c b/drivers/ssb/b43_pci_bridge.c
+index 9c7316b5685f..988d91957f95 100644
+--- a/drivers/ssb/b43_pci_bridge.c
+@@ -21,9 +21,12 @@ static const struct pci_device_id b43_pci_bridge_tbl[] = {
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4301) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4306) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4307) },
++	/* gobbo@igel.com support of Broadcom bcm943224hms WLAN Adapter in our UDC2 */
++#ifndef CONFIG_IGEL_SSB_B43_PCI_PREFER_BROADCOM_STA
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4311) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4312) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4315) },
++#endif
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4318) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BCM_GVC,  0x4318) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4319) },
+diff --git a/drivers/ssb/b43_pci_bridge.c b/drivers/ssb/b43_pci_bridge.c
+index 9c7316b5685f..988d91957f95 100644
+--- a/drivers/ssb/b43_pci_bridge.c
+@@ -33,10 +36,13 @@ static const struct pci_device_id b43_pci_bridge_tbl[] = {
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 43222) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4324) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4325) },
++	/* gobbo@igel.com support of Broadcom bcm943224hms WLAN Adapter in our UDC2 */
++#ifndef CONFIG_IGEL_SSB_B43_PCI_PREFER_BROADCOM_STA
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4328) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4329) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x432b) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x432c) },
++#endif
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4350) },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_BROADCOM, 0x4351) },
+ 	{ 0, },

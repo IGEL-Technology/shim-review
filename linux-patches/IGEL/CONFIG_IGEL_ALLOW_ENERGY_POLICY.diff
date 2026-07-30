@@ -1,0 +1,27 @@
+IGEL_ALLOW_ENERGY_POLICY
+	  The MSR lockdown prevent the use of x86_energy_perf_policy so no
+	  policy can be set. So change this to allow the setting of the policy
+	  also if lockdown is active.
+
+	  Source: IGEL
+diff --git a/arch/x86/kernel/msr.c b/arch/x86/kernel/msr.c
+index e17c16c54a37..46fbea8acf81 100644
+--- a/arch/x86/kernel/msr.c
+@@ -115,9 +115,17 @@ static ssize_t msr_write(struct file *file, const char __user *buf,
+ 	int err = 0;
+ 	ssize_t bytes = 0;
+ 
++#ifdef CONFIG_IGEL_ALLOW_ENERGY_POLICY
++	if ((reg != MSR_HWP_REQUEST_PKG && reg != MSR_PM_ENABLE && reg != MSR_IA32_MISC_ENABLE && reg != MSR_HWP_REQUEST) || count > 8) {
++		err = security_locked_down(LOCKDOWN_MSR);
++		if (err)
++			return err;
++	}
++#else
+ 	err = security_locked_down(LOCKDOWN_MSR);
+ 	if (err)
+ 		return err;
++#endif
+ 
+ 	err = filter_write(reg);
+ 	if (err)

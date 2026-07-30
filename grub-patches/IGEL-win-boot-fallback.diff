@@ -1,0 +1,440 @@
+Index: grub2/grub-core/commands/efi/win-bootnext.c
+===================================================================
+--- /dev/null
++++ grub2/grub-core/commands/efi/win-bootnext.c
+@@ -0,0 +1,392 @@
++#include <grub/types.h>
++#include <grub/mm.h>
++#include <grub/misc.h>
++#include <grub/dl.h>
++#include <grub/command.h>
++#include <grub/env.h>
++#include <grub/device.h>
++#include <grub/disk.h>
++#include <grub/charset.h>
++#include <grub/efi/api.h>
++#include <grub/efi/efi.h>
++#include <grub/efi/disk.h>
++#include <grub/i18n.h>
++
++GRUB_MOD_LICENSE ("GPLv3+");
++
++/* EFI_LOAD_OPTION attribute (UEFI spec, "LOAD_OPTION_ACTIVE").  */
++#define LOAD_OPTION_ACTIVE		0x00000001
++
++/* The standard description Windows uses for its firmware boot entry.  The
++ * exact string is required so that find_win_boot_id detects the entry on the
++ * next boot.  */
++#define WIN_BOOT_DESCRIPTION		"Windows Boot Manager"
++
++/* Standard path of the Windows EFI boot loader on the EFI system partition. */
++#define WIN_BOOTMGR_PATH		"\\EFI\\Microsoft\\Boot\\bootmgfw.efi"
++
++/* Highest Boot#### slot to probe when looking for a free one.  Matches the
++ * range scanned by find_win_boot_id/find_udp_boot_id.  */
++#define WINBOOTNEXT_MAX_SLOTS		12288
++
++/* Upper bound on the size (in bytes) of the firmware-provided partition device
++ * path.  Used to keep the walk over untrusted firmware data bounded should the
++ * path be corrupt or lack a terminating End node.  */
++#define WINBOOTNEXT_MAX_DP_SIZE		4096
++
++static const grub_efi_uint32_t efi_boot_var_attr =
++  GRUB_EFI_VARIABLE_NON_VOLATILE
++  | GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS
++  | GRUB_EFI_VARIABLE_RUNTIME_ACCESS;
++
++/* Build a full device path pointing at the Windows boot loader by appending a
++ * File Path media node (and a terminating End node) to the device path of the
++ * EFI system partition.  */
++static grub_efi_device_path_t *
++create_file_device_path (grub_efi_device_path_t *dp, grub_size_t *out_size)
++{
++  grub_efi_char16_t *fn16 = NULL;
++  grub_ssize_t fn16_len;
++  grub_size_t dp_size = 0, file_node_len, total;
++  grub_efi_device_path_t *p, *result, *end;
++  grub_efi_file_path_device_path_t *fp;
++
++  /* Length of the partition device path, excluding its End node.
++   *
++   * Do not use GRUB_EFI_END_ENTIRE_DEVICE_PATH() as the loop guard: that macro
++   * also reports any node shorter than the fixed header as an end marker, so a
++   * truncated/malformed firmware node would be silently accepted and the path
++   * quietly truncated.  Validate every node explicitly instead, only stop at a
++   * genuine End Of Entire Device Path node, and bound the walk so corrupt data
++   * without a terminator cannot run away.  */
++  for (p = dp; ; )
++    {
++      grub_size_t len;
++
++      if (p == NULL)
++        return NULL;
++
++      len = GRUB_EFI_DEVICE_PATH_LENGTH (p);
++
++      /* Reject any node too short to even hold the fixed header.  */
++      if (len < sizeof (grub_efi_device_path_t))
++        return NULL;
++
++      /* Stop only at a well-formed End Of Entire Device Path node.  */
++      if (GRUB_EFI_DEVICE_PATH_TYPE (p) == GRUB_EFI_END_DEVICE_PATH_TYPE
++	  && (GRUB_EFI_DEVICE_PATH_SUBTYPE (p)
++	      == GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE))
++        break;
++
++      dp_size += len;
++      if (dp_size > WINBOOTNEXT_MAX_DP_SIZE)
++        return NULL;
++
++      p = (grub_efi_device_path_t *) ((grub_uint8_t *) p + len);
++    }
++
++  fn16_len = grub_utf8_to_utf16_alloc (WIN_BOOTMGR_PATH, &fn16, NULL);
++  if (fn16_len < 0 || fn16 == NULL)
++    return NULL;
++
++  /* File Path node: header + UTF-16 path + NUL terminator.  */
++  file_node_len = sizeof (grub_efi_device_path_t)
++    + ((grub_size_t) fn16_len + 1) * sizeof (grub_efi_char16_t);
++
++  total = dp_size + file_node_len + sizeof (grub_efi_device_path_t);
++
++  result = grub_malloc (total);
++  if (result == NULL)
++    {
++      grub_free (fn16);
++      return NULL;
++    }
++
++  /* Copy the partition device path (without its End node).  */
++  grub_memcpy (result, dp, dp_size);
++
++  /* Append the File Path node.  */
++  fp = (grub_efi_file_path_device_path_t *) ((grub_uint8_t *) result + dp_size);
++  fp->header.type = GRUB_EFI_MEDIA_DEVICE_PATH_TYPE;
++  fp->header.subtype = GRUB_EFI_FILE_PATH_DEVICE_PATH_SUBTYPE;
++  fp->header.length = (grub_efi_uint16_t) file_node_len;
++  grub_memcpy (fp->path_name, fn16,
++	       (grub_size_t) fn16_len * sizeof (grub_efi_char16_t));
++  fp->path_name[fn16_len] = 0;
++  grub_free (fn16);
++
++  /* Append the End Of Device Path node.  */
++  end = (grub_efi_device_path_t *) ((grub_uint8_t *) fp + file_node_len);
++  end->type = GRUB_EFI_END_DEVICE_PATH_TYPE;
++  end->subtype = GRUB_EFI_END_ENTIRE_DEVICE_PATH_SUBTYPE;
++  end->length = sizeof (grub_efi_device_path_t);
++
++  *out_size = total;
++  return result;
++}
++
++/* Serialise an EFI_LOAD_OPTION as described by the UEFI specification:
++ *
++ *   UINT32          Attributes;
++ *   UINT16          FilePathListLength;
++ *   CHAR16          Description[];        // NUL terminated
++ *   EFI_DEVICE_PATH FilePathList[];
++ *   UINT8           OptionalData[];       // none here
++ *
++ * The structure is packed, so it is assembled byte-wise.  */
++static grub_uint8_t *
++create_load_option (grub_efi_device_path_t *fp, grub_size_t fp_size,
++		    grub_size_t *out_size)
++{
++  grub_efi_char16_t *desc16 = NULL;
++  grub_ssize_t desc16_len;
++  grub_size_t total, offset;
++  grub_uint8_t *buf;
++  grub_uint32_t attributes = LOAD_OPTION_ACTIVE;
++  grub_uint16_t fp_len16;
++
++  if (fp_size > 0xffff)
++    return NULL;
++  fp_len16 = (grub_uint16_t) fp_size;
++
++  desc16_len = grub_utf8_to_utf16_alloc (WIN_BOOT_DESCRIPTION, &desc16, NULL);
++  if (desc16_len < 0 || desc16 == NULL)
++    return NULL;
++
++  total = sizeof (attributes) + sizeof (fp_len16)
++    + ((grub_size_t) desc16_len + 1) * sizeof (grub_efi_char16_t)
++    + fp_size;
++
++  buf = grub_zalloc (total);
++  if (buf == NULL)
++    {
++      grub_free (desc16);
++      return NULL;
++    }
++
++  offset = 0;
++  grub_memcpy (buf + offset, &attributes, sizeof (attributes));
++  offset += sizeof (attributes);
++  grub_memcpy (buf + offset, &fp_len16, sizeof (fp_len16));
++  offset += sizeof (fp_len16);
++  grub_memcpy (buf + offset, desc16,
++	       (grub_size_t) desc16_len * sizeof (grub_efi_char16_t));
++  offset += (grub_size_t) desc16_len * sizeof (grub_efi_char16_t);
++  /* NUL terminator of the description is already zeroed by grub_zalloc.  */
++  offset += sizeof (grub_efi_char16_t);
++  grub_memcpy (buf + offset, fp, fp_size);
++  offset += fp_size;
++
++  grub_free (desc16);
++  *out_size = total;
++  return buf;
++}
++
++/* Locate the first unused Boot#### variable.  On success *slot_out is set to a
++ * free slot number, or to -1 if every slot in range is already in use.  A slot
++ * is treated as free only when the firmware specifically reports it as missing
++ * (GRUB_EFI_NOT_FOUND); any other read failure is propagated so that a valid
++ * firmware boot entry is never overwritten after an unrelated error.  */
++static grub_err_t
++find_free_boot_slot (const grub_guid_t *guid, int *slot_out)
++{
++  grub_uint32_t i;
++  char varname[16];
++  void *data;
++  grub_size_t size;
++  grub_efi_status_t status;
++
++  *slot_out = -1;
++
++  for (i = 0; i < WINBOOTNEXT_MAX_SLOTS; i++)
++    {
++      grub_snprintf (varname, sizeof (varname), "Boot%04X", i);
++      data = NULL;
++      size = 0;
++      status = grub_efi_get_variable (varname, guid, &size, &data);
++
++      if (status == GRUB_EFI_NOT_FOUND)
++        {
++          /* Slot is genuinely unused.  */
++          *slot_out = (int) i;
++          return GRUB_ERR_NONE;
++        }
++
++      if (status != GRUB_EFI_SUCCESS)
++        {
++          /* Allocation failure, device error, etc.  Must not be mistaken for
++           * a free slot.  */
++          grub_free (data);
++          grub_dprintf ("winboot",
++                        "error reading %s (EFI status 0x%" PRIxGRUB_UINT64_T ")\n",
++                        varname, (grub_uint64_t) status);
++          return GRUB_ERR_IO;
++        }
++
++      /* Slot exists and is in use.  */
++      grub_free (data);
++    }
++
++  return GRUB_ERR_NONE;
++}
++
++static grub_err_t
++grub_cmd_winbootnext (grub_command_t cmd __attribute__ ((unused)),
++		      int argc __attribute__ ((unused)),
++		      char **args __attribute__ ((unused)))
++{
++  grub_guid_t guid = GRUB_EFI_GLOBAL_VARIABLE_GUID;
++  const char *devname;
++  char *devbuf = NULL;
++  grub_device_t dev;
++  grub_efi_handle_t handle;
++  grub_efi_device_path_t *dp, *fp;
++  grub_uint8_t *loadopt;
++  grub_size_t fp_size = 0, lo_size = 0, len;
++  int slot;
++  grub_uint16_t slot16;
++  char varname[16];
++  grub_err_t err;
++
++  /* Target device: the EFI system partition recorded in the efidev env var.  */
++  devname = grub_env_get ("efidev");
++
++  if (devname == NULL || devname[0] == '\0')
++    {
++      grub_dprintf ("winboot", "no EFI system partition device given\n");
++      return GRUB_ERR_UNKNOWN_DEVICE;
++    }
++
++  /* efidev is stored parenthesised, e.g. "(hd0,gpt1)"; strip the parens.  */
++  if (devname[0] == '(')
++    {
++      devbuf = grub_strdup (devname + 1);
++      if (devbuf == NULL)
++        return grub_errno;
++      len = grub_strlen (devbuf);
++      if (len > 0 && devbuf[len - 1] == ')')
++        devbuf[len - 1] = '\0';
++      devname = devbuf;
++    }
++
++  /* Keep devbuf (which devname may point into) alive until every diagnostic
++   * that logs devname has run.  */
++  dev = grub_device_open (devname);
++  if (dev == NULL)
++    {
++      grub_free (devbuf);
++      return grub_errno;
++    }
++
++  if (dev->disk == NULL)
++    {
++      grub_device_close (dev);
++      grub_dprintf ("winboot", "`%s' is not a disk device\n", devname);
++      grub_free (devbuf);
++      return GRUB_ERR_BAD_DEVICE;
++    }
++
++  handle = grub_efidisk_get_device_handle (dev->disk);
++  if (handle == NULL)
++    {
++      grub_device_close (dev);
++      grub_dprintf ("winboot", "cannot get EFI handle for `%s'\n", devname);
++      grub_free (devbuf);
++      return GRUB_ERR_BAD_DEVICE;
++    }
++
++  dp = grub_efi_get_device_path (handle);
++  if (dp == NULL)
++    {
++      grub_device_close (dev);
++      grub_dprintf ("winboot", "cannot get EFI device path for `%s'\n", devname);
++      grub_free (devbuf);
++      return GRUB_ERR_BAD_DEVICE;
++    }
++
++  /* devname is no longer referenced past this point.  */
++  grub_free (devbuf);
++  devbuf = NULL;
++  devname = NULL;
++
++  fp = create_file_device_path (dp, &fp_size);
++  grub_device_close (dev);
++  if (fp == NULL)
++    {
++      grub_dprintf ("winboot", "failed to build device path (out of memory)\n");
++      return GRUB_ERR_OUT_OF_MEMORY;
++    }
++
++  loadopt = create_load_option (fp, fp_size, &lo_size);
++  grub_free (fp);
++  if (loadopt == NULL)
++    {
++      grub_dprintf ("winboot", "failed to build load option (out of memory)\n");
++      return GRUB_ERR_OUT_OF_MEMORY;
++    }
++
++  err = find_free_boot_slot (&guid, &slot);
++  if (err != GRUB_ERR_NONE)
++    {
++      grub_free (loadopt);
++      return err;
++    }
++  if (slot < 0)
++    {
++      grub_free (loadopt);
++      grub_dprintf ("winboot", "no free EFI Boot#### slot available\n");
++      return GRUB_ERR_OUT_OF_RANGE;
++    }
++  slot16 = (grub_uint16_t) slot;
++
++  /* Create the persistent (non-volatile) Boot#### entry.  */
++  grub_snprintf (varname, sizeof (varname), "Boot%04X", (unsigned) slot);
++  err = grub_efi_set_variable_with_attributes (varname, &guid, loadopt,
++					       lo_size, efi_boot_var_attr);
++  grub_free (loadopt);
++  if (err != GRUB_ERR_NONE)
++    {
++      grub_dprintf ("winboot", "failed to create %s (error %d)\n", varname, err);
++      return err;
++    }
++
++  grub_dprintf ("winboot", "created %s -> " WIN_BOOTMGR_PATH "\n", varname);
++
++  /* BootNext so the coming reboot boots straight into Windows.  BootNext is
++   * a one-shot override that firmware honours even when the entry is not listed
++   * in BootOrder, so BootOrder is deliberately left untouched: on this system a
++   * Windows-side application maintains/repairs BootOrder, and this command only
++   * provides the fallback boot entry when it is missing.  */
++  grub_dprintf ("winboot", "setting BootNext=%04X (%s)\n",
++		(unsigned) slot, varname);
++  err = grub_efi_set_variable_with_attributes ("BootNext", &guid, &slot16,
++					       sizeof (slot16),
++					       efi_boot_var_attr);
++  if (err != GRUB_ERR_NONE)
++    {
++      grub_dprintf ("winboot", "failed to set BootNext (error %d)\n", err);
++      return err;
++    }
++
++  grub_dprintf ("winboot", "BootNext set to %s, rebooting into Windows\n",
++		varname);
++
++  grub_reboot ();
++
++  return GRUB_ERR_NONE;
++}
++
++static grub_command_t cmd;
++
++GRUB_MOD_INIT (winbootnext)
++{
++  cmd = grub_register_command ("winbootnext", grub_cmd_winbootnext, 0,
++			       N_("Create a persistent Windows Boot Manager EFI "
++				  "boot entry and boot it via BootNext."));
++}
++
++GRUB_MOD_FINI (winbootnext)
++{
++  if (cmd)
++    grub_unregister_command (cmd);
++}
+Index: grub2/grub-core/fs/igelfs.c
+===================================================================
+--- grub2.orig/grub-core/fs/igelfs.c
++++ grub2/grub-core/fs/igelfs.c
+@@ -376,6 +376,9 @@ if [ ! -e %s/EFI/igel_no_bootnext ]; the
+       find_win_boot_id --set=bootid\n\
+       if [ \"$bootid\" != \"\" ]; then\n\
+          set_next_boot $bootid\n\
++      else\n\
++         insmod winbootnext\n\
++         winbootnext\n\
+       fi\n\
+    }\n\
+ else\n\
+@@ -410,6 +413,9 @@ menuentry 'Windows' 'Primary operation s
+    find_win_boot_id --set=bootid\n\
+    if [ \"$bootid\" != \"\" ]; then\n\
+       set_next_boot $bootid\n\
++   else\n\
++      insmod winbootnext\n\
++      winbootnext\n\
+    fi\n\
+ }\n\n", MAINT_MAX_BOOT_ATTEMPTS);
+       } else { /* emergency mode is active */
+Index: grub2/grub-core/Makefile.core.def
+===================================================================
+--- grub2.orig/grub-core/Makefile.core.def
++++ grub2/grub-core/Makefile.core.def
+@@ -808,6 +808,14 @@ module = {
+ };
+ 
+ module = {
++  name = winbootnext;
++
++  common = commands/efi/win-bootnext.c;
++
++  enable = efi;
++};
++
++module = {
+   name = lsacpi;
+ 
+   common = commands/lsacpi.c;

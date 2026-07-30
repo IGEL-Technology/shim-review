@@ -1,0 +1,28 @@
+IGEL_LVDS_CONNECTED_ON_TC215
+	  Fixed a problem in i915 driver which not detect the LVDS connected state
+	  on the TC215 hardware correctly so enforce connected state here.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_sdvo.c b/drivers/gpu/drm/i915/display/intel_sdvo.c
+index 6c032d81e7ee..abddf860c0c2 100644
+--- a/drivers/gpu/drm/i915/display/intel_sdvo.c
+@@ -2191,6 +2224,19 @@ intel_sdvo_detect(struct drm_connector *connector, bool force)
+ 		}
+ 	}
+ 
++#ifdef CONFIG_IGEL_LVDS_CONNECTED_ON_TC215
++	/* lang@igel.de: fix dual monitor with TC215 hardware */
++	if ((ret != connector_status_connected) &&
++	    (response & SDVO_LVDS_MASK)) {
++		struct intel_connector *intel_connector = to_intel_connector(connector);
++		if (intel_connector->panel.vbt.sdvo_lvds_vbt_mode != NULL) {
++			DRM_INFO("%s: set LVDS connector_status_connected "
++			  "- VBT mode available\n", SDVO_NAME(intel_sdvo));
++			ret = connector_status_connected;
++		}
++	}
++#endif
++
+ 	return ret;
+ }
+ 

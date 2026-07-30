@@ -1,0 +1,48 @@
+IGEL_HP_RFKILL_MT645_G7_FIX
+	  Fix issue with rfkill is switched on/off every 2-3 seconds if hp-wmi
+	  driver is loaded. This prevent the issue from happening.
+
+	  Source: IGEL
+diff --git a/drivers/platform/x86/hp/hp-wmi.c b/drivers/platform/x86/hp/hp-wmi.c
+index 550d4b39a92a..814d9f6783e2 100644
+--- a/drivers/platform/x86/hp/hp-wmi.c
+@@ -2062,12 +2062,39 @@ static int hp_wmi_hwmon_init(void);
+ static int __init hp_wmi_bios_setup(struct platform_device *device)
+ {
+ 	int err;
++#ifdef CONFIG_IGEL_HP_RFKILL_MT645_G7_FIX
++        const char *vendor = NULL;
++        const char *name = NULL;
++	int no_rfkill = 0;
++#endif
++
+ 	/* clear detected rfkill devices */
+ 	wifi_rfkill = NULL;
+ 	bluetooth_rfkill = NULL;
+ 	wwan_rfkill = NULL;
+ 	rfkill2_count = 0;
++#ifdef CONFIG_IGEL_HP_RFKILL_MT645_G7_FIX
++        vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++        name = dmi_get_system_info(DMI_PRODUCT_NAME);
++
++        if (vendor != NULL && name != NULL) {
++                if (strstr(vendor, "HP") &&
++                    strstr(name, "mt645 G7")) {
++                        no_rfkill = 1;
++                }
++        }
+ 
++	/*
++	 * In pre-2009 BIOS, command 1Bh return 0x4 to indicate that
++	 * BIOS no longer controls the power for the wireless
++	 * devices. All features supported by this command will no
++	 * longer be supported.
++	 */
++	if (!no_rfkill && !hp_wmi_bios_2009_later()) {
++		if (hp_wmi_rfkill_setup(device))
++			hp_wmi_rfkill2_setup(device);
++	}
++#else
+ 	/*
+ 	 * In pre-2009 BIOS, command 1Bh return 0x4 to indicate that
+ 	 * BIOS no longer controls the power for the wireless

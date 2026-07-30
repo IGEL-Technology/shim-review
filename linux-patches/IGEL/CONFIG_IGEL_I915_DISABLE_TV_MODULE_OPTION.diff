@@ -1,0 +1,114 @@
+IGEL_I915_DISABLE_TV_MODULE_OPTION
+	  Sometimes it is useful to be able to disable the TV support completely
+	  if there is a misdetection or so. This adds a kernel module parameter
+	  to the i915 module and enable TV as default.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_tv.c b/drivers/gpu/drm/i915/display/intel_tv.c
+index e3ab49815a3c..ca699e654b71 100644
+--- a/drivers/gpu/drm/i915/display/intel_tv.c
+@@ -36,6 +36,9 @@
+ #include <drm/drm_print.h>
+ #include <drm/drm_probe_helper.h>
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++#include "i915_drv.h"
++#endif
+ #include "intel_connector.h"
+ #include "intel_crtc.h"
+ #include "intel_de.h"
+diff --git a/drivers/gpu/drm/i915/display/intel_tv.c b/drivers/gpu/drm/i915/display/intel_tv.c
+index e3ab49815a3c..ca699e654b71 100644
+--- a/drivers/gpu/drm/i915/display/intel_tv.c
+@@ -1943,6 +1946,14 @@ intel_tv_init(struct intel_display *display)
+ 		return;
+ 	}
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++	/* lang@igel.de: Skip init if TV is disabled */
++	if (! i915_modparams.tv) {
++		DRM_INFO("Integrated TV is disabled by module parameter\n");
++		return;
++	}
++#endif
++
+ 	/*
+ 	 * Sanity check the TV output by checking to see if the
+ 	 * DAC register holds a value
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 37746dd619fd..3caf6115c0e3 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
+@@ -130,6 +130,55 @@ i915_param_named_unsafe(lmem_size, uint, 0400,
+ i915_param_named_unsafe(lmem_bar_size, uint, 0400,
+ 			"Set the lmem bar size(in MiB).");
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION
++i915_param_named(lvds, int, 0444,
++	"LVDS enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++i915_param_named(tv, int, 0444,
++	"TV enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION
++/* gottwald@igel.com: sometimes a dp is wrongly detected as edp which makes
++ * problems with hotplug. Try to determine this automatically failed so
++ * added module param to fix this. */
++i915_param_named(edp_is_dp, bool, 0444,
++	"eDP is DP (0 = disable, 1 = edp is dp)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION
++/* gottwald@igel.com: sometimes the max dp link speed is not detected correctly
++ * to prevent black screen issues this parameter can be used to limit the
++ * max DisplayPort link speed */
++i915_param_named(limit_dp_max_rate, int, 0644,
++	"DP port max link rate (0 = not set (default), 162000, 216000, 270000, 324000, 432000, 540000, 648000, 810000)");
++#endif
++
++/* gottwald@igel.com: some devices have problems with higher resolutions and
++ * DP audio where the screen will get black if the DP audio get initialized
++ * to be able to work around this you can use this option to disable DP audio.
++ * Add the same option for HDMI also just to be sure... */
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION
++i915_param_named(disable_dp_audio, bool, 0644,
++	"Disable DP audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
++i915_param_named(disable_hdmi_audio, bool, 0644,
++	"Disable HDMI audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION
++/* gottwald@igel.com: M250C workaround to fix color space limit problems */
++i915_param_named(m250c_no_limited_color_range, bool, 0444,
++	"Do not use limited color range for DP1 on M250C (0 = not set (default), 1 = do not use limited color range)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER
++i915_param_named(reverse_enum_order, bool, 0444,
++       "Reverse connector enumeration order (0 = not set (default), 1 = reverse order)");
++#endif
++
+ #if IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API)
+ i915_param_named(enable_debug_only_api, bool, 0400,
+ 		 "Enable support for unstable debug only userspace API. (default:false)");
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 0fbcb5b6d7bf..8a2959c8c8b7 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
+@@ -45,6 +45,14 @@ struct drm_printer;
+  * mode: debugfs file permissions, one of {0400, 0600, 0}, use 0 to not create
+  *       debugfs file
+  */
++#if ! defined(CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER)
+ #define I915_PARAMS_FOR_EACH(param) \
+ 	param(int, modeset, -1, 0400) \
+ 	param(int, enable_guc, -1, 0400) \

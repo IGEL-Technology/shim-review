@@ -1,0 +1,78 @@
+IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
+	  Add a kernel module option to disable DP MST support.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index 803b6fc360a0..fcdf7456bc45 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -250,6 +250,18 @@ extern bool pcie_p2p;
+ 
+ extern int amdgpu_tmz;
+ extern int amdgpu_reset_method;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++extern int amdgpu_use_fbc;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++extern int amdgpu_prefer_vram_over_gtt;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++extern int amdgpu_disable_mst_support;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++extern int amdgpu_support_edp0_on_dp1;
++#endif
+ 
+ #ifdef CONFIG_DRM_AMDGPU_SI
+ extern int amdgpu_si_support;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -235,6 +239,18 @@ int amdgpu_num_kcq = -1;
+ int amdgpu_smartshift_bias;
+ int amdgpu_use_xgmi_p2p = 1;
+ int amdgpu_vcnfw_log;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++int amdgpu_use_fbc = 0;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++int amdgpu_prefer_vram_over_gtt = -1;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++int amdgpu_disable_mst_support = 0;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++int amdgpu_support_edp0_on_dp1 = -1;
++#endif
+ int amdgpu_sg_display = -1; /* auto */
+ int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
+ int amdgpu_umsch_mm;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -1107,6 +1122,26 @@ MODULE_PARM_DESC(wbrf,
+ 	"Enable Wifi RFI interference mitigation (0 = disabled, 1 = enabled, -1 = auto(default)");
+ module_param_named(wbrf, amdgpu_wbrf, int, 0444);
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++MODULE_PARM_DESC(use_fbc, "Use framebuffer compression. (0=disable, 1=enable)");
++module_param_named(use_fbc, amdgpu_use_fbc, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++MODULE_PARM_DESC(prefer_vram_over_gtt, "Prefer use of VRAM over GTT (-1=auto, 0=disable, 1=enable)");
++module_param_named(prefer_vram_over_gtt, amdgpu_prefer_vram_over_gtt, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++MODULE_PARM_DESC(disable_mst, "Disable DP MST support (0=no (default), 1=yes)");
++module_param_named(disable_mst, amdgpu_disable_mst_support, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++MODULE_PARM_DESC(support_edp0_on_dp1, "Support eDP0 on DP1 (0 = disabled, 1 = enabled, -1 = auto(default)");
++module_param_named(support_edp0_on_dp1, amdgpu_support_edp0_on_dp1, int, 0644);
++#endif
++
+ /**
+  * DOC: rebar (int)
+  * Allow BAR resizing.  Disable this to prevent the driver from attempting

@@ -1,0 +1,93 @@
+IGEL_LG_AIO_MIC_FIXES
+	  Fix some issues with the microphone not working.
+
+	  Source: IGEL
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -2844,6 +2929,32 @@ static void alc274_fixup_hp_headset_mic(struct hda_codec *codec,
+ 	}
+ }
+ 
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++static void alc_fixup_lg_headphone(struct hda_codec *codec,
++				  const struct hda_fixup *fix, int action)
++{
++	if (action == HDA_FIXUP_ACT_PRE_PROBE) {
++		snd_hda_override_wcaps(codec, 0x19, get_wcaps(codec, 0x19) & ~AC_WCAP_IN_AMP);
++	
++//		alc_update_coef_idx(codec, 0x10, 0x000c, 2 << 2); // Line2 JD gate
++//		alc_update_coef_idx(codec, 0x1b, 0x0f00, 0xc << 8); // Analog JD
++		alc_write_coef_idx(codec, 0x1b, 0x0a4b);
++		alc_update_coef_idx(codec, 0x47, 0x00f0, 0xa << 4); // TD1 timing
++	
++//		if (!query_amp_caps(codec, 0x8, HDA_INPUT))
++			/* override the amp caps for capture generator */
++			snd_hda_override_amp_caps(codec, 0x08, HDA_INPUT,
++					  (0x01f << AC_AMPCAP_OFFSET_SHIFT) |
++					  (0x037 << AC_AMPCAP_NUM_STEPS_SHIFT) |  // 18db --> 0x3f-0x08=0x37
++										  // 6db  --> 0x3f-0x20=0x1f
++										  // 0db  --> 0x3f-0x28-0x17		
++					  (0x02 << AC_AMPCAP_STEP_SIZE_SHIFT) |
++					  (1 << AC_AMPCAP_MUTE_SHIFT));
++	}
++	
++}
++#endif
++
+ static void alc_fixup_no_int_mic(struct hda_codec *codec,
+ 				    const struct hda_fixup *fix, int action)
+ {
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -3920,6 +4060,10 @@ enum {
+ 	ALC285_FIXUP_HP_SPECTRE_X360,
+ 	ALC287_FIXUP_IDEAPAD_BASS_SPK_AMP,
+ 	ALC623_FIXUP_LENOVO_THINKSTATION_P340,
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++	ALC256_FIXUP_HEADPHONE_HEADSET,
++	ALC256_FIXUP_LG_AIO,
++#endif
+ 	ALC255_FIXUP_ACER_HEADPHONE_AND_MIC,
+ 	ALC236_FIXUP_HP_LIMIT_INT_MIC_BOOST,
+ 	ALC287_FIXUP_LEGION_15IMHG05_SPEAKERS,
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -5938,6 +6128,22 @@ static const struct hda_fixup alc269_fixups[] = {
+ 		.chained = true,
+ 		.chain_id = ALC283_FIXUP_HEADSET_MIC,
+ 	},
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++	[ALC256_FIXUP_HEADPHONE_HEADSET] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_lg_headphone,
++	},
++	[ALC256_FIXUP_LG_AIO] = {
++		.type = HDA_FIXUP_PINS,
++		.v.pins = (const struct hda_pintbl[]) {
++			{ 0x19, 0x04a11030 },
++			{ 0x21, 0x411111f0 },
++			{}
++		},
++		.chained = true,
++		.chain_id = ALC256_FIXUP_HEADPHONE_HEADSET,
++	},
++#endif
+ 	[ALC255_FIXUP_ACER_HEADPHONE_AND_MIC] = {
+ 		.type = HDA_FIXUP_PINS,
+ 		.v.pins = (const struct hda_pintbl[]) {
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -7517,6 +7744,9 @@ static const struct hda_quirk alc269_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0x17aa, 0x9e56, "Lenovo ZhaoYang CF4620Z", ALC286_FIXUP_SONY_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0x1849, 0x0269, "Positivo Master C6400", ALC269VB_FIXUP_ASUS_ZENBOOK),
+ 	SND_PCI_QUIRK(0x1849, 0x1233, "ASRock NUC Box 1100", ALC233_FIXUP_NO_AUDIO_JACK),
++#ifdef CONFIG_IGEL_LG_AIO_MIC_FIXES
++	SND_PCI_QUIRK(0x1854, 0x0345, "LG CL66 AIO", ALC256_FIXUP_ASUS_MIC_NO_PRESENCE),
++#endif
+ 	SND_PCI_QUIRK(0x1849, 0xa233, "Positivo Master C6300", ALC269_FIXUP_HEADSET_MIC),
+ 	SND_PCI_QUIRK(0x1854, 0x0440, "LG CQ6", ALC256_FIXUP_HEADPHONE_AMP_VOL),
+ 	SND_PCI_QUIRK(0x1854, 0x0441, "LG CQ6 AIO", ALC256_FIXUP_HEADPHONE_AMP_VOL),

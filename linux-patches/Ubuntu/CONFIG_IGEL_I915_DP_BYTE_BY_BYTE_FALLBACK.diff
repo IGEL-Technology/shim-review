@@ -1,0 +1,56 @@
+IGEL_I915_DP_BYTE_BY_BYTE_FALLBACK
+	  Some USB-C hubs and adapters have buggy firmware that causes multi-byte
+	  AUX reads from DPCD address 0x00000 to timeout while single-byte reads succeed.
+	  This option enables a fallback that reads DPCD capabilities byte-by-byte when
+	  the standard multi-byte read fails.
+
+	  Source: Ubuntu
+	  Commit: 84b049fd15e71ea3f67b7548cf279fc4dca49020
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 27f3716bdc1f..57d50320c449 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -212,6 +212,9 @@ static int intel_dp_init_lttpr(struct intel_dp *intel_dp, const u8 dpcd[DP_RECEI
+ int intel_dp_read_dprx_caps(struct intel_dp *intel_dp, u8 dpcd[DP_RECEIVER_CAP_SIZE])
+ {
+ 	struct intel_display *display = to_intel_display(intel_dp);
++#ifdef CONFIG_IGEL_I915_DP_BYTE_BY_BYTE_FALLBACK
++	int ret, i;
++#endif /* CONFIG_IGEL_I915_DP_BYTE_BY_BYTE_FALLBACK */
+ 
+ 	if (intel_dp_is_edp(intel_dp))
+ 		return 0;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 27f3716bdc1f..57d50320c449 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -225,8 +228,31 @@ int intel_dp_read_dprx_caps(struct intel_dp *intel_dp, u8 dpcd[DP_RECEIVER_CAP_S
+ 				      DP_LT_TUNABLE_PHY_REPEATER_FIELD_DATA_STRUCTURE_REV))
+ 			return -EIO;
+ 
++#ifdef CONFIG_IGEL_I915_DP_BYTE_BY_BYTE_FALLBACK
++	ret = drm_dp_read_dpcd_caps(&intel_dp->aux, dpcd);
++	if (ret == 0)
++		return 0;
++
++	/*
++	 * Workaround for USB-C hubs/adapters with buggy firmware that fail
++	 * multi-byte AUX reads from DPCD address 0x00000 but work with
++	 * single-byte reads. Known affected devices:
++	 * - Lenovo USB-C to VGA adapter (VIA VL817, idVendor=17ef, idProduct=7217)
++	 * - Dell DA310 USB-C hub (idVendor=413c, idProduct=c010)
++	 * Read the DPCD capabilities byte-by-byte as a fallback.
++	 */
++	for (i = 0; i < DP_RECEIVER_CAP_SIZE; i++) {
++		ret = drm_dp_dpcd_readb(&intel_dp->aux, DP_DPCD_REV + i, &dpcd[i]);
++		if (ret < 0)
++			return -EIO;
++	}
++
++	if (dpcd[DP_DPCD_REV] == 0)
++		return -EIO;
++#else
+ 	if (drm_dp_read_dpcd_caps(&intel_dp->aux, dpcd))
+ 		return -EIO;
++#endif /* CONFIG_IGEL_I915_DP_BYTE_BY_BYTE_FALLBACK */
+ 
+ 	return 0;
+ }

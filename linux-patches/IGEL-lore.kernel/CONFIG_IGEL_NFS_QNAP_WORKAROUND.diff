@@ -1,0 +1,28 @@
+IGEL_NFS_QNAP_WORKAROUND
+	  Some QNAP devices declare FS LOCATION support but did not really are
+	  capable of providing it which leads to a failed mount. With this
+	  option active we limit FS LOCATION to NFS v4.2 capable servers which
+	  solve the problem.
+
+	  Source: IGEL-lore.kernel
+	  URL: https://lore.kernel.org/linux-nfs/10d55787-7b97-8636-9426-73fdeda0a122@garloff.de/T/#m00027a668fc42bab7d771efa9d2b22047b2c66dc
+diff --git a/fs/nfs/nfs4proc.c b/fs/nfs/nfs4proc.c
+index 711812d83990..0a47924a7ab0 100644
+--- a/fs/nfs/nfs4proc.c
+@@ -4048,8 +4048,16 @@ static int _nfs4_server_capabilities(struct nfs_server *server, struct nfs_fh *f
+ 		if (res.attr_bitmask[2] & FATTR4_WORD2_SECURITY_LABEL)
+ 			server->caps |= NFS_CAP_SECURITY_LABEL;
+ #endif
++#ifdef CONFIG_IGEL_NFS_QNAP_WORKAROUND
++		/* Restrict FS_LOCATIONS to NFS v4.3+ to work aroundi Qnap knfsd-3.4.6 bug */
++		if (minorversion >= 3 && (res.attr_bitmask[0] & FATTR4_WORD0_FS_LOCATIONS))
++			server->caps |= NFS_CAP_FS_LOCATIONS;
++#else
+ 		if (res.attr_bitmask[0] & FATTR4_WORD0_FS_LOCATIONS)
+ 			server->caps |= NFS_CAP_FS_LOCATIONS;
++#endif
++		if (res.attr_bitmask[2] & FATTR4_WORD2_TIME_DELEG_MODIFY)
++			server->caps |= NFS_CAP_DELEGTIME;
+ 		if (!(res.attr_bitmask[0] & FATTR4_WORD0_FILEID))
+ 			server->fattr_valid &= ~NFS_ATTR_FATTR_FILEID;
+ 		if (!(res.attr_bitmask[1] & FATTR4_WORD1_MODE))

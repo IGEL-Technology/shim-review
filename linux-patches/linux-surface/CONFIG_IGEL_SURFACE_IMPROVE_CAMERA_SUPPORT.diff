@@ -1,0 +1,881 @@
+IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
+	  Enhanced support for more cameras.
+	  If your device is a detachable / hybrid laptop that comes
+	  with Windows installed by the OEM, for example:
+
+	       - Microsoft Surface models (except Surface Pro 3)
+	       - The Lenovo Miix line (for example the 510, 520, 710 and 720)
+	       - Dell 7285
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/acpi/scan.c b/drivers/acpi/scan.c
+index 50f60da6cf27..b851d277f59f 100644
+--- a/drivers/acpi/scan.c
+@@ -2205,6 +2205,11 @@ static acpi_status acpi_bus_check_add_2(acpi_handle handle, u32 lvl_not_used,
+ 
+ static void acpi_default_enumeration(struct acpi_device *device)
+ {
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (!acpi_dev_ready_for_enumeration(device))
++		return;
++#endif
++
+ 	/*
+ 	 * Do not enumerate devices with enumeration_by_parent flag set as
+ 	 * they will be enumerated by their respective parents.
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -39,6 +39,22 @@
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
+ 
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++#define IS_IPTS(pdev) ( \
++		((pdev)->vendor == PCI_VENDOR_ID_INTEL && (pdev)->device == 0x9D3E) || \
++		((pdev)->vendor == PCI_VENDOR_ID_INTEL && (pdev)->device == 0x34E4) \
++	)
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define IS_INTEL_IPU(pdev) ((pdev)->vendor == PCI_VENDOR_ID_INTEL &&	\
++			   ((pdev)->device == 0x9a19 ||		\
++			    (pdev)->device == 0x9a39 ||		\
++			    (pdev)->device == 0x4e19 ||		\
++			    (pdev)->device == 0x465d ||		\
++			    (pdev)->device == 0x1919))
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+ #define IOVA_START_ADDR		(0x1000)
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -209,12 +225,24 @@ int intel_iommu_sm = IS_ENABLED(CONFIG_INTEL_IOMMU_SCALABLE_MODE_DEFAULT_ON);
+ int intel_iommu_enabled = 0;
+ EXPORT_SYMBOL_GPL(intel_iommu_enabled);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++static int dmar_map_ipts = 1;
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++static int dmar_map_ipu = 1;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ static int intel_iommu_superpage = 1;
+ static int iommu_identity_mapping;
+ static int iommu_skip_te_disable;
+ static int disable_igfx_iommu;
+ 
+ #define IDENTMAP_AZALIA		4
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define IDENTMAP_IPU		8
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++#define IDENTMAP_IPTS		16
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
+ 
+ const struct iommu_ops intel_iommu_ops;
+ static const struct iommu_dirty_ops intel_dirty_ops;
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -1881,6 +1909,16 @@ static int device_def_domain_type(struct device *dev)
+ 
+ 		if ((iommu_identity_mapping & IDENTMAP_AZALIA) && IS_AZALIA(pdev))
+ 			return IOMMU_DOMAIN_IDENTITY;
++
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		if ((iommu_identity_mapping & IDENTMAP_IPU) && IS_INTEL_IPU(pdev))
++			return IOMMU_DOMAIN_IDENTITY;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++		if ((iommu_identity_mapping & IDENTMAP_IPTS) && IS_IPTS(pdev))
++			return IOMMU_DOMAIN_IDENTITY;
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -2171,6 +2209,16 @@ static int __init init_dmars(void)
+ 		iommu_set_root_entry(iommu);
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (!dmar_map_ipu)
++		iommu_identity_mapping |= IDENTMAP_IPU;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++	if (!dmar_map_ipts)
++		iommu_identity_mapping |= IDENTMAP_IPTS;
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
+ 	check_tylersburg_isoch();
+ 
+ 	/*
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -4518,6 +4566,34 @@ static void quirk_iommu_igfx(struct pci_dev *dev)
+ 	disable_igfx_iommu = 1;
+ }
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++static void quirk_iommu_ipu(struct pci_dev *dev)
++{
++	if (!IS_INTEL_IPU(dev))
++		return;
++
++	if (risky_device(dev))
++		return;
++
++	pci_info(dev, "Passthrough IOMMU for integrated Intel IPU\n");
++	dmar_map_ipu = 0;
++}
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++static void quirk_iommu_ipts(struct pci_dev *dev)
++{
++	if (!IS_IPTS(dev))
++		return;
++
++	if (risky_device(dev))
++		return;
++
++	pci_info(dev, "Passthrough IOMMU for IPTS\n");
++	dmar_map_ipts = 0;
++}
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
+ /* Q35 integrated gfx dmar support is totally busted. */
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x29b2, quirk_iommu_igfx);
+ 
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -4559,6 +4635,17 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x1632, quirk_iommu_igfx);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163A, quirk_iommu_igfx);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163D, quirk_iommu_igfx);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++/* disable IPU dmar support */
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, PCI_ANY_ID, quirk_iommu_ipu);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++/* disable IPTS dmar support */
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x9D3E, quirk_iommu_ipts);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x34E4, quirk_iommu_ipts);
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
+ static void quirk_iommu_rwbf(struct pci_dev *dev)
+ {
+ 	if (risky_device(dev))
+diff --git a/drivers/media/i2c/dw9719.c b/drivers/media/i2c/dw9719.c
+index 032fbcb981f2..c8dc77e31b19 100644
+--- a/drivers/media/i2c/dw9719.c
+@@ -87,6 +87,10 @@ static int dw9719_power_up(struct dw9719_device *dw9719, bool detect)
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	/* Wait for device to be acknowledged */
++	fsleep(10000);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	/* Jiggle SCL pin to wake up device */
+ 	cci_write(dw9719->regmap, DW9719_CONTROL, DW9719_SHUTDOWN, &ret);
+ 	fsleep(100);
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -2,6 +2,9 @@
+ // Copyright (c) 2017 Intel Corporation.
+ 
+ #include <linux/acpi.h>
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#include <linux/delay.h>
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ #include <linux/clk.h>
+ #include <linux/i2c.h>
+ #include <linux/module.h>
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -119,6 +122,18 @@ struct ov13858_mode {
+ 	struct ov13858_reg_list reg_list;
+ };
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++// Or use standard names that might be more correct:
++static const char * const ov13858_supply_names[] = {
++	"avdd",    // Analog voltage
++	"pwr1",    // Digital core voltage
++};
++
++
++#define OV13858_NUM_SUPPLIES ARRAY_SIZE(ov13858_supply_names)
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++
+ /* 4224x3136 needs 1080Mbps/lane, 4 lanes */
+ static const struct ov13858_reg mipi_data_rate_1080mbps[] = {
+ 	/* PLL1 registers */
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1046,12 +1061,130 @@ struct ov13858 {
+ 	/* Current mode */
+ 	const struct ov13858_mode *cur_mode;
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	struct regulator_bulk_data supplies[OV13858_NUM_SUPPLIES];
++	struct gpio_desc *reset;
++	struct clk *xvclk;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ 	/* Mutex for serialized access */
+ 	struct mutex mutex;
+ };
+ 
+ #define to_ov13858(_sd)	container_of(_sd, struct ov13858, sd)
+ 
++
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++static int ov13858_get_regulators(struct ov13858 *ov13858)
++{
++	unsigned int i;
++
++	for (i = 0; i < OV13858_NUM_SUPPLIES; i++)
++		ov13858->supplies[i].supply = ov13858_supply_names[i];
++
++	return devm_regulator_bulk_get(ov13858->dev, OV13858_NUM_SUPPLIES,
++				       ov13858->supplies);
++}
++
++static int ov13858_sensor_powerup(struct ov13858 *ov13858)
++{
++	int ret;
++
++	dev_info(ov13858->dev, "Powering up sensor\n");
++
++	/* Assert reset */
++	gpiod_set_value_cansleep(ov13858->reset, 1);
++
++	/* Enable clock FIRST - sensor needs clock to communicate */
++	ret = clk_prepare_enable(ov13858->xvclk);
++	if (ret) {
++		dev_err(ov13858->dev, "Failed to enable clock: %d\n", ret);
++		return ret;
++	}
++	dev_info(ov13858->dev, "Clock enabled\n");
++
++	/* Enable regulators */
++	ret = regulator_bulk_enable(OV13858_NUM_SUPPLIES, ov13858->supplies);
++	if (ret) {
++		dev_err(ov13858->dev, "Failed to enable regulators: %d\n", ret);
++		clk_disable_unprepare(ov13858->xvclk);
++		return ret;
++	}
++
++	dev_info(ov13858->dev, "Regulators enabled\n");
++
++	/* Wait for power to stabilize */
++	usleep_range(5000, 10000);
++
++	/* De-assert reset */
++	gpiod_set_value_cansleep(ov13858->reset, 0);
++
++	/* Wait for sensor to boot */
++	msleep(20);
++
++	dev_info(ov13858->dev, "Reset de-asserted, sensor should be ready\n");
++
++	return 0;
++}
++
++static void ov13858_sensor_powerdown(struct ov13858 *ov13858)
++{
++	dev_info(ov13858->dev, "Powering down sensor\n");
++
++	/* Assert reset to put sensor in reset state */
++	gpiod_set_value_cansleep(ov13858->reset, 1);
++
++	/* Disable regulators */
++	regulator_bulk_disable(OV13858_NUM_SUPPLIES, ov13858->supplies);
++	dev_info(ov13858->dev, "Regulators disabled\n");
++
++	/* Disable clock */
++	clk_disable_unprepare(ov13858->xvclk);
++	dev_info(ov13858->dev, "Clock disabled\n");
++}
++
++static int __maybe_unused ov13858_suspend(struct device *dev)
++{
++	struct i2c_client *client = to_i2c_client(dev);
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct ov13858 *ov13858 = to_ov13858(sd);
++
++	ov13858_sensor_powerdown(ov13858);
++
++	return 0;
++}
++
++static int __maybe_unused ov13858_resume(struct device *dev)
++{
++	struct i2c_client *client = to_i2c_client(dev);
++	struct v4l2_subdev *sd = i2c_get_clientdata(client);
++	struct ov13858 *ov13858 = to_ov13858(sd);
++	int ret;
++
++	ret = ov13858_sensor_powerup(ov13858);
++	if (ret)
++		return ret;
++
++	return 0;
++}
++
++static const struct dev_pm_ops ov13858_pm_ops = {
++	SET_RUNTIME_PM_OPS(ov13858_suspend, ov13858_resume, NULL)
++};
++
++static int ov13858_get_gpios(struct ov13858 *ov13858)
++{
++	ov13858->reset = devm_gpiod_get_optional(ov13858->dev, "reset",
++	                                         GPIOD_OUT_HIGH);
++	if (IS_ERR(ov13858->reset)) {
++		dev_err(ov13858->dev, "Error fetching reset GPIO\n");
++		return PTR_ERR(ov13858->reset);
++	}
++
++	return 0;
++}
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ /* Read registers up to 4 at a time */
+ static int ov13858_read_reg(struct ov13858 *ov13858, u16 reg, u32 len,
+ 			    u32 *val)
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1498,8 +1631,15 @@ static int ov13858_identify_module(struct ov13858 *ov13858)
+ 	int ret;
+ 	u32 val;
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	dev_info(ov13858->dev, "Attempting to read chip ID from register 0x300a\n");
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	ret = ov13858_read_reg(ov13858, OV13858_REG_CHIP_ID,
+ 			       OV13858_REG_VALUE_24BIT, &val);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	dev_info(ov13858->dev, "Chip ID read result: ret=%d, val=0x%06x (expected 0x%06x)\n",
++	         ret, val, OV13858_CHIP_ID);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1509,6 +1649,9 @@ static int ov13858_identify_module(struct ov13858 *ov13858)
+ 		return -EIO;
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	dev_info(ov13858->dev, "Chip ID verified successfully!\n");
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	return 0;
+ }
+ 
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1678,14 +1821,41 @@ static int ov13858_probe(struct i2c_client *client)
+ 				     "external clock %lu is not supported\n",
+ 				     freq);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	/* Get the external clock */
++	ov13858->xvclk = devm_clk_get_optional(ov13858->dev, "xvclk");
++	if (IS_ERR(ov13858->xvclk))
++		return dev_err_probe(ov13858->dev, PTR_ERR(ov13858->xvclk),
++		       "failed to get xvclk\n");
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ 	/* Initialize subdev */
+ 	v4l2_i2c_subdev_init(&ov13858->sd, client, &ov13858_subdev_ops);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	ret = ov13858_get_regulators(ov13858);
++	if (ret)
++		return dev_err_probe(ov13858->dev, ret,
++		       "Error fetching regulators\n");
++
++	ret = ov13858_get_gpios(ov13858);
++	if (ret)
++		return ret;
++
++	ret = ov13858_sensor_powerup(ov13858);
++	if (ret)
++		return ret;  // No cleanup needed yet, devm handles GPIOs/regulators
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ 	/* Check module identity */
+ 	ret = ov13858_identify_module(ov13858);
+ 	if (ret) {
+ 		dev_err(ov13858->dev, "failed to find sensor: %d\n", ret);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		goto error_power_off;  // Now we need to power down
++#else
+ 		return ret;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	}
+ 
+ 	/* Set default mode to max resolution */
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1693,7 +1863,11 @@ static int ov13858_probe(struct i2c_client *client)
+ 
+ 	ret = ov13858_init_controls(ov13858);
+ 	if (ret)
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		goto error_power_off;
++#else
+ 		return ret;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 
+ 	/* Initialize subdev */
+ 	ov13858->sd.internal_ops = &ov13858_internal_ops;
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1729,6 +1903,12 @@ static int ov13858_probe(struct i2c_client *client)
+ 
+ error_handler_free:
+ 	ov13858_free_controls(ov13858);
++
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++error_power_off:
++	ov13858_sensor_powerdown(ov13858);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ 	dev_err(ov13858->dev, "%s failed:%d\n", __func__, ret);
+ 
+ 	return ret;
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1744,6 +1924,11 @@ static void ov13858_remove(struct i2c_client *client)
+ 	ov13858_free_controls(ov13858);
+ 
+ 	pm_runtime_disable(ov13858->dev);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (!pm_runtime_status_suspended(ov13858->dev))
++		ov13858_sensor_powerdown(ov13858);
++	pm_runtime_set_suspended(ov13858->dev);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ }
+ 
+ static const struct i2c_device_id ov13858_id_table[] = {
+diff --git a/drivers/media/i2c/ov13858.c b/drivers/media/i2c/ov13858.c
+index 162b49046990..279ff8248a49 100644
+--- a/drivers/media/i2c/ov13858.c
+@@ -1765,6 +1950,9 @@ MODULE_DEVICE_TABLE(acpi, ov13858_acpi_ids);
+ static struct i2c_driver ov13858_i2c_driver = {
+ 	.driver = {
+ 		.name = "ov13858",
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		.pm = &ov13858_pm_ops,
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 		.acpi_match_table = ACPI_PTR(ov13858_acpi_ids),
+ 	},
+ 	.probe = ov13858_probe,
+diff --git a/drivers/media/i2c/ov5693.c b/drivers/media/i2c/ov5693.c
+index d294477f9dd3..7bd956c125f8 100644
+--- a/drivers/media/i2c/ov5693.c
+@@ -1396,6 +1396,9 @@ static const struct dev_pm_ops ov5693_pm_ops = {
+ 
+ static const struct acpi_device_id ov5693_acpi_match[] = {
+ 	{"INT33BE"},
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	{"OVTI5693"},
++#endif
+ 	{},
+ };
+ MODULE_DEVICE_TABLE(acpi, ov5693_acpi_match);
+diff --git a/drivers/media/i2c/ov7251.c b/drivers/media/i2c/ov7251.c
+index 27afc3fc0175..8a5caf7f5c35 100644
+--- a/drivers/media/i2c/ov7251.c
+@@ -1053,7 +1053,11 @@ static int ov7251_s_ctrl(struct v4l2_ctrl *ctrl)
+ 	case V4L2_CID_EXPOSURE:
+ 		ret = ov7251_set_exposure(ov7251, ctrl->val);
+ 		break;
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	case V4L2_CID_ANALOGUE_GAIN:
++#else
+ 	case V4L2_CID_GAIN:
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 		ret = ov7251_set_gain(ov7251, ctrl->val);
+ 		break;
+ 	case V4L2_CID_TEST_PATTERN:
+diff --git a/drivers/media/i2c/ov7251.c b/drivers/media/i2c/ov7251.c
+index 27afc3fc0175..8a5caf7f5c35 100644
+--- a/drivers/media/i2c/ov7251.c
+@@ -1578,8 +1582,13 @@ static int ov7251_init_ctrls(struct ov7251 *ov7251)
+ 			  V4L2_CID_VFLIP, 0, 1, 1, 0);
+ 	ov7251->exposure = v4l2_ctrl_new_std(&ov7251->ctrls, &ov7251_ctrl_ops,
+ 					     V4L2_CID_EXPOSURE, 1, 32, 1, 32);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	ov7251->gain = v4l2_ctrl_new_std(&ov7251->ctrls, &ov7251_ctrl_ops,
++					 V4L2_CID_ANALOGUE_GAIN, 16, 1023, 1, 16);
++#else
+ 	ov7251->gain = v4l2_ctrl_new_std(&ov7251->ctrls, &ov7251_ctrl_ops,
+ 					 V4L2_CID_GAIN, 16, 1023, 1, 16);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	v4l2_ctrl_new_std_menu_items(&ov7251->ctrls, &ov7251_ctrl_ops,
+ 				     V4L2_CID_TEST_PATTERN,
+ 				     ARRAY_SIZE(ov7251_test_pattern_menu) - 1,
+diff --git a/drivers/media/pci/intel/ipu-bridge.c b/drivers/media/pci/intel/ipu-bridge.c
+index 4e579352ab2c..f65b3762d9bf 100644
+--- a/drivers/media/pci/intel/ipu-bridge.c
+@@ -60,6 +60,12 @@ static const struct ipu_sensor_config ipu_supported_sensors[] = {
+ 	IPU_SENSOR_CONFIG("INT33BE", 1, 419200000),
+ 	/* Onsemi MT9M114 */
+ 	IPU_SENSOR_CONFIG("INT33F0", 1, 384000000),
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	/* Omnivision OV5693 - Surface Pro 9 */
++	IPU_SENSOR_CONFIG("OVTI5693", 1, 419200000),
++	/* Omnivision OV13858 - Surface Pro 9 */
++	IPU_SENSOR_CONFIG("OVTID858", 4, 540000000),
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	/* Omnivision OV2740 */
+ 	IPU_SENSOR_CONFIG("INT3474", 1, 180000000),
+ 	/* Omnivision OV5670 */
+diff --git a/drivers/media/pci/intel/ipu3/ipu3-cio2.c b/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+index a87f105beb5e..e6732ccb305a 100644
+--- a/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+@@ -1365,6 +1365,10 @@ static int cio2_notifier_bound(struct v4l2_async_notifier *notifier,
+ 	struct cio2_device *cio2 = to_cio2_device(notifier);
+ 	struct sensor_async_subdev *s_asd = to_sensor_asd(asd);
+ 	struct cio2_queue *q;
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	struct device *dev = &cio2->pci_dev->dev;
++	unsigned int pad;
++#endif
+ 	int ret;
+ 
+ 	if (cio2->queue[s_asd->csi2.port].sensor)
+diff --git a/drivers/media/pci/intel/ipu3/ipu3-cio2.c b/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+index a87f105beb5e..e6732ccb305a 100644
+--- a/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+@@ -1380,7 +1384,30 @@ static int cio2_notifier_bound(struct v4l2_async_notifier *notifier,
+ 	q->sensor = sd;
+ 	q->csi_rx_base = cio2->base + CIO2_REG_PIPE_BASE(q->csi2.port);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	for (pad = 0; pad < q->sensor->entity.num_pads; pad++)
++		if (q->sensor->entity.pads[pad].flags &
++					MEDIA_PAD_FL_SOURCE)
++			break;
++
++	if (pad == q->sensor->entity.num_pads) {
++		dev_err(dev, "failed to find src pad for %s\n",
++			q->sensor->name);
++		return -ENXIO;
++	}
++
++	ret = media_create_pad_link(&q->sensor->entity, pad, &q->subdev.entity,
++				    CIO2_PAD_SINK, 0);
++	if (ret) {
++		dev_err(dev, "failed to create link for %s\n",
++			q->sensor->name);
++		return ret;
++	}
++
++	return v4l2_device_register_subdev_nodes(&cio2->v4l2_dev);
++#else
+ 	return 0;
++#endif
+ }
+ 
+ /* The .unbind callback */
+diff --git a/drivers/media/pci/intel/ipu3/ipu3-cio2.c b/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+index a87f105beb5e..e6732ccb305a 100644
+--- a/drivers/media/pci/intel/ipu3/ipu3-cio2.c
+@@ -1397,6 +1424,37 @@ static void cio2_notifier_unbind(struct v4l2_async_notifier *notifier,
+ /* .complete() is called after all subdevices have been located */
+ static int cio2_notifier_complete(struct v4l2_async_notifier *notifier)
+ {
++#ifndef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	struct cio2_device *cio2 = to_cio2_device(notifier);
++	struct device *dev = &cio2->pci_dev->dev;
++	struct sensor_async_subdev *s_asd;
++	struct v4l2_async_connection *asd;
++	struct cio2_queue *q;
++	int ret;
++
++	list_for_each_entry(asd, &cio2->notifier.done_list, asc_entry) {
++		s_asd = to_sensor_asd(asd);
++		q = &cio2->queue[s_asd->csi2.port];
++
++		ret = media_entity_get_fwnode_pad(&q->sensor->entity,
++						  s_asd->asd.match.fwnode,
++						  MEDIA_PAD_FL_SOURCE);
++		if (ret < 0) {
++			dev_err(dev, "no pad for endpoint %pfw (%d)\n",
++				s_asd->asd.match.fwnode, ret);
++			return ret;
++		}
++
++		ret = media_create_pad_link(&q->sensor->entity, ret,
++					    &q->subdev.entity, CIO2_PAD_SINK,
++					    0);
++		if (ret) {
++			dev_err(dev, "failed to create link for %s (endpoint %pfw, error %d)\n",
++				q->sensor->name, s_asd->asd.match.fwnode, ret);
++			return ret;
++		}
++	}
++#else
+ 	struct cio2_device *cio2 = to_cio2_device(notifier);
+ 	struct sensor_async_subdev *s_asd;
+ 	struct v4l2_async_connection *asd;
+diff --git a/drivers/media/v4l2-core/v4l2-async.c b/drivers/media/v4l2-core/v4l2-async.c
+index 1c08bba9ecb9..2ab24a5f49aa 100644
+--- a/drivers/media/v4l2-core/v4l2-async.c
+@@ -811,6 +811,12 @@ int __v4l2_async_register_subdev(struct v4l2_subdev *sd, struct module *module)
+ 
+ 	INIT_LIST_HEAD(&sd->asc_list);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	ret = v4l2_subdev_get_privacy_led(sd);
++	if (ret < 0)
++		return ret;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ 	/*
+ 	 * No reference taken. The reference is held by the device (struct
+ 	 * v4l2_subdev.dev), and async sub-device does not exist independently
+diff --git a/drivers/media/v4l2-core/v4l2-fwnode.c b/drivers/media/v4l2-core/v4l2-fwnode.c
+index cb153ce42c45..6cdb0b58f548 100644
+--- a/drivers/media/v4l2-core/v4l2-fwnode.c
+@@ -1260,9 +1260,11 @@ int v4l2_async_register_subdev_sensor(struct v4l2_subdev *sd)
+ 
+ 	v4l2_async_subdev_nf_init(notifier, sd);
+ 
++#ifndef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
+ 	ret = v4l2_subdev_get_privacy_led(sd);
+ 	if (ret < 0)
+ 		goto out_cleanup;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 
+ 	ret = v4l2_async_nf_parse_fwnode_sensor(sd->dev, notifier);
+ 	if (ret < 0)
+diff --git a/drivers/platform/x86/intel/int3472/discrete.c b/drivers/platform/x86/intel/int3472/discrete.c
+index 1505fc3ef7a8..5d26758c3fca 100644
+--- a/drivers/platform/x86/intel/int3472/discrete.c
+@@ -229,6 +229,16 @@ static void int3472_get_con_id_and_polarity(struct int3472_discrete_device *int3
+ 		/* Setups using a handshake pin need 25 ms enable delay */
+ 		*enable_time_us = 25 * USEC_PER_MSEC;
+ 		break;
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	case 0x08:  /* Surface Pro 9 - additional power rail */
++		*con_id = "pwr1";
++		*gpio_flags = GPIO_ACTIVE_HIGH;
++		break;
++	case 0x10:  /* Surface Pro 9 - secondary power rail */
++		*con_id = "pwr2";
++		*gpio_flags = GPIO_ACTIVE_HIGH;
++		break;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 	default:
+ 		*con_id = "unknown";
+ 		*gpio_flags = GPIO_ACTIVE_HIGH;
+diff --git a/drivers/platform/x86/intel/int3472/discrete.c b/drivers/platform/x86/intel/int3472/discrete.c
+index 1505fc3ef7a8..5d26758c3fca 100644
+--- a/drivers/platform/x86/intel/int3472/discrete.c
+@@ -333,6 +343,10 @@ static int skl_int3472_handle_gpio_resources(struct acpi_resource *ares,
+ 	case INT3472_GPIO_TYPE_PRIVACY_LED:
+ 	case INT3472_GPIO_TYPE_POWER_ENABLE:
+ 	case INT3472_GPIO_TYPE_HANDSHAKE:
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	case 0x08:  /* Surface Pro 9 power rails */
++	case 0x10:
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 		gpio = skl_int3472_gpiod_get_from_temp_lookup(int3472, agpio, con_id, gpio_flags);
+ 		if (IS_ERR(gpio)) {
+ 			ret = PTR_ERR(gpio);
+diff --git a/drivers/platform/x86/intel/int3472/discrete.c b/drivers/platform/x86/intel/int3472/discrete.c
+index 1505fc3ef7a8..5d26758c3fca 100644
+--- a/drivers/platform/x86/intel/int3472/discrete.c
+@@ -363,6 +377,21 @@ static int skl_int3472_handle_gpio_resources(struct acpi_resource *ares,
+ 				err_msg = "Failed to register regulator\n";
+ 
+ 			break;
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		case 0x08:  /* Surface Pro 9 - treat as power*/
++		    dev_info(int3472->dev, "GPIO type 0x%02x detected on pin 0x%02x\n", type, agpio->pin_table[0]);
++		    dev_info(int3472->dev, "  con_id=%s, flags=0x%lx\n", con_id, gpio_flags);
++		    ret = skl_int3472_register_regulator(int3472, gpio,
++			 GPIO_REGULATOR_ENABLE_TIME,
++			 con_id, NULL);
++		    dev_info(int3472->dev, "  register_regulator returned: %d\n", ret);
++		    if (ret) {
++			dev_err(int3472->dev, "Failed to register type 0x%02x: %d\n", type, ret);
++		    }
++		    break;
++		case 0x10:
++		    break;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 		default: /* Never reached */
+ 			ret = -EINVAL;
+ 			break;
+diff --git a/drivers/platform/x86/intel/int3472/tps68470.c b/drivers/platform/x86/intel/int3472/tps68470.c
+index 0133405697dc..b6eb87e436a6 100644
+--- a/drivers/platform/x86/intel/int3472/tps68470.c
+@@ -17,7 +17,11 @@
+ #define DESIGNED_FOR_CHROMEOS		1
+ #define DESIGNED_FOR_WINDOWS		2
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define TPS68470_WIN_MFD_CELL_COUNT	4
++#else
+ #define TPS68470_WIN_MFD_CELL_COUNT	3
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 
+ static const struct mfd_cell tps68470_cros[] = {
+ 	{ .name = "tps68470-gpio" },
+diff --git a/drivers/platform/x86/intel/int3472/tps68470.c b/drivers/platform/x86/intel/int3472/tps68470.c
+index 0133405697dc..b6eb87e436a6 100644
+--- a/drivers/platform/x86/intel/int3472/tps68470.c
+@@ -46,6 +50,15 @@ static int tps68470_chip_init(struct device *dev, struct regmap *regmap)
+ 		return ret;
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	/* Enable I2C daisy chain */
++	ret = regmap_write(regmap, TPS68470_REG_S_I2C_CTL, 0x03);
++	if (ret) {
++		dev_err(dev, "Failed to enable i2c daisy chain\n");
++		return ret;
++	}
++#endif
++
+ 	dev_info(dev, "TPS68470 REVID: 0x%02x\n", version);
+ 
+ 	return 0;
+diff --git a/drivers/platform/x86/intel/int3472/tps68470.c b/drivers/platform/x86/intel/int3472/tps68470.c
+index 0133405697dc..b6eb87e436a6 100644
+--- a/drivers/platform/x86/intel/int3472/tps68470.c
+@@ -196,7 +209,12 @@ static int skl_int3472_tps68470_probe(struct i2c_client *client)
+ 		cells[1].name = "tps68470-regulator";
+ 		cells[1].platform_data = (void *)board_data->tps68470_regulator_pdata;
+ 		cells[1].pdata_size = sizeof(struct tps68470_regulator_platform_data);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		cells[2].name = "tps68470-led";
++		cells[3].name = "tps68470-gpio";
++#else
+ 		cells[2].name = "tps68470-gpio";
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ 
+ 		for (i = 0; i < board_data->n_gpiod_lookups; i++)
+ 			gpiod_add_lookup_table(board_data->tps68470_gpio_lookup_tables[i]);
+diff --git a/drivers/staging/media/ipu3/ipu3-v4l2.c b/drivers/staging/media/ipu3/ipu3-v4l2.c
+index 2f6041d342f4..1fabcbd047ca 100644
+--- a/drivers/staging/media/ipu3/ipu3-v4l2.c
+@@ -189,6 +189,7 @@ static int imgu_subdev_set_fmt(struct v4l2_subdev *sd,
+ 	return 0;
+ }
+ 
++#ifndef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
+ static struct v4l2_rect *
+ imgu_subdev_get_crop(struct imgu_v4l2_subdev *sd,
+ 		     struct v4l2_subdev_state *sd_state, unsigned int pad,
+diff --git a/drivers/staging/media/ipu3/ipu3-v4l2.c b/drivers/staging/media/ipu3/ipu3-v4l2.c
+index 2f6041d342f4..1fabcbd047ca 100644
+--- a/drivers/staging/media/ipu3/ipu3-v4l2.c
+@@ -240,9 +240,16 @@ static int imgu_subdev_set_selection(struct v4l2_subdev *sd,
+ 				     struct v4l2_subdev_selection *sel)
+ {
+ 	struct imgu_device *imgu = v4l2_get_subdevdata(sd);
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	struct imgu_v4l2_subdev *imgu_sd = container_of(sd,
++							struct imgu_v4l2_subdev,
++							subdev);
++	struct v4l2_rect *rect, *try_sel;
++#else
+ 	struct imgu_v4l2_subdev *imgu_sd =
+ 		container_of(sd, struct imgu_v4l2_subdev, subdev);
+ 	struct v4l2_rect *rect;
++#endif
+ 
+ 	dev_dbg(&imgu->pci_dev->dev,
+ 		 "set subdev %u sel which %u target 0x%4x rect [%ux%u]",
+diff --git a/drivers/staging/media/ipu3/ipu3-v4l2.c b/drivers/staging/media/ipu3/ipu3-v4l2.c
+index 2f6041d342f4..1fabcbd047ca 100644
+--- a/drivers/staging/media/ipu3/ipu3-v4l2.c
+@@ -254,8 +261,10 @@ static int imgu_subdev_set_selection(struct v4l2_subdev *sd,
+ 
+ 	switch (sel->target) {
+ 	case V4L2_SEL_TGT_CROP:
+-		rect = imgu_subdev_get_crop(imgu_sd, sd_state, sel->pad,
+-					    sel->which);
++#ifndef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		sel->r = *imgu_subdev_get_crop(imgu_sd, sd_state, sel->pad,
++						sel->which);
++#endif
+ 		break;
+ 	case V4L2_SEL_TGT_COMPOSE:
+ 		rect = imgu_subdev_get_compose(imgu_sd, sd_state, sel->pad,
+diff --git a/drivers/staging/media/ipu3/ipu3-v4l2.c b/drivers/staging/media/ipu3/ipu3-v4l2.c
+index 2f6041d342f4..1fabcbd047ca 100644
+--- a/drivers/staging/media/ipu3/ipu3-v4l2.c
+@@ -265,7 +274,15 @@ static int imgu_subdev_set_selection(struct v4l2_subdev *sd,
+ 		return -EINVAL;
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (sel->which == V4L2_SUBDEV_FORMAT_TRY)
++		*try_sel = sel->r;
++	else
++		*rect = sel->r;
++#else
+ 	*rect = sel->r;
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/include/linux/mfd/tps68470.h b/include/linux/mfd/tps68470.h
+index 7807fa329db0..2603f535952b 100644
+--- a/include/linux/mfd/tps68470.h
+@@ -34,6 +34,9 @@
+ #define TPS68470_REG_SGPO		0x22
+ #define TPS68470_REG_GPDI		0x26
+ #define TPS68470_REG_GPDO		0x27
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define TPS68470_REG_ILEDCTL		0x28
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ #define TPS68470_REG_VCMVAL		0x3C
+ #define TPS68470_REG_VAUX1VAL		0x3D
+ #define TPS68470_REG_VAUX2VAL		0x3E
+diff --git a/include/linux/mfd/tps68470.h b/include/linux/mfd/tps68470.h
+index 7807fa329db0..2603f535952b 100644
+--- a/include/linux/mfd/tps68470.h
+@@ -94,4 +97,10 @@
+ #define TPS68470_GPIO_MODE_OUT_CMOS	2
+ #define TPS68470_GPIO_MODE_OUT_ODRAIN	3
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define TPS68470_ILEDCTL_ENA		BIT(2)
++#define TPS68470_ILEDCTL_ENB		BIT(6)
++#define TPS68470_ILEDCTL_CTRLB		GENMASK(5, 4)
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ #endif /* __LINUX_MFD_TPS68470_H */

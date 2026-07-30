@@ -1,0 +1,34 @@
+IGEL_DISABLE_AUTOLOADING_OF_NON_SECURE_NET_MODULES
+	  Disable module autoloading of following network protocols
+	       * DCCP protocol (IPv4 and IPv6)
+	       * DECnet protocol
+	       * IEEE802154 protocol
+               * RDS protocol
+
+	  Source: Debian
+	  URL: https://salsa.debian.org/kernel-team/linux/-/blob/debian/5.10/bullseye/debian/patches/debian/af_802154-Disable-auto-loading-as-mitigation-against.patch?ref_type=heads
+	  URL: https://salsa.debian.org/kernel-team/linux/-/blob/debian/5.10/bullseye/debian/patches/debian/rds-Disable-auto-loading-as-mitigation-against-local.patch?ref_type=heads
+diff --git a/net/ieee802154/socket.c b/net/ieee802154/socket.c
+index 18d267921bb5..c6e0aa730bd7 100644
+--- a/net/ieee802154/socket.c
+@@ -1140,4 +1140,8 @@ module_exit(af_ieee802154_remove);
+ 
+ MODULE_LICENSE("GPL");
+ MODULE_DESCRIPTION("IEEE 802.15.4 socket interface");
++/* gottwald@igel.com : Disable auto loading as mitigation against local exploits.
++ * Patch taken from debian Change some defaults for security reasons */
++#ifndef CONFIG_IGEL_DISABLE_AUTOLOADING_OF_NON_SECURE_NET_MODULES
+ MODULE_ALIAS_NETPROTO(PF_IEEE802154);
++#endif
+diff --git a/net/rds/af_rds.c b/net/rds/af_rds.c
+index 7a0f5150e910..c340c4141062 100644
+--- a/net/rds/af_rds.c
+@@ -965,4 +965,8 @@ MODULE_DESCRIPTION("RDS: Reliable Datagram Sockets"
+ 		   " v" DRV_VERSION " (" DRV_RELDATE ")");
+ MODULE_VERSION(DRV_VERSION);
+ MODULE_LICENSE("Dual BSD/GPL");
++/* gottwald@igel.com : Disable auto loading as mitigation against local exploits.
++ * Patch taken from debian Change some defaults for security reasons */
++#ifndef CONFIG_IGEL_DISABLE_AUTOLOADING_OF_NON_SECURE_NET_MODULES
+ MODULE_ALIAS_NETPROTO(PF_RDS);
++#endif

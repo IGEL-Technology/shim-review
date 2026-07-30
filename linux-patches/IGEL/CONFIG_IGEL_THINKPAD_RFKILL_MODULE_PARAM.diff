@@ -1,0 +1,105 @@
+IGEL_THINKPAD_RFKILL_MODULE_PARAM
+	  There seems to be devices where rfkill switches are detected but which
+	  are not present in reality. So a device got locked without the possibility
+	  to unlock it again. With the new parameters wwan_rfkill,wlan_rfkill and
+	  bluetooth_rfkill this can be solved without the need to patch the kernel
+	  module each time.
+
+	  Source: IGEL
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 075543cd0e77..20801050e790 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -436,6 +436,12 @@ static int dbg_uwbemul;
+ static bool tpacpi_uwb_emulstate;
+ #endif
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++static bool wwan_rfkill = 1;
++static bool wlan_rfkill = 1;
++static bool bluetooth_rfkill = 1;
++#endif
++
+ 
+ /*************************************************************************
+  *  Debugging helpers
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 075543cd0e77..20801050e790 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -1955,6 +1961,10 @@ static int hotkey_get_wlsw(void)
+ 	if (!tp_features.hotkey_wlsw)
+ 		return -ENODEV;
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!wlan_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_wlswemul)
+ 		return (tpacpi_wlsw_emulstate) ?
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 075543cd0e77..20801050e790 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -4145,6 +4155,10 @@ static int bluetooth_get_status(void)
+ {
+ 	int status;
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!bluetooth_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_bluetoothemul)
+ 		return (tpacpi_bluetooth_emulstate) ?
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 075543cd0e77..20801050e790 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -4399,7 +4413,27 @@ enum {
+ static int wan_get_status(void)
+ {
+ 	int status;
++#ifdef CONFIG_IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
++	const char *vendor;
++	const char *version;
++#endif
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!wwan_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ 
++#ifdef CONFIG_IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
++	/* gottwald@igel.com rfkill for wwan is invalid for Lenovo ThinkPad L480 */
++	vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++	version = dmi_get_system_info(DMI_PRODUCT_VERSION);
++
++	if (vendor != NULL && version != NULL) {
++		if (strstr(vendor, "LENOVO") &&
++                    strstr(version, "ThinkPad L480")) {
++			return TPACPI_RFK_RADIO_ON;
++		}
++	}
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_wwanemul)
+ 		return (tpacpi_wwan_emulstate) ?
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 075543cd0e77..20801050e790 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -11871,6 +11905,18 @@ MODULE_PARM_DESC(uwb_state,
+ 		 "Initial state of the emulated UWB switch");
+ #endif
+ 
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++module_param(wwan_rfkill, bool, 0444);
++MODULE_PARM_DESC(wwan_rfkill,
++		 "If set to false the rfkill for WWAN get disabled (rfkill switch setting get ignored)");
++module_param(wlan_rfkill, bool, 0444);
++MODULE_PARM_DESC(wlan_rfkill,
++		 "If set to false the rfkill for WLAN get disabled (rfkill switch setting get ignored)");
++module_param(bluetooth_rfkill, bool, 0444);
++MODULE_PARM_DESC(bluetooth_rfkill,
++		 "If set to false the rfkill for Bluetooth get disabled (rfkill switch setting get ignored)");
++#endif
++
+ module_param(profile_force, int, 0444);
+ MODULE_PARM_DESC(profile_force, "Force profile mode. -1=off, 1=MMC, 2=PSC");
+ 

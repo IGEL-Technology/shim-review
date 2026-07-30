@@ -1,0 +1,87 @@
+IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
+	  Samsung NC241, NC221 and TC2 workaround to not detect DVI monitor
+	  also as VGA.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -31,11 +31,17 @@
+ #include <drm/drm_probe_helper.h>
+ #include <drm/radeon_drm.h>
+ #include "radeon.h"
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include "radeon_drv.h"
++#endif
+ #include "radeon_audio.h"
+ #include "atom.h"
+ 
+ #include <linux/pm_runtime.h>
+ #include <linux/vga_switcheroo.h>
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++#include <linux/pci.h>
++#endif
+ 
+ void radeon_connector_hotplug(struct drm_connector *connector)
+ {
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1851,6 +1969,12 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 	bool shared_ddc = false;
+ 	bool is_dp_bridge = false;
+ 	bool has_aux = false;
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++	struct pci_dev *pdev = to_pci_dev(dev->dev);
++#endif
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	bool dvii_shared = false;
++#endif
+ 
+ 	if (connector_type == DRM_MODE_CONNECTOR_Unknown)
+ 		return;
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1862,15 +1986,41 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 	    (radeon_tv == 0))
+ 		return;
+ 
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++	if (connector_type == DRM_MODE_CONNECTOR_VGA) {
++		/* gottwald@igel.com Samsung NC241, NC221 and TC2 workaround to not detect DVI monitor also as VGA */
++		if ((pdev->device == 0x9856 || pdev->device == 0x9851) &&
++		    (pdev->subsystem_vendor == 0x1022) &&
++		    (pdev->subsystem_device == 0x1234)) {
++			list_for_each_entry(connector, &dev->mode_config.connector_list, head)
++				if (connector->connector_type == DRM_MODE_CONNECTOR_DVII)
++					dvii_shared = true;
++		} else if (IS_SAMSUNG_TC2) {
++			list_for_each_entry(connector, &dev->mode_config.connector_list, head)
++				if (connector->connector_type == DRM_MODE_CONNECTOR_DVII)
++					dvii_shared = true;
++		}
++	}
++#endif
+ 	/* see if we already added it */
+ 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
+ 		radeon_connector = to_radeon_connector(connector);
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++		if ((radeon_connector->connector_id == connector_id) &&
++		     ! splitted_dvii) {
++#else
+ 		if (radeon_connector->connector_id == connector_id) {
++#endif
+ 			radeon_connector->devices |= supported_device;
+ 			return;
+ 		}
+ 		if (radeon_connector->ddc_bus && i2c_bus->valid) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			if (((radeon_connector->ddc_bus->rec.i2c_id == i2c_bus->i2c_id) 
++			      || dvii_shared) && ! splitted_dvii) {
++#else
+ 			if (radeon_connector->ddc_bus->rec.i2c_id == i2c_bus->i2c_id) {
++#endif
+ 				radeon_connector->shared_ddc = true;
+ 				shared_ddc = true;
+ 			}

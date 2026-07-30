@@ -1,0 +1,112 @@
+IGEL_I915_DP_DETECT_WORKAROUND
+	  Added a DP workaround for some monitors like Samsung U28D590D which
+	  took some time after as DPMS OFF/ON event before the function
+	  ibx_digital_port_connected is working again. The workaround is only
+	  used if the DP link training was successful.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_display_types.h b/drivers/gpu/drm/i915/display/intel_display_types.h
+index 0496b3263ed1..cea3ee848768 100644
+--- a/drivers/gpu/drm/i915/display/intel_display_types.h
+@@ -1778,6 +1778,12 @@ struct intel_dp {
+ 	struct intel_connector *attached_connector;
+ 	bool as_sdp_supported;
+ 
++#ifdef CONFIG_IGEL_I915_DP_DETECT_WORKAROUND
++	/* gottwald@igel.com variables for DPMS OFF/ON workaround */
++	bool detect_workaround;
++	ktime_t detect_workaround_timestamp;
++#endif /* CONFIG_IGEL_I915_DP_DETECT_WORKAROUND */
++
+ 	struct drm_dp_tunnel *tunnel;
+ 	bool tunnel_suspended:1;
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index a44fbac1e5e2..ed8d6c06d425 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -5930,12 +5972,34 @@ intel_dp_detect(struct drm_connector *_connector,
+ 	intel_pps_vdd_on(intel_dp);
+ 
+ 	/* Can't disconnect eDP */
++#ifdef CONFIG_IGEL_I915_DP_DETECT_WORKAROUND
++	if (intel_dp_is_edp(intel_dp)) {
++		status = edp_detect(intel_dp);
++	} else {
++		/* gottwald@igel.com some monitors (Samsung U28D590D) took some time after
++		 * a DPMS OFF/ON event before ibx_digital_port_connected is working again.
++		 * The detect workaround is set if the DP link train was sucessful.
++		 * So if detect_workaround is set and detect_workaround_timestamp is less
++		 * then 900 ms from now do not use ibx_digital_port_connected result
++		 */
++
++		if (intel_digital_port_connected(encoder))
++			status = intel_dp_detect_dpcd(intel_dp);
++		else if (intel_dp->detect_workaround == true &&
++			 ktime_to_ms(ktime_sub(ktime_get(), intel_dp->detect_workaround_timestamp)) <= 900)
++			status = intel_dp_detect_dpcd(intel_dp);
++		else
++			status = connector_status_disconnected;
++	}
++	intel_dp->detect_workaround = false;
++#else
+ 	if (intel_dp_is_edp(intel_dp))
+ 		status = edp_detect(intel_dp);
+ 	else if (intel_digital_port_connected(encoder))
+ 		status = intel_dp_detect_dpcd(intel_dp);
+ 	else
+ 		status = connector_status_disconnected;
++#endif /* CONFIG_IGEL_I915_DP_DETECT_WORKAROUND */
+ 
+ 	if (status != connector_status_disconnected &&
+ 	    !intel_dp_mst_verify_dpcd_state(intel_dp))
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index a44fbac1e5e2..ed8d6c06d425 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -6806,6 +6875,13 @@ intel_dp_init_connector(struct intel_digital_port *dig_port,
+ 		connector->get_hw_state = intel_connector_get_hw_state;
+ 	connector->sync_state = intel_dp_connector_sync_state;
+ 
++#ifdef CONFIG_IGEL_I915_DP_DETECT_WORKAROUND
++	/* gottwald@igel.com init dp detect workaround */
++
++	intel_dp->detect_workaround = false;
++	intel_dp->detect_workaround_timestamp = ktime_get();
++#endif
++
+ 	if (!intel_edp_init_connector(intel_dp, connector)) {
+ 		intel_dp_aux_fini(intel_dp);
+ 		goto fail;
+diff --git a/drivers/gpu/drm/i915/display/intel_dp_link_training.c b/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+index 27f3716bdc1f..57d50320c449 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp_link_training.c
+@@ -1657,6 +1683,30 @@ void intel_dp_start_link_train(struct intel_atomic_state *state,
+ 		/* Still continue with enabling the port and link training. */
+ 		lttpr_count = 0;
+ 
++#ifdef CONFIG_IGEL_I915_DP_DETECT_WORKAROUND
++	/* gottwald@igel.com some monitors (Samsung U28D590D) took some time after
++	 * a DPMS OFF/ON event before ibx_digital_port_connected is working again.
++	 * The detect workaround is set if the DP link train was sucessful. */
++
++	intel_dp->detect_workaround = true;
++	intel_dp->detect_workaround_timestamp = ktime_get();
++#endif
++
++#ifdef CONFIG_IGEL_I915_DP_RETRY_LINK_TRAINING
++	intel_dp_prepare_link_train(intel_dp, crtc_state);
++
++	if (intel_dp_is_uhbr(crtc_state))
++		passed = intel_dp_128b132b_link_train(intel_dp, crtc_state, lttpr_count);
++	else
++		passed = intel_dp_link_train_all_phys(intel_dp, crtc_state, lttpr_count);
++
++	if (!passed) {
++		usleep_range(50000, 200000);
++	} else {
++		return;
++	}
++#endif
++
+ 	intel_dp_prepare_link_train(intel_dp, crtc_state);
+ 
+ 	if (intel_dp_is_uhbr(crtc_state))

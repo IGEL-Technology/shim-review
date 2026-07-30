@@ -66,7 +66,7 @@
 +	int i;
 +	grub_uint32_t first_sect;
 +
-+	
++	/* hashing not yet implemented. TODO: implement! */
 +	for (minor = 0; minor < DIR_MAX_MINORS; minor++)
 +	{
 +		part = &(dir->partition[minor]);
@@ -132,7 +132,7 @@
 +
 --- /dev/null
 +++ b/grub-core/partmap/igel.c
-@@ -0,0 +1,829 @@
+@@ -0,0 +1,827 @@
 +/* igel.c - Read IGEL style partition tables.  */
 +/*
 + *  GRUB  --  GRand Unified Bootloader
@@ -400,7 +400,6 @@
 +	grub_uint32_t sect, old_sect;
 +	grub_uint16_t version;
 +	grub_uint32_t crc, header_crc;
-+	grub_uint64_t from;
 +	grub_uint32_t section_in_minor;
 +	struct igf_sect_hdr *shp;
 +	unsigned char *buffer = NULL;
@@ -473,8 +472,7 @@
 +			grub_printf(".");
 +		}
 +		updcrc(NULL, 0);
-+		from = START_OF_SECTION(sect);
-+		igelpart_disk_read (disk, part_offset + from, IGF_SECTION_SIZE, buffer);
++		igelpart_disk_read (disk, part_offset + START_OF_SECTION(sect), IGF_SECTION_SIZE, buffer);
 +		shp =  (struct igf_sect_hdr *)buffer;
 +		header_crc = shp->crc;
 +		sect = shp->next_section;

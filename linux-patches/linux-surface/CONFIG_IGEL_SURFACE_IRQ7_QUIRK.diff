@@ -1,0 +1,65 @@
+IGEL_SURFACE_IRQ7_QUIRK
+	  Quirk for Surface Laptop 4 AMD 15 and AMD 13 to override legacy irq 7.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/arch/x86/kernel/acpi/boot.c b/arch/x86/kernel/acpi/boot.c
+index d6138b2b633a..2d102a45af91 100644
+--- a/arch/x86/kernel/acpi/boot.c
+@@ -22,6 +22,9 @@
+ #include <linux/efi-bgrt.h>
+ #include <linux/serial_core.h>
+ #include <linux/pgtable.h>
++#ifdef CONFIG_IGEL_SURFACE_IRQ7_QUIRK
++#include <linux/dmi.h>
++#endif
+ 
+ #include <xen/xen.h>
+ 
+diff --git a/arch/x86/kernel/acpi/boot.c b/arch/x86/kernel/acpi/boot.c
+index d6138b2b633a..2d102a45af91 100644
+--- a/arch/x86/kernel/acpi/boot.c
+@@ -1175,6 +1178,26 @@ static void __init mp_config_acpi_legacy_irqs(void)
+ 	}
+ }
+ 
++#ifdef CONFIG_IGEL_SURFACE_IRQ7_QUIRK
++static const struct dmi_system_id surface_quirk[] __initconst = {
++	{
++		.ident = "Microsoft Surface Laptop 4 (AMD 15\")",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_SKU, "Surface_Laptop_4_1952:1953")
++		},
++	},
++	{
++		.ident = "Microsoft Surface Laptop 4 (AMD 13\")",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_SKU, "Surface_Laptop_4_1958:1959")
++		},
++	},
++	{}
++};
++#endif
++
+ /*
+  * Parse IOAPIC related entries in MADT
+  * returns 0 on success, < 0 on error
+diff --git a/arch/x86/kernel/acpi/boot.c b/arch/x86/kernel/acpi/boot.c
+index d6138b2b633a..2d102a45af91 100644
+--- a/arch/x86/kernel/acpi/boot.c
+@@ -1231,6 +1254,13 @@ static int __init acpi_parse_madt_ioapic_entries(void)
+ 		acpi_sci_ioapic_setup(acpi_gbl_FADT.sci_interrupt, 0, 0,
+ 				      acpi_gbl_FADT.sci_interrupt);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IRQ7_QUIRK
++	if (dmi_check_system(surface_quirk)) {
++		pr_warn("Surface hack: Override irq 7\n");
++		mp_override_legacy_irq(7, 3, 3, 7);
++	}
++#endif
++
+ 	/* Fill in identity legacy mappings where no override */
+ 	mp_config_acpi_legacy_irqs();
+ 

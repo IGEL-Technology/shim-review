@@ -1,0 +1,28 @@
+IGEL_ALLOW_RYZENADJ
+	  The PCI lockdown prevent the use of ryzenadj to set energy policy
+	  which we use to lower the power usage in idle cases. So this allows
+	  this again also if lockdown is active.
+
+	  Source: IGEL
+diff --git a/drivers/pci/pci-sysfs.c b/drivers/pci/pci-sysfs.c
+index d36b46849fee..50ac1aeceeed 100644
+--- a/drivers/pci/pci-sysfs.c
+@@ -793,10 +793,17 @@ static ssize_t pci_write_config(struct file *filp, struct kobject *kobj,
+ 	u8 *data = (u8 *) buf;
+ 	int ret;
+ 
++#ifdef CONFIG_IGEL_ALLOW_RYZENADJ
++	if (dev->vendor != 0x1022 || dev->class != 0x60000 || (off != 0xB8 && off != 0xBC) || count > 4) {
++		ret = security_locked_down(LOCKDOWN_PCI_ACCESS);
++		if (ret)
++			return ret;
++	}
++#else
+ 	ret = security_locked_down(LOCKDOWN_PCI_ACCESS);
+ 	if (ret)
+ 		return ret;
+-
++#endif
+ 	if (resource_is_exclusive(&dev->driver_exclusive_resource, off,
+ 				  count)) {
+ 		pci_warn_once(dev, "%s: Unexpected write to kernel-exclusive config offset %llx",

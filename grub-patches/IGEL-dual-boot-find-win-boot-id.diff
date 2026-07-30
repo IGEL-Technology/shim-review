@@ -1,0 +1,63 @@
+Index: grub2/grub-core/commands/efi/find_win_boot_id.c
+===================================================================
+--- grub2.orig/grub-core/commands/efi/find_win_boot_id.c
++++ grub2/grub-core/commands/efi/find_win_boot_id.c
+@@ -43,11 +43,11 @@ grub_find_win_boot_id(struct grub_extcmd
+ 
+   for (i=0;i<12288;i++) {
+     if (i <= 0xf) {
+-      grub_snprintf(varname, 200, "Boot000%x", i);
++      grub_snprintf(varname, 200, "Boot000%X", i);
+     } else if (i <= 0xff) {
+-      grub_snprintf(varname, 200, "Boot00%x", i);
++      grub_snprintf(varname, 200, "Boot00%X", i);
+     } else if (i <= 0xfff) {
+-      grub_snprintf(varname, 200, "Boot0%x", i);
++      grub_snprintf(varname, 200, "Boot0%X", i);
+     } else {
+       grub_snprintf(varname, 200, "Boot%x", i);
+     }
+@@ -84,13 +84,13 @@ grub_find_win_boot_id(struct grub_extcmd
+     }
+     if (found != 0) {
+       if (i <= 0xf) {
+-        grub_snprintf(id, 11, "000%x", i);
++        grub_snprintf(id, 11, "000%X", i);
+       } else if (i <= 0xff) {
+-        grub_snprintf(id, 11, "00%x", i);
++        grub_snprintf(id, 11, "00%X", i);
+       } else if (i <= 0xfff) {
+-        grub_snprintf(id, 11, "0%x", i);
++        grub_snprintf(id, 11, "0%X", i);
+       } else {
+-        grub_snprintf(id, 11, "%x", i);
++        grub_snprintf(id, 11, "%X", i);
+       }
+       grub_dprintf("winboot","%s: windows bootloader found with id %s\n", varname, id);
+       break;
+@@ -103,17 +103,17 @@ grub_find_win_boot_id(struct grub_extcmd
+   if (found == 0 && maybe >= 0) {
+     i = maybe;
+     if (i <= 0xf) {
+-      grub_snprintf(varname, 200, "Boot000%x", i);
+-      grub_snprintf(id, 11, "000%x", i);
++      grub_snprintf(varname, 200, "Boot000%X", i);
++      grub_snprintf(id, 11, "000%X", i);
+     } else if (i <= 0xff) {
+-      grub_snprintf(varname, 200, "Boot00%x", i);
+-      grub_snprintf(id, 11, "00%x", i);
++      grub_snprintf(varname, 200, "Boot00%X", i);
++      grub_snprintf(id, 11, "00%X", i);
+     } else if (i <= 0xfff) {
+-      grub_snprintf(varname, 200, "Boot0%x", i);
+-      grub_snprintf(id, 11, "0%x", i);
++      grub_snprintf(varname, 200, "Boot0%X", i);
++      grub_snprintf(id, 11, "0%X", i);
+     } else {
+-      grub_snprintf(varname, 200, "Boot%x", i);
+-      grub_snprintf(id, 11, "%x", i);
++      grub_snprintf(varname, 200, "Boot%X", i);
++      grub_snprintf(id, 11, "%X", i);
+     }
+     grub_dprintf("winboot","%s: windows bootloader found with id %s\n", varname, id);
+   }

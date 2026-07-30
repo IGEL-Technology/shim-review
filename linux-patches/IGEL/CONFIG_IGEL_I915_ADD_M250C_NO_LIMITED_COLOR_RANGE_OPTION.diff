@@ -1,0 +1,122 @@
+IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION
+	  We have the problem that the M250 has serious problems with colors on
+	  DisplayPort 1 which can be solved with disabling the limited colorspace
+	  for this connector (which is wrong but works). Doing so with xrandr is
+	  great but will result that the monitor gets a black screen and only come
+	  back after some time. So a new i915 module option was added so the
+	  settings are done in kernel to avoid the black screen issue and the
+	  color problems.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index a44fbac1e5e2..ed8d6c06d425 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -51,6 +51,12 @@
+ #include <drm/drm_probe_helper.h>
+ 
+ #include "g4x_dp.h"
++#if defined(CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION) ||\
++    defined(CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION) ||\
++    defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) ||\
++    defined(CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION)
++#include "i915_drv.h"
++#endif
+ #include "i915_utils.h"
+ #include "intel_alpm.h"
+ #include "intel_atomic.h"
+diff --git a/drivers/gpu/drm/i915/display/intel_dp.c b/drivers/gpu/drm/i915/display/intel_dp.c
+index a44fbac1e5e2..ed8d6c06d425 100644
+--- a/drivers/gpu/drm/i915/display/intel_dp.c
+@@ -2749,7 +2762,15 @@ bool intel_dp_limited_color_range(const struct intel_crtc_state *crtc_state,
+ 		to_intel_digital_connector_state(conn_state);
+ 	const struct drm_display_mode *adjusted_mode =
+ 		&crtc_state->hw.adjusted_mode;
++#if defined(CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION) && defined(_I915_PARAMS_H_)
++	struct intel_connector *intel_connector =
++		to_intel_connector(conn_state->connector);
++	struct drm_connector *connector = &intel_connector->base;
+ 
++	/* gottwald@igel.com Ugly workaround for M250C colorspace problems on DP-1 connector */
++	if (strcmp("DP-1", connector->name) == 0 && i915_modparams.m250c_no_limited_color_range != 0)
++		return 0;
++#endif
+ 	/*
+ 	 * Our YCbCr output is always limited range.
+ 	 * crtc_state->limited_color_range only applies to RGB,
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 37746dd619fd..3caf6115c0e3 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
+@@ -130,6 +130,55 @@ i915_param_named_unsafe(lmem_size, uint, 0400,
+ i915_param_named_unsafe(lmem_bar_size, uint, 0400,
+ 			"Set the lmem bar size(in MiB).");
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION
++i915_param_named(lvds, int, 0444,
++	"LVDS enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++i915_param_named(tv, int, 0444,
++	"TV enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION
++/* gottwald@igel.com: sometimes a dp is wrongly detected as edp which makes
++ * problems with hotplug. Try to determine this automatically failed so
++ * added module param to fix this. */
++i915_param_named(edp_is_dp, bool, 0444,
++	"eDP is DP (0 = disable, 1 = edp is dp)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION
++/* gottwald@igel.com: sometimes the max dp link speed is not detected correctly
++ * to prevent black screen issues this parameter can be used to limit the
++ * max DisplayPort link speed */
++i915_param_named(limit_dp_max_rate, int, 0644,
++	"DP port max link rate (0 = not set (default), 162000, 216000, 270000, 324000, 432000, 540000, 648000, 810000)");
++#endif
++
++/* gottwald@igel.com: some devices have problems with higher resolutions and
++ * DP audio where the screen will get black if the DP audio get initialized
++ * to be able to work around this you can use this option to disable DP audio.
++ * Add the same option for HDMI also just to be sure... */
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION
++i915_param_named(disable_dp_audio, bool, 0644,
++	"Disable DP audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
++i915_param_named(disable_hdmi_audio, bool, 0644,
++	"Disable HDMI audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION
++/* gottwald@igel.com: M250C workaround to fix color space limit problems */
++i915_param_named(m250c_no_limited_color_range, bool, 0444,
++	"Do not use limited color range for DP1 on M250C (0 = not set (default), 1 = do not use limited color range)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER
++i915_param_named(reverse_enum_order, bool, 0444,
++       "Reverse connector enumeration order (0 = not set (default), 1 = reverse order)");
++#endif
++
+ #if IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API)
+ i915_param_named(enable_debug_only_api, bool, 0400,
+ 		 "Enable support for unstable debug only userspace API. (default:false)");
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 0fbcb5b6d7bf..8a2959c8c8b7 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
+@@ -45,6 +45,14 @@ struct drm_printer;
+  * mode: debugfs file permissions, one of {0400, 0600, 0}, use 0 to not create
+  *       debugfs file
+  */
++#if ! defined(CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER)
+ #define I915_PARAMS_FOR_EACH(param) \
+ 	param(int, modeset, -1, 0400) \
+ 	param(int, enable_guc, -1, 0400) \

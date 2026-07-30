@@ -1,0 +1,91 @@
+IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE
+	  There are some devices which get into serious trouble if using
+	  best mode and connecting 3 or more monitors. These devices all
+	  are using the radeon driver so disable the best_mode for them.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/drm_client_modeset.c b/drivers/gpu/drm/drm_client_modeset.c
+index eaf71c9ecf13..74e61bd99f09 100644
+--- a/drivers/gpu/drm/drm_client_modeset.c
+@@ -826,6 +1297,9 @@ int drm_client_modeset_probe(struct drm_client_dev *client, unsigned int width,
+ 	struct drm_crtc **crtcs;
+ 	int i, ret = 0;
+ 	bool *enabled;
++#if defined(CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE) || defined(CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE)
++	int count = 0;
++#endif
+ 
+ 	drm_dbg_kms(dev, "\n");
+ 
+diff --git a/drivers/gpu/drm/drm_client_modeset.c b/drivers/gpu/drm/drm_client_modeset.c
+index eaf71c9ecf13..74e61bd99f09 100644
+--- a/drivers/gpu/drm/drm_client_modeset.c
+@@ -871,17 +1345,68 @@ int drm_client_modeset_probe(struct drm_client_dev *client, unsigned int width,
+ 		drm_dbg_kms(dev, "No connectors reported connected with modes\n");
+ 	drm_client_connectors_enabled(connectors, connector_count, enabled);
+ 
++#if defined(CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE) || defined(CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE)
++	count = 0;
++	for (i = 0; i < connector_count; i++) {
++		if (enabled[i])
++			count++;
++	}
++#endif
++
++#ifdef CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE
++	/* We have a radeon device which behave really badly if trying to set a common
++	 * mode with more then 2 monitors with different resolutions so try to fix this */
++	if (count > 2) {
++		if (dev &&
++		dev->driver &&
++		dev->driver->name) {
++			if (!strcmp(dev->driver->name, "radeon")) {
++				use_best_mode = 0;
++			}
++		}
++	}
++#endif /* CONFIG_IGEL_FIX_RADEON_3_SCREENS_BEST_MODE_ISSUE */
++
++#ifdef CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE
++	/* we tested with a AMD V1000 platform and 4 x 4K screens and run into issues
++	 * so do not use best_mode for more then 3 screens */
++	if (count > 3) {
++		use_best_mode = 0;
++	}
++#endif /* CONFIG_IGEL_4_SCREENS_BEST_MODE_ISSUE */
++
+ 	if (!drm_client_firmware_config(client, connectors, connector_count, crtcs,
+ 					modes, offsets, enabled, width, height)) {
+ 		modes_destroy(dev, modes, connector_count);
+ 		memset(crtcs, 0, connector_count * sizeof(*crtcs));
+ 		memset(offsets, 0, connector_count * sizeof(*offsets));
+ 
++#ifdef CONFIG_IGEL_USE_BEST_MODE_FRAMEBUFFER
++		if (!drm_client_target_cloned(dev, connectors, connector_count, modes,
++					      offsets, enabled, width, height)) {
++			if (use_best_mode) {
++				if (!drm_client_target_common_modes(client, connectors, connector_count, modes,
++								    enabled, width, height,
++								    (int)m_width, (int)m_height)) {
++					if (!drm_client_best_mode(client, connectors, connector_count, modes,
++								  offsets, enabled, width, height,
++								  (int)m_width, (int)m_height)) {
++						DRM_ERROR("Unable to find initial modes\n");
++					}
++				}
++			} else {
++				if(!drm_client_target_preferred(dev, connectors, connector_count, modes,
++								offsets, enabled, width, height))
++					DRM_ERROR("Unable to find initial modes\n");
++			}
++		}
++#else
+ 		if (!drm_client_target_cloned(dev, connectors, connector_count, modes,
+ 					      offsets, enabled, width, height) &&
+ 		    !drm_client_target_preferred(dev, connectors, connector_count, modes,
+ 						 offsets, enabled, width, height))
+ 			drm_err(dev, "Unable to find initial modes\n");
++#endif
+ 
+ 		drm_dbg_kms(dev, "picking CRTCs for %dx%d config\n",
+ 			    width, height);

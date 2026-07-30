@@ -105,7 +105,7 @@
 @@ -692,11 +754,13 @@ set timeout_style=hidden\n\
  insmod regexp\n\
  \n\
- regexp --set=0:dev '(\\(hd[0-9]{1,},)' $cmdpath\n\
+ regexp --set=0:dev '(\\(hd[0-9]{1,},)' $igeldev\n\
 -set device=\"${dev}igel1)\"\n\
 +set device=\"${dev}igel%u)\"\n\
  set igel_part_check=false\n\

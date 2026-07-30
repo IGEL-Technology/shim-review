@@ -1,0 +1,360 @@
+--- /dev/null
++++ b/grub-core/commands/efi/find_win_boot_id.c
+@@ -0,0 +1,151 @@
++#include <grub/types.h>
++#include <grub/mm.h>
++#include <grub/misc.h>
++#include <grub/efi/api.h>
++#include <grub/efi/efi.h>
++#include <grub/extcmd.h>
++#include <grub/env.h>
++#include <grub/charset.h>
++
++GRUB_MOD_LICENSE ("GPLv3+");
++
++static const struct grub_arg_option options[] = {
++  {"set", 's', GRUB_ARG_OPTION_OPTIONAL, N_("Save parsed result to environment variable)."), N_("ENV_VAR"), ARG_TYPE_STRING},
++  {0, 0, 0, 0, 0, 0}
++};
++
++static grub_err_t
++grub_find_win_boot_id(struct grub_extcmd_context *ctxt,
++		      int argc __attribute__ ((unused)),
++		      char **args __attribute__ ((unused)))
++{
++  struct grub_arg_list *state = ctxt->state;
++  grub_err_t status = GRUB_ERR_NONE;
++  grub_efi_char16_t *name = NULL;
++  grub_guid_t guid = GRUB_EFI_GLOBAL_VARIABLE_GUID;
++  grub_uint8_t *buf = NULL, *bp;
++  char id[12], varname[201], *var;
++  void *efi_var = NULL;
++  grub_size_t efi_var_size = 0;
++  grub_uint16_t i = 0, p = 0, c = 0, found = 0;
++  grub_int32_t maybe = -1;
++
++  if (argc == 1)
++    grub_printf("%s\n", args[0]);
++
++  buf = grub_zalloc(512);
++  if (buf == NULL) {
++    status = grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
++    return status;
++  }
++
++  id[0] = '\0';
++
++  for (i=0;i<12288;i++) {
++    if (i <= 0xf) {
++      grub_snprintf(varname, 200, "Boot000%x", i);
++    } else if (i <= 0xff) {
++      grub_snprintf(varname, 200, "Boot00%x", i);
++    } else if (i <= 0xfff) {
++      grub_snprintf(varname, 200, "Boot0%x", i);
++    } else {
++      grub_snprintf(varname, 200, "Boot%x", i);
++    }
++    grub_efi_get_variable (varname, &guid, &efi_var_size, &efi_var);
++    if (!efi_var || !efi_var_size)
++    {
++      continue;
++    }
++
++    c=0;
++    var = (char *)efi_var;
++    for (p=0;p<efi_var_size;p++) {
++      if (var[p] == '\0')
++        continue;
++      if (var[p] == '\n')
++        break;
++      buf[c++] = var[p];
++    }
++    buf[c]='\0';
++
++    grub_free(efi_var);
++
++    grub_dprintf("winboot","%s: buf = %s\n", varname, buf);
++    found = 0;
++    bp = buf;
++    while (*bp != '\0' && found == 0 && grub_strlen((char *)bp) >= 20) {
++      if (grub_strncasecmp((char *)bp, "\\EFI\\Microsoft\\Boot\\bootmgfw.efi", 32) == 0) {
++        found = 1;
++        break;
++      } else if (grub_strncasecmp((char *)bp, "Windows Boot Manager", 20) == 0) {
++        maybe = i;
++      }
++      bp++;
++    }
++    if (found != 0) {
++      if (i <= 0xf) {
++        grub_snprintf(id, 11, "000%x", i);
++      } else if (i <= 0xff) {
++        grub_snprintf(id, 11, "00%x", i);
++      } else if (i <= 0xfff) {
++        grub_snprintf(id, 11, "0%x", i);
++      } else {
++        grub_snprintf(id, 11, "%x", i);
++      }
++      grub_dprintf("winboot","%s: windows bootloader found with id %s\n", varname, id);
++      break;
++    }
++    if (maybe != i) {
++      grub_dprintf("winboot","%s: is not a windows bootloader\n", varname);
++    }
++  }
++
++  if (found == 0 && maybe >= 0) {
++    i = maybe;
++    if (i <= 0xf) {
++      grub_snprintf(varname, 200, "Boot000%x", i);
++      grub_snprintf(id, 11, "000%x", i);
++    } else if (i <= 0xff) {
++      grub_snprintf(varname, 200, "Boot00%x", i);
++      grub_snprintf(id, 11, "00%x", i);
++    } else if (i <= 0xfff) {
++      grub_snprintf(varname, 200, "Boot0%x", i);
++      grub_snprintf(id, 11, "0%x", i);
++    } else {
++      grub_snprintf(varname, 200, "Boot%x", i);
++      grub_snprintf(id, 11, "%x", i);
++    }
++    grub_dprintf("winboot","%s: windows bootloader found with id %s\n", varname, id);
++  }
++
++  if (name) {
++    grub_free(name);
++    name = NULL;
++  }
++
++  if (id[0] != '\0') {
++    if (state[0].set) {
++      status = grub_env_set (state[0].arg, id);
++    } else {
++      grub_printf("%s\n", (const char *)id);
++      status = GRUB_ERR_NONE;
++    }
++  }
++
++  return status;
++}
++
++static grub_extcmd_t cmd = NULL;
++
++GRUB_MOD_INIT (find_win_boot_id)
++{
++  cmd = grub_register_extcmd ("find_win_boot_id", grub_find_win_boot_id, 0, N_("[-s ENV_VAR]"),
++ N_("Get boot id from Windows bootloader."), options);
++}
++
++GRUB_MOD_FINI (find_win_boot_id)
++{
++  if (cmd)
++    grub_unregister_extcmd (cmd);
++}
++
+--- a/grub-core/kern/efi/efi.c
++++ b/grub-core/kern/efi/efi.c
+@@ -202,6 +202,50 @@ grub_efi_set_virtual_address_map (grub_e
+   return grub_error (GRUB_ERR_IO, "set_virtual_address_map failed");
+ }
+ 
++grub_efi_status_t
++grub_efi_get_next_variable_name(grub_size_t *name_size,
++				grub_efi_char16_t **name,
++			        grub_guid_t *guid)
++{
++  grub_efi_status_t status;
++  grub_efi_runtime_services_t *r;
++  grub_efi_char16_t *rname;
++
++  if (*name_size == 0)
++    *name_size = 256;
++
++  if (*name == NULL)
++    *name = grub_zalloc(*name_size);
++
++  if (*name == NULL)
++    return GRUB_EFI_OUT_OF_RESOURCES;
++
++  r = grub_efi_system_table->runtime_services;
++
++  status = r->get_next_variable_name (name_size, *name, guid);
++
++  if (status == GRUB_EFI_BUFFER_TOO_SMALL) {
++    rname = grub_zalloc(*name_size);
++    grub_free (*name);
++    if (rname == NULL) {
++      *name = NULL;
++      *name_size = 0;
++      return GRUB_EFI_OUT_OF_RESOURCES;
++    }
++    *name = rname;
++    status = r->get_next_variable_name (name_size, *name, guid);
++  }
++
++  if (status == GRUB_EFI_NOT_FOUND) {
++    grub_free (*name);
++    *name = NULL;
++    *name_size = 0;
++    return status;
++  }
++
++  return GRUB_EFI_SUCCESS;
++}
++
+ grub_err_t
+ grub_efi_set_variable_with_attributes (const char *var, const grub_guid_t *guid,
+ 		      void *data, grub_size_t datasize, grub_efi_uint32_t attributes)
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -784,6 +784,22 @@ module = {
+ };
+ 
+ module = {
++  name = set_next_boot;
++
++  common = commands/efi/set_next_boot.c;
++
++  enable = efi;
++};
++
++module = {
++  name = find_win_boot_id;
++
++  common = commands/efi/find_win_boot_id.c;
++
++  enable = efi;
++};
++
++module = {
+   name = lsacpi;
+ 
+   common = commands/lsacpi.c;
+--- a/include/grub/efi/efi.h
++++ b/include/grub/efi/efi.h
+@@ -88,6 +88,9 @@ grub_err_t EXPORT_FUNC (grub_efi_set_vir
+ 							   grub_efi_uintn_t descriptor_size,
+ 							   grub_efi_uint32_t descriptor_version,
+ 							   grub_efi_memory_descriptor_t *virtual_map);
++grub_efi_status_t EXPORT_FUNC (grub_efi_get_next_variable_name) (grub_size_t *name_size,
++								 grub_efi_char16_t **name,
++							         grub_guid_t *guid);
+ grub_efi_status_t EXPORT_FUNC (grub_efi_get_variable_with_attributes) (const char *variable,
+ 								       const grub_guid_t *guid,
+ 								       grub_size_t *datasize_out,
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -335,18 +335,27 @@ menuentry \"Please contact your admin\"
+   dualboot = grub_env_get ("dualboot");
+   if (dualboot != NULL && dualboot[0] == '1') {
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " dualboot");
+-    grub_snprintf(winchain, 400, "set win_default=0\n\n\
++    grub_snprintf(winchain, 600, "set win_default=0\n\n\
+ if [ ! -e %s/EFI/boot_igel ]; then\n\
+    if [ ! -e %s/EFI/boot_igel_once ]; then\n\
+       if [ \"$igel_boot\" != \"1\" ]; then\n\
+          set default=$win_default\n\
+       fi\n\
+    fi\n\
+-fi\n\n\
+-menuentry 'Boot Windows' {\n\
+-   set root=%s\n\
+-   chainloader /EFI/Microsoft/Boot/bootmgfw.efi\n\
+-}\n\n", efidev, efidev, efidev);
++fi\n\
++if [ ! -e %s/EFI/igel_no_bootnext ]; then\n\
++   menuentry 'Boot Windows' {\n\
++      find_win_boot_id --set=bootid\n\
++      if [ \"$bootid\" != \"\" ]; then\n\
++         set_next_boot $bootid\n\
++      fi\n\
++   }\n\
++else\n\
++   menuentry 'Boot Windows' {\n\
++      set root=%s\n\
++      chainloader /EFI/Microsoft/Boot/bootmgfw.efi\n\
++   }\n\
++fi\n\n", efidev, efidev, efidev, efidev);
+   }
+ 
+   if (sys_minor != 0 && sys_minor != 1) {
+@@ -772,12 +781,12 @@ menuentry 'Boot Windows' {\n\
+   size_params = grub_strlen(cmdline) + grub_strlen(val) + 2;
+ 
+   if (dualboot != NULL && dualboot[0] == '1') {
+-    size_params += 610;
++    size_params += grub_strlen(winchain) + 20;
+     def1 += 1;
+     def += 1;
+   }
+-  if ((size_params * 9 + 3000) > content_size) {
+-	  content_size = (size_params * 9 + 3000);
++  if ((size_params * 9 + 3500) > content_size) {
++	  content_size = (size_params * 9 + 3500);
+   }
+ 
+   *content = (unsigned char *) grub_zalloc (content_size);
+--- /dev/null
++++ b/grub-core/commands/efi/set_next_boot.c
+@@ -0,0 +1,61 @@
++#include <grub/types.h>
++#include <grub/mm.h>
++#include <grub/misc.h>
++#include <grub/normal.h>
++#include <grub/charset.h>
++#include <grub/efi/api.h>
++#include <grub/efi/efi.h>
++
++GRUB_MOD_LICENSE ("GPLv3+");
++
++static grub_err_t
++grub_set_next_boot (struct grub_command *cmd __attribute__ ((unused)),
++		    int argc __attribute__ ((unused)),
++		    char **args __attribute__ ((unused)))
++{
++  static grub_guid_t guid = {0x8be4df61, 0x93ca, 0x11d2, {0xaa, 0x0d, 0x00, 0xe0, 0x98, 0x03, 0x2b, 0x8c}};
++  grub_efi_status_t status;
++  grub_uint16_t num;
++  char *p;
++
++  if (argc != 1) {
++    return grub_error (GRUB_ERR_BAD_ARGUMENT, N_("one argument expected"));
++  }
++
++  p = args[0];
++
++  while (*p == '0' && *p != '\0') {
++    p++;
++  }
++
++  if (*p == '\0') {
++    num = 0;
++  } else {
++    num = grub_strtoul(p,NULL,16);
++  }
++
++  status = grub_efi_set_variable_with_attributes("BootNext", &guid, (grub_uint8_t *)&num,
++					sizeof (num), GRUB_EFI_VARIABLE_NON_VOLATILE |
++					GRUB_EFI_VARIABLE_BOOTSERVICE_ACCESS |
++					GRUB_EFI_VARIABLE_RUNTIME_ACCESS);
++  if (status != GRUB_ERR_NONE)
++    return status;
++
++  grub_reboot ();
++
++  return GRUB_ERR_NONE;
++}
++
++static grub_command_t cmd;
++
++GRUB_MOD_INIT(set_next_boot)
++{
++  cmd = grub_register_command ("set_next_boot", grub_set_next_boot, "",
++			       "Set boot next");
++}
++
++GRUB_MOD_FINI(set_next_boot)
++{
++  if (cmd)
++    grub_unregister_command (cmd);
++}

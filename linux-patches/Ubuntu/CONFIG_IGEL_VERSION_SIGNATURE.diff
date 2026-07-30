@@ -1,0 +1,65 @@
+IGEL_VERSION_SIGNATURE
+	  This string will be added to the kernel version what you see with uname.
+	  If IGEL_USE_VERSION_SIGNATURE is also choosen it will also be shown in
+	  the /proc/version_signature.
+
+	  Source: Ubuntu
+	  URL: https://wiki.ubuntu.com/Kernel/SourceCode
+	  Commit: 195486586f0bbe34d0c1be810df4a2d78cfafee2
+diff --git a/fs/proc/version_signature.c b/fs/proc/version_signature.c
+new file mode 100644
+index 000000000000..1ff358c20d02
+@@ -0,0 +1,35 @@
++#include <linux/kernel.h>
++#include <linux/module.h>
++#include <linux/fs.h>
++#include <linux/init.h>
++#include <linux/proc_fs.h>
++#include <linux/seq_file.h>
++#include <linux/utsname.h>
++
++#ifdef CONFIG_IGEL_VERSION_SIGNATURE
++static int version_signature_proc_show(struct seq_file *m, void *v)
++{
++	seq_printf(m, "%s\n", CONFIG_IGEL_VERSION_SIGNATURE);
++	return 0;
++}
++
++static int version_signature_proc_open(struct inode *inode, struct file *file)
++{
++	return single_open(file, version_signature_proc_show, NULL);
++}
++
++static const struct proc_ops version_signature_proc_fops = {
++	.proc_open		= version_signature_proc_open,
++	.proc_read		= seq_read,
++	.proc_lseek		= seq_lseek,
++	.proc_release	= single_release,
++};
++
++static int __init proc_version_signature_init(void)
++{
++	proc_create("version_signature", 0, NULL, &version_signature_proc_fops);
++	return 0;
++}
++
++module_init(proc_version_signature_init);
++#endif
+diff --git a/init/version-timestamp.c b/init/version-timestamp.c
+index d071835121c2..a3f03db74951 100644
+--- a/init/version-timestamp.c
+@@ -26,6 +26,14 @@ struct uts_namespace init_uts_ns = {
+ };
+ 
+ /* FIXED STRINGS! Don't touch! */
++#ifdef CONFIG_IGEL_VERSION_SIGNATURE
++const char linux_banner[] =
++	"Linux version " UTS_RELEASE " (" LINUX_COMPILE_BY "@"
++	LINUX_COMPILE_HOST ") (" LINUX_COMPILER ") " UTS_VERSION
++	" (" CONFIG_IGEL_VERSION_SIGNATURE ")"
++	"\n";
++#else
+ const char linux_banner[] =
+ 	"Linux version " UTS_RELEASE " (" LINUX_COMPILE_BY "@"
+ 	LINUX_COMPILE_HOST ") (" LINUX_COMPILER ") " UTS_VERSION "\n";
++#endif

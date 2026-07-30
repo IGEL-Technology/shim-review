@@ -1,0 +1,25 @@
+IGEL_SURFACE_SECUREBOOT
+	  Enable a workaround for early boot hangs on some Microsoft Surface
+	  devices when booting with UEFI Secure Boot enabled.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/arch/x86/boot/header.S b/arch/x86/boot/header.S
+index 9bea5a1e2c52..bb9d810285bb 100644
+--- a/arch/x86/boot/header.S
+@@ -111,7 +111,15 @@ extra_header_fields:
+ 	.long	salign				# SizeOfHeaders
+ 	.long	0				# CheckSum
+ 	.word	IMAGE_SUBSYSTEM_EFI_APPLICATION	# Subsystem (EFI application)
++#ifdef CONFIG_IGEL_SURFACE_SECUREBOOT
++#ifdef CONFIG_EFI_DXE_MEM_ATTRIBUTES
+ 	.word	IMAGE_DLLCHARACTERISTICS_NX_COMPAT	# DllCharacteristics
++#else
++	.word	0				# DllCharacteristics
++#endif
++#else
++	.word	IMAGE_DLLCHARACTERISTICS_NX_COMPAT	# DllCharacteristics
++#endif /* CONFIG_IGEL_SURFACE_SECUREBOOT */
+ #ifdef CONFIG_X86_32
+ 	.long	0				# SizeOfStackReserve
+ 	.long	0				# SizeOfStackCommit

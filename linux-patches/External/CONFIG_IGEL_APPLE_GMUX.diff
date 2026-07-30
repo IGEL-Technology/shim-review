@@ -1,0 +1,321 @@
+IGEL_APPLE_GMUX
+	  In order to support MacBooks with T2 security chip several changes are
+	  needed. With this switch you can decide for or against T2 support.
+
+	  Source: External
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/2005-apple-gmux-Use-GMSP-acpi-method-for-interrupt-clear.patch
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/2008-i915-4-lane-quirk-for-mbp15-1.patch
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/2009-apple-gmux-allow-switching-to-igpu-at-probe.patch
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -2333,6 +2368,11 @@ static int amdgpu_pci_probe(struct pci_dev *pdev,
+ 	int ret, retry = 0, i;
+ 	bool supports_atomic = false;
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	if (vga_switcheroo_client_probe_defer(pdev))
++		return -EPROBE_DEFER;
++#endif
++
+ 	if ((pdev->class >> 8) == PCI_CLASS_DISPLAY_VGA ||
+ 	    (pdev->class >> 8) == PCI_CLASS_DISPLAY_OTHER) {
+ 		if (drm_firmware_drivers_only() && amdgpu_modeset == -1)
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index c09aa759f4d4..c4e436a36bfb 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -4868,6 +4882,11 @@ static bool intel_ddi_a_force_4_lanes(struct intel_digital_port *dig_port)
+ 	if (dig_port->ddi_a_4_lanes)
+ 		return false;
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	if (intel_has_quirk(display, QUIRK_DDI_A_FORCE_4_LANES))
++		return true;
++#endif
++
+ 	/* Broxton/Geminilake: Bspec says that DDI_A_4_LANES is the only
+ 	 *                     supported configuration
+ 	 */
+diff --git a/drivers/gpu/drm/i915/display/intel_quirks.c b/drivers/gpu/drm/i915/display/intel_quirks.c
+index 1abbdd426e58..a07e7d5217d9 100644
+--- a/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -66,12 +69,37 @@ static void quirk_increase_ddi_disabled_time(struct intel_display *display)
+ 	drm_info(display->drm, "Applying Increase DDI Disabled quirk\n");
+ }
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++/*
++ * In some cases, the firmware might not set the lane count to 4 (for example,
++ * when booting in some dual GPU Macs with the dGPU as the default GPU), this
++ * quirk is used to force it as otherwise it might not be possible to compute a
++ * valid link configuration.
++ */
++static void quirk_ddi_a_force_4_lanes(struct intel_display *display)
++{
++	intel_set_quirk(display, QUIRK_DDI_A_FORCE_4_LANES);
++	drm_info(display->drm, "Applying DDI A Forced 4 Lanes quirk\n");
++}
++#endif
++
+ static void quirk_no_pps_backlight_power_hook(struct intel_display *display)
+ {
+ 	intel_set_quirk(display, QUIRK_NO_PPS_BACKLIGHT_POWER_HOOK);
+ 	drm_info(display->drm, "Applying no pps backlight power quirk\n");
+ }
+ 
++#if defined(CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK) && defined(_I915_DRV_H_)
++/* Dell Wyse 3040 doesn't work well with some Dell monitors (E-series).
++ * Workaround this by skipping DP DPMS D3 transition.
++ */
++static void quirk_disable_dp_dpms_d3(struct intel_display *display)
++{
++	intel_set_quirk(display, QUIRK_SKIP_DP_DPMS_D3);
++	DRM_INFO("Applying Wyse 3040 quirk\n");
++}
++#endif
++
+ static void quirk_fw_sync_len(struct intel_dp *intel_dp)
+ {
+ 	struct intel_display *display = to_intel_display(intel_dp);
+diff --git a/drivers/gpu/drm/i915/display/intel_quirks.c b/drivers/gpu/drm/i915/display/intel_quirks.c
+index 1abbdd426e58..a07e7d5217d9 100644
+--- a/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -235,6 +263,14 @@ static struct intel_quirk intel_quirks[] = {
+ 	/* ECS Liva Q2 */
+ 	{ 0x3185, 0x1019, 0xa94d, quirk_increase_ddi_disabled_time },
+ 	{ 0x3184, 0x1019, 0xa94d, quirk_increase_ddi_disabled_time },
++#if defined(CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK) && defined(_I915_DRV_H_)
++	/* Dell Wyse 3040 */
++	{ 0x22b0, 0x1028, 0x07c1, quirk_disable_dp_dpms_d3 },
++#endif
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	/* Apple MacBookPro15,1 */
++	{ 0x3e9b, 0x106b, 0x0176, quirk_ddi_a_force_4_lanes },
++#endif
+ 	/* HP Notebook - 14-r206nv */
+ 	{ 0x0f31, 0x103c, 0x220f, quirk_invert_brightness },
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_quirks.h b/drivers/gpu/drm/i915/display/intel_quirks.h
+index 06da0e286c67..ff01c7d5948e 100644
+--- a/drivers/gpu/drm/i915/display/intel_quirks.h
+@@ -21,6 +21,9 @@ enum intel_quirk_id {
+ 	QUIRK_NO_PPS_BACKLIGHT_POWER_HOOK,
+ 	QUIRK_FW_SYNC_LEN,
+ 	QUIRK_EDP_LIMIT_RATE_HBR2,
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	QUIRK_DDI_A_FORCE_4_LANES,
++#endif
+ };
+ 
+ void intel_init_quirks(struct intel_display *display);
+diff --git a/drivers/pci/vgaarb.c b/drivers/pci/vgaarb.c
+index baa242b14099..aefe44f84912 100644
+--- a/drivers/pci/vgaarb.c
+@@ -143,6 +143,9 @@ void vga_set_default_device(struct pci_dev *pdev)
+ 	pci_dev_put(vga_default);
+ 	vga_default = pci_dev_get(pdev);
+ }
++#ifdef CONFIG_IGEL_APPLE_GMUX
++EXPORT_SYMBOL_GPL(vga_set_default_device);
++#endif
+ 
+ /**
+  * vga_remove_vgacon - deactivate VGA console
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -21,6 +21,9 @@
+ #include <linux/delay.h>
+ #include <linux/pci.h>
+ #include <linux/vga_switcheroo.h>
++#ifdef CONFIG_IGEL_APPLE_GMUX
++#include <linux/vgaarb.h>
++#endif
+ #include <linux/debugfs.h>
+ #include <acpi/video.h>
+ #include <asm/io.h>
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -91,6 +94,9 @@ struct apple_gmux_config {
+ 	enum vga_switcheroo_handler_flags_t handler_flags;
+ 	unsigned long resource_type;
+ 	bool read_version_as_u32;
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	bool use_acpi_gmsp;
++#endif
+ 	char *name;
+ };
+ 
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -107,6 +113,12 @@ struct apple_gmux_config {
+ 
+ # define MMIO_GMUX_MAX_BRIGHTNESS	0xffff
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++static bool force_igd;
++module_param(force_igd, bool, 0);
++MODULE_PARM_DESC(force_idg, "Switch gpu to igd on module load. Make sure that you have apple-set-os set up and the iGPU is in `lspci -s 00:02.0`. (default: false) (bool)");
++#endif
++
+ static u8 gmux_pio_read8(struct apple_gmux_data *gmux_data, int port)
+ {
+ 	return inb(gmux_data->iostart + port);
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -578,6 +590,9 @@ static const struct apple_gmux_config apple_gmux_pio = {
+ 	.handler_flags = VGA_SWITCHEROO_CAN_SWITCH_DDC,
+ 	.resource_type = IORESOURCE_IO,
+ 	.read_version_as_u32 = false,
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	.use_acpi_gmsp = false,
++#endif
+ 	.name = "classic"
+ };
+ 
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -590,6 +605,9 @@ static const struct apple_gmux_config apple_gmux_index = {
+ 	.handler_flags = VGA_SWITCHEROO_NEEDS_EDP_CONFIG,
+ 	.resource_type = IORESOURCE_IO,
+ 	.read_version_as_u32 = true,
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	.use_acpi_gmsp = false,
++#endif
+ 	.name = "indexed"
+ };
+ 
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -602,6 +620,9 @@ static const struct apple_gmux_config apple_gmux_mmio = {
+ 	.handler_flags = VGA_SWITCHEROO_NEEDS_EDP_CONFIG,
+ 	.resource_type = IORESOURCE_MEM,
+ 	.read_version_as_u32 = true,
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	.use_acpi_gmsp = true,
++#endif
+ 	.name = "T2"
+ };
+ 
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -631,6 +652,26 @@ static const struct apple_gmux_config apple_gmux_mmio = {
+  * that can't be cleared. This issue seems to be unique to MMIO gmux's.
+  */
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++static int gmux_call_acpi_gmsp(struct apple_gmux_data *gmux_data, int arg)
++{
++	acpi_status status = AE_OK;
++	union acpi_object arg0 = { ACPI_TYPE_INTEGER };
++	struct acpi_object_list arg_list = { 1, &arg0 };
++
++	arg0.integer.value = arg;
++
++	status = acpi_evaluate_object(gmux_data->dhandle, "GMSP", &arg_list, NULL);
++	if (ACPI_FAILURE(status)) {
++		pr_err("GMSP call failed: %s\n",
++		       acpi_format_exception(status));
++		return -ENODEV;
++	}
++
++	return 0;
++}
++#endif
++
+ static inline void gmux_disable_interrupts(struct apple_gmux_data *gmux_data)
+ {
+ 	gmux_write8(gmux_data, GMUX_PORT_INTERRUPT_ENABLE,
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -655,9 +696,14 @@ static void gmux_clear_interrupts(struct apple_gmux_data *gmux_data)
+ 	/* to clear interrupts write back current status */
+ 	status = gmux_interrupt_get_status(gmux_data);
+ 	gmux_write8(gmux_data, GMUX_PORT_INTERRUPT_STATUS, status);
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	if (gmux_data->config->use_acpi_gmsp)
++		gmux_call_acpi_gmsp(gmux_data, 0);
++#else
+ 	/* Prevent flood of status=0 interrupts */
+ 	if (gmux_data->config == &apple_gmux_mmio)
+ 		acpi_execute_simple_method(gmux_data->dhandle, "GMSP", 0);
++#endif
+ }
+ 
+ static void gmux_notify_handler(acpi_handle device, u32 value, void *context)
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -695,6 +741,9 @@ static ssize_t gmux_selected_port_data_write(struct file *file,
+ 		const char __user *userbuf, size_t count, loff_t *ppos)
+ {
+ 	struct apple_gmux_data *gmux_data = file->private_data;
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	int ret;
++#endif
+ 
+ 	if (*ppos)
+ 		return -EINVAL;
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -702,15 +751,27 @@ static ssize_t gmux_selected_port_data_write(struct file *file,
+ 	if (count == 1) {
+ 		u8 data;
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++		ret = copy_from_user(&data, userbuf, 1);
++		if (ret)
++			return ret;
++#else
+ 		if (copy_from_user(&data, userbuf, 1))
+ 			return -EFAULT;
++#endif
+ 
+ 		gmux_write8(gmux_data, gmux_data->selected_port, data);
+ 	} else if (count == 4) {
+ 		u32 data;
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++		ret = copy_from_user(&data, userbuf, 4);
++		if (ret)
++			return ret;
++#else
+ 		if (copy_from_user(&data, userbuf, 4))
+ 			return -EFAULT;
++#endif
+ 
+ 		gmux_write32(gmux_data, gmux_data->selected_port, data);
+ 	} else
+diff --git a/drivers/platform/x86/apple-gmux.c b/drivers/platform/x86/apple-gmux.c
+index 1417e230edbd..d2f10e373143 100644
+--- a/drivers/platform/x86/apple-gmux.c
+@@ -945,6 +1006,21 @@ static int gmux_probe(struct pnp_dev *pnp, const struct pnp_device_id *id)
+ 	gmux_enable_interrupts(gmux_data);
+ 	gmux_read_switch_state(gmux_data);
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	if (force_igd) {
++		struct pci_dev *pdev;
++
++		pdev = pci_get_domain_bus_and_slot(0, 0, PCI_DEVFN(2, 0));
++		if (pdev) {
++			pr_info("Switching to IGD");
++			gmux_switchto(VGA_SWITCHEROO_IGD);
++			vga_set_default_device(pdev);
++		} else {
++			pr_err("force_idg is true, but couldn't find iGPU at 00:02.0! Is apple-set-os working?");
++		}
++	}
++#endif
++
+ 	/*
+ 	 * Retina MacBook Pros cannot switch the panel's AUX separately
+ 	 * and need eDP pre-calibration. They are distinguishable from

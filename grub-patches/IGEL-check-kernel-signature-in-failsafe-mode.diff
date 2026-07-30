@@ -42,7 +42,7 @@
 +static grub_efi_boolean_t
 +grub_secureboot_validate (void *data, grub_uint32_t size)
 +{
-+  grub_efi_guid_t guid = SHIM_VERIFY_GUID;
++  grub_guid_t guid = SHIM_VERIFY_GUID;
 +  grub_efi_shim_verify_t *shim_lock;
 +  grub_efi_status_t status;
 +
@@ -78,7 +78,7 @@
  /*****************************************************************************
   * CRC functions block
   *****************************************************************************/
-@@ -398,7 +446,7 @@ check_chain_of_sections(grub_disk_t disk
+@@ -397,7 +445,7 @@ check_chain_of_sections(grub_disk_t disk
   */
  
  static int
@@ -87,7 +87,7 @@
  {
  	struct igf_part_hdr part;
  	struct igf_sect_hdr sect_hdr;
-@@ -407,11 +455,14 @@ check_sys_bspl_partition_header (grub_di
+@@ -406,11 +454,14 @@ check_sys_bspl_partition_header (grub_di
  	grub_uint32_t diff;
  	grub_uint16_t *generation = NULL;
  	int ret = 0;
@@ -102,7 +102,7 @@
  
  	if (sect_minor)
  		*sect_minor = 0;
-@@ -451,6 +502,8 @@ check_sys_bspl_partition_header (grub_di
+@@ -450,6 +501,8 @@ check_sys_bspl_partition_header (grub_di
  			}
  			if (extents.extent[ext].type == EXTENT_TYPE_KERNEL) {
  				grub_dprintf("partition", "Found valid extent of type KERNEL\n");
@@ -111,7 +111,7 @@
  				generation = gen_array;
  				ret = 1;
  			} else if (ret != 1 && extents.extent[ext].type == EXTENT_TYPE_SPLASH) {
-@@ -494,24 +547,113 @@ check_sys_bspl_partition_header (grub_di
+@@ -493,24 +546,113 @@ check_sys_bspl_partition_header (grub_di
  		grub_dprintf("partition", "RET: %d GENERATION: %u MINOR: %u SECT_GEN: %u diff: %u\n", ret, *generation, sect_hdr.partition_minor, sect_hdr.generation, diff);
  	}
  
@@ -236,7 +236,7 @@
  	}
  
  	return ret;
-@@ -545,7 +687,7 @@ find_root_partition_secure(grub_disk_t d
+@@ -544,7 +686,7 @@ find_root_partition_secure(grub_disk_t d
  	 * if present and valid */
  
  	if (found_secure_sys_sect != 0) {
@@ -245,7 +245,7 @@
  			sys_sect = found_secure_sys_sect;
  			sys_minor = sect_minor;
  			return 0;
-@@ -564,7 +706,7 @@ find_root_partition_secure(grub_disk_t d
+@@ -563,7 +705,7 @@ find_root_partition_secure(grub_disk_t d
  
  			/* setting sect_generation[0] = 0 disables the generation check in check_sys_bspl_partition_header */
  			sect_generation[0] = 0;
@@ -254,7 +254,7 @@
  				if (sect == bad_chain)
  					continue;
  				/* version difference gives a hint about wrap arounds */
-@@ -736,7 +878,7 @@ iterate_real (grub_disk_t disk, const gr
+@@ -735,7 +877,7 @@ iterate_real (grub_disk_t disk, const gr
          if (i > 0 && i < DIR_MAX_MINORS) {
            section = find_partition_by_directory(&pdir, i, &n_sects);
            if (section != end_section) {
@@ -263,7 +263,7 @@
                sys_first_section = section;
                n_sections = n_sects;
                sys_minor = i;
-@@ -754,7 +896,7 @@ iterate_real (grub_disk_t disk, const gr
+@@ -753,7 +895,7 @@ iterate_real (grub_disk_t disk, const gr
          if (i > 0 && i < DIR_MAX_MINORS) {
            section = find_partition_by_directory(&pdir, i, &n_sects);
            if (section != end_section) {
@@ -272,7 +272,7 @@
  	      bspl_first_section = section;
  	      bspl_minor = i;
  	      grub_snprintf(string, sizeof(string), "%u", bspl_minor);
-@@ -770,7 +912,7 @@ iterate_real (grub_disk_t disk, const gr
+@@ -769,7 +911,7 @@ iterate_real (grub_disk_t disk, const gr
          if (section == end_section)
  	  continue;
  	if (sys_hint_found == 0 || bspl_hint_found == 0) {

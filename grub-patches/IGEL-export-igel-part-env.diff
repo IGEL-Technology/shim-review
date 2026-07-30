@@ -1,0 +1,12 @@
+Index: grub2/grub-core/partmap/igel.c
+===================================================================
+--- grub2.orig/grub-core/partmap/igel.c
++++ grub2/grub-core/partmap/igel.c
+@@ -926,6 +926,7 @@ iterate_real (grub_disk_t disk, const gr
+   }
+ 
+   grub_env_set("igel_part", string);
++  grub_env_export("igel_part");
+ 
+   section = end_section;
+ 

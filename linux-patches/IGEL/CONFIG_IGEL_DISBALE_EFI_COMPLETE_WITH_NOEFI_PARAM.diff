@@ -1,0 +1,22 @@
+IGEL_DISBALE_EFI_COMPLETE_WITH_NOEFI_PARAM
+	  We encountered some problems with messages if using the noefi kernel
+	  parameter as it seems the EFI was not fully disabled by it. So we added
+	  some code to ensure that noefi will completly switch EFI support off.
+
+	  Source: IGEL
+diff --git a/drivers/firmware/efi/efi.c b/drivers/firmware/efi/efi.c
+index c27fe836c8ae..eded464c85c7 100644
+--- a/drivers/firmware/efi/efi.c
+@@ -432,7 +432,12 @@ static int __init efisubsys_init(void)
+ {
+ 	int error;
+ 
++#ifdef CONFIG_IGEL_DISBALE_EFI_COMPLETE_WITH_NOEFI_PARAM
++	/* gottwald@igel.com ensure EFI is really fully disabled if noefi kernel parameter was set */
++	if (!efi_enabled(EFI_BOOT) || efi_runtime_disabled())
++#else
+ 	if (!efi_enabled(EFI_BOOT))
++#endif
+ 		return 0;
+ 
+ 	if (efi_rt_services_supported(EFI_RT_SUPPORTED_TIME_SERVICES))

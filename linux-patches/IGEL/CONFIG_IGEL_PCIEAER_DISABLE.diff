@@ -1,0 +1,24 @@
+IGEL_PCIEAER_DISABLE
+	  This disables PCI advanced error reporting because it is spaming
+	  the syslog with unnecessary messages.
+
+	  Source: IGEL
+diff --git a/drivers/pci/pcie/aer.c b/drivers/pci/pcie/aer.c
+index 85f1f0cf62d6..11aafaded495 100644
+--- a/drivers/pci/pcie/aer.c
+@@ -126,7 +126,15 @@ struct aer_info {
+ 					PCI_ERR_ROOT_MULTI_COR_RCV |	\
+ 					PCI_ERR_ROOT_MULTI_UNCOR_RCV)
+ 
++/* gottwald@igel.com disable PCI advanced error reporting because it is spaming
++ * the syslog with unnecessary messages see also
++ * http://marc.info/?l=linux-pci&m=145140470807043
++ * for details */
++#ifdef CONFIG_IGEL_PCIEAER_DISABLE
++static bool pcie_aer_disable = 1;
++#else
+ static bool pcie_aer_disable;
++#endif
+ static pci_ers_result_t aer_root_reset(struct pci_dev *dev);
+ 
+ void pci_no_aer(void)

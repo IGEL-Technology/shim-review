@@ -1,0 +1,37 @@
+IGEL_WACOM_BAMBOO_QUIRK
+	  For Wacom Bamboo pad CTH301 and CTH300 we will use the default HID
+	  driver as it is working better for this devices.
+
+	  Source: IGEL
+diff --git a/drivers/hid/hid-ids.h b/drivers/hid/hid-ids.h
+index 96a9fa53e4ad..15dd84fa0880 100644
+--- a/drivers/hid/hid-ids.h
+@@ -1460,6 +1469,10 @@
+ #define USB_VENDOR_ID_WACOM		0x056a
+ #define USB_DEVICE_ID_WACOM_GRAPHIRE_BLUETOOTH	0x81
+ #define USB_DEVICE_ID_WACOM_INTUOS4_BLUETOOTH   0x00BD
++#ifdef CONFIG_IGEL_WACOM_BAMBOO_QUIRK
++#define USB_DEVICE_ID_WACOM_BAMBOO_PAD_CTH301   0x0318
++#define USB_DEVICE_ID_WACOM_BAMBOO_PAD_CTH300   0x0319
++#endif
+ 
+ #define USB_VENDOR_ID_WALTOP				0x172f
+ #define USB_DEVICE_ID_WALTOP_SLIM_TABLET_5_8_INCH	0x0032
+diff --git a/drivers/hid/hid-quirks.c b/drivers/hid/hid-quirks.c
+index ebf865c2dbb3..fba9d4e5921a 100644
+--- a/drivers/hid/hid-quirks.c
+@@ -1013,6 +1024,14 @@ bool hid_ignore(struct hid_device *hdev)
+ 		return true;
+ 
+ 	switch (hdev->vendor) {
++#ifdef CONFIG_IGEL_WACOM_BAMBOO_QUIRK
++	/* gottwald@igel.com Better to use standard HID for this WACOM devices */
++	case USB_VENDOR_ID_WACOM:
++		if (hdev->product == USB_DEVICE_ID_WACOM_BAMBOO_PAD_CTH301 ||
++			hdev->product == USB_DEVICE_ID_WACOM_BAMBOO_PAD_CTH300)
++			return false;
++		break;
++#endif
+ 	case USB_VENDOR_ID_CODEMERCS:
+ 		/* ignore all Code Mercenaries IOWarrior devices */
+ 		if (hdev->product >= USB_DEVICE_ID_CODEMERCS_IOW_FIRST &&

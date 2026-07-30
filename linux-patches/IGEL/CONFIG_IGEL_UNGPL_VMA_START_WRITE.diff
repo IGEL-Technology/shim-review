@@ -1,0 +1,21 @@
+IGEL_UNGPL_VMA_START_WRITE
+	  A mainline change made __vma_start_write GPL only which is new
+	  as it was not exported as GPL only before. To be able to use
+	  nvidia driver revert this for now.
+
+	  Source: IGEL
+diff --git a/mm/mmap_lock.c b/mm/mmap_lock.c
+index 42e3dde73e74..7ab838ccdfe6 100644
+--- a/mm/mmap_lock.c
+@@ -101,7 +101,11 @@ void __vma_start_write(struct vm_area_struct *vma, unsigned int mm_lock_seq)
+ 		WARN_ON_ONCE(detached); /* vma should remain attached */
+ 	}
+ }
++#ifdef CONFIG_IGEL_UNGPL_VMA_START_WRITE
++EXPORT_SYMBOL(__vma_start_write);
++#else
+ EXPORT_SYMBOL_GPL(__vma_start_write);
++#endif
+ 
+ void vma_mark_detached(struct vm_area_struct *vma)
+ {

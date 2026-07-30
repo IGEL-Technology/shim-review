@@ -1,0 +1,64 @@
+IGEL_SURFACE_HID
+	  Enable HID changes for surface devices.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/hid/Makefile b/drivers/hid/Makefile
+index 361a7daedeb8..7979a081733d 100644
+--- a/drivers/hid/Makefile
+@@ -174,5 +177,7 @@ obj-$(CONFIG_INTEL_ISH_HID)	+= intel-ish-hid/
+ obj-$(CONFIG_AMD_SFH_HID)       += amd-sfh-hid/
+ 
+ obj-$(CONFIG_SURFACE_HID_CORE)  += surface-hid/
++obj-$(CONFIG_IGEL_HID_SURFACE)	+= hid-surface.o
+ 
+ obj-$(CONFIG_INTEL_THC_HID)     += intel-thc-hid/
++obj-$(CONFIG_IGEL_SURFACE_HID_IPTS)     += ipts/
+diff --git a/drivers/hid/ipts/Makefile b/drivers/hid/ipts/Makefile
+new file mode 100644
+index 000000000000..f0e8078602a7
+@@ -0,0 +1,16 @@
++# SPDX-License-Identifier: GPL-2.0-or-later
++#
++# Makefile for the IPTS touchscreen driver
++#
++
++obj-$(CONFIG_IGEL_SURFACE_HID_IPTS) += ipts.o
++ipts-objs := cmd.o
++ipts-objs += control.o
++ipts-objs += eds1.o
++ipts-objs += eds2.o
++ipts-objs += hid.o
++ipts-objs += main.o
++ipts-objs += mei.o
++ipts-objs += receiver.o
++ipts-objs += resources.o
++ipts-objs += thread.o
+diff --git a/drivers/iommu/intel/irq_remapping.c b/drivers/iommu/intel/irq_remapping.c
+index 8bcbfe3d9c72..3897929b78c9 100644
+--- a/drivers/iommu/intel/irq_remapping.c
+@@ -381,6 +381,24 @@ static int set_msi_sid(struct irte *irte, struct pci_dev *dev)
+ 	data.busmatch_count = 0;
+ 	pci_for_each_dma_alias(dev, set_msi_sid_cb, &data);
+ 
++#ifdef CONFIG_IGEL_SURFACE_HID_ITHC_DISABLE_IRQ
++	/*
++	 * The Intel Touch Host Controller is at 00:10.6, but for some reason
++	 * the MSI interrupts have request id 01:05.0.
++	 * Disable id verification to work around this.
++	 * FIXME Find proper fix or turn this into a quirk.
++	 */
++	if (dev->vendor == PCI_VENDOR_ID_INTEL && (dev->class >> 8) == PCI_CLASS_INPUT_PEN) {
++		switch(dev->device) {
++		case 0x98d0: case 0x98d1: // LKF
++		case 0xa0d0: case 0xa0d1: // TGL LP
++		case 0x43d0: case 0x43d1: // TGL H
++			set_irte_sid(irte, SVT_NO_VERIFY, SQ_ALL_16, 0);
++			return 0;
++		}
++	}
++#endif /* CONFIG_IGEL_SURFACE_HID_ITHC_DISABLE_IRQ */
++
+ 	/*
+ 	 * DMA alias provides us with a PCI device and alias.  The only case
+ 	 * where the it will return an alias on a different bus than the

@@ -16,40 +16,11 @@ Subject: [PATCH] Apply changes to patch
 
 --- a/grub-core/Makefile.core.am
 +++ b/grub-core/Makefile.core.am
-@@ -7200,6 +7200,29 @@ CLEANFILES += hexdump.marker
- hexdump.marker: $(hexdump_module_SOURCES) $(nodist_hexdump_module_SOURCES)
- 	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hexdump_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
- 	grep 'MARKER' $@.new > $@; rm -f $@.new
-+
-+if COND_i386_pc
-+platform_PROGRAMS += hwmatch.module
-+MODULE_FILES += hwmatch.module$(EXEEXT)
-+hwmatch_module_SOURCES  = commands/i386/pc/hwmatch.c  ## platform sources
-+nodist_hwmatch_module_SOURCES  =  ## platform nodist sources
-+hwmatch_module_LDADD  = 
-+hwmatch_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) $(CFLAGS_POSIX) $(CFLAGS_GNULIB) 
-+hwmatch_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
-+hwmatch_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) $(CPPFLAGS_POSIX) $(CPPFLAGS_GNULIB) 
-+hwmatch_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
-+hwmatch_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_hwmatch_module_SOURCES)
-+CLEANFILES += $(nodist_hwmatch_module_SOURCES)
-+MOD_FILES += hwmatch.mod
-+MARKER_FILES += hwmatch.marker
-+CLEANFILES += hwmatch.marker
-+
-+hwmatch.marker: $(hwmatch_module_SOURCES) $(nodist_hwmatch_module_SOURCES)
-+	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(hwmatch_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
-+	grep 'MARKER' $@.new > $@; rm -f $@.new
-+endif
- platform_PROGRAMS += keystatus.module
- MODULE_FILES += keystatus.module$(EXEEXT)
- keystatus_module_SOURCES  = commands/keystatus.c  ## platform sources
-@@ -11833,6 +11856,26 @@ CLEANFILES += xfs.marker
+@@ -12359,6 +12359,28 @@ CLEANFILES += xfs.marker
  xfs.marker: $(xfs_module_SOURCES) $(nodist_xfs_module_SOURCES)
  	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(xfs_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
- 	grep 'MARKER' $@.new > $@; rm -f $@.new
+ 	grep 'MARKER' $@.new | grep -v '^#' > $@; rm -f $@.new
++
 +platform_PROGRAMS += igelfs.module
 +MODULE_FILES += igelfs.module$(EXEEXT)
 +igelfs_module_SOURCES  = fs/igelfs.c fs/bootregfs.c  ## platform sources
@@ -69,103 +40,16 @@ Subject: [PATCH] Apply changes to patch
 +
 +igelfs.marker: $(igelfs_module_SOURCES) $(nodist_igelfs_module_SOURCES)
 +	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(igelfs_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
-+	grep 'MARKER' $@.new > $@; rm -f $@.new
++	grep 'MARKER' $@.new | grep -v '^#' > $@; rm -f $@.new
++
  platform_PROGRAMS += zfs.module
  MODULE_FILES += zfs.module$(EXEEXT)
- zfs_module_SOURCES  = fs/zfs/zfs.c fs/zfs/zfs_lzjb.c fs/zfs/zfs_lz4.c fs/zfs/zfs_sha256.c fs/zfs/zfs_fletcher.c  ## platform sources
-@@ -12583,7 +12626,7 @@ endif
- if COND_i386_efi
- platform_PROGRAMS += relocator.module
- MODULE_FILES += relocator.module$(EXEEXT)
--relocator_module_SOURCES  = lib/i386/relocator_asm.S lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/efi/relocator.c lib/relocator.c  ## platform sources
-+relocator_module_SOURCES  = lib/i386/relocator_asm.S lib/efi/relocator.c lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/relocator.c  ## platform sources
- nodist_relocator_module_SOURCES  =  ## platform nodist sources
- relocator_module_LDADD  = 
- relocator_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-@@ -12698,7 +12741,7 @@ endif
- if COND_x86_64_efi
- platform_PROGRAMS += relocator.module
- MODULE_FILES += relocator.module$(EXEEXT)
--relocator_module_SOURCES  = lib/x86_64/efi/relocator.c lib/x86_64/relocator_asm.S lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/efi/relocator.c lib/relocator.c  ## platform sources
-+relocator_module_SOURCES  = lib/x86_64/efi/relocator.c lib/x86_64/relocator_asm.S lib/efi/relocator.c lib/i386/relocator16.S lib/i386/relocator32.S lib/i386/relocator64.S lib/i386/relocator.c lib/i386/relocator_common_c.c lib/relocator.c  ## platform sources
- nodist_relocator_module_SOURCES  =  ## platform nodist sources
- relocator_module_LDADD  = 
- relocator_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-@@ -15403,6 +15446,52 @@ appleldr.marker: $(appleldr_module_SOURC
- 	grep 'MARKER' $@.new > $@; rm -f $@.new
- endif
- 
-+if COND_i386_efi
-+platform_PROGRAMS += linuxefi.module
-+MODULE_FILES += linuxefi.module$(EXEEXT)
-+linuxefi_module_SOURCES  = loader/i386/efi/linux.c  ## platform sources
-+nodist_linuxefi_module_SOURCES  =  ## platform nodist sources
-+linuxefi_module_LDADD  = 
-+linuxefi_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-+linuxefi_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
-+linuxefi_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
-+linuxefi_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
-+linuxefi_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_linuxefi_module_SOURCES)
-+CLEANFILES += $(nodist_linuxefi_module_SOURCES)
-+MOD_FILES += linuxefi.mod
-+MARKER_FILES += linuxefi.marker
-+CLEANFILES += linuxefi.marker
-+
-+linuxefi.marker: $(linuxefi_module_SOURCES) $(nodist_linuxefi_module_SOURCES)
-+	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(linuxefi_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
-+	grep 'MARKER' $@.new > $@; rm -f $@.new
-+endif
-+
-+if COND_x86_64_efi
-+platform_PROGRAMS += linuxefi.module
-+MODULE_FILES += linuxefi.module$(EXEEXT)
-+linuxefi_module_SOURCES  = loader/i386/efi/linux.c  ## platform sources
-+nodist_linuxefi_module_SOURCES  =  ## platform nodist sources
-+linuxefi_module_LDADD  = 
-+linuxefi_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-+linuxefi_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
-+linuxefi_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
-+linuxefi_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
-+linuxefi_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_linuxefi_module_SOURCES)
-+CLEANFILES += $(nodist_linuxefi_module_SOURCES)
-+MOD_FILES += linuxefi.mod
-+MARKER_FILES += linuxefi.marker
-+CLEANFILES += linuxefi.marker
-+
-+linuxefi.marker: $(linuxefi_module_SOURCES) $(nodist_linuxefi_module_SOURCES)
-+	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(linuxefi_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
-+	grep 'MARKER' $@.new > $@; rm -f $@.new
-+endif
-+
- if COND_i386_pc
- platform_PROGRAMS += chain.module
- MODULE_FILES += chain.module$(EXEEXT)
-@@ -15636,7 +15725,7 @@ endif
- if COND_i386_efi
- platform_PROGRAMS += mmap.module
- MODULE_FILES += mmap.module$(EXEEXT)
--mmap_module_SOURCES  = mmap/i386/uppermem.c mmap/i386/mmap.c mmap/efi/mmap.c mmap/mmap.c  ## platform sources
-+mmap_module_SOURCES  = mmap/efi/mmap.c mmap/i386/uppermem.c mmap/i386/mmap.c mmap/mmap.c  ## platform sources
- nodist_mmap_module_SOURCES  =  ## platform nodist sources
- mmap_module_LDADD  = 
- mmap_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-@@ -15751,7 +15840,7 @@ endif
- if COND_x86_64_efi
- platform_PROGRAMS += mmap.module
- MODULE_FILES += mmap.module$(EXEEXT)
--mmap_module_SOURCES  = mmap/i386/uppermem.c mmap/i386/mmap.c mmap/efi/mmap.c mmap/mmap.c  ## platform sources
-+mmap_module_SOURCES  = mmap/efi/mmap.c mmap/i386/uppermem.c mmap/i386/mmap.c mmap/mmap.c  ## platform sources
- nodist_mmap_module_SOURCES  =  ## platform nodist sources
- mmap_module_LDADD  = 
- mmap_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-@@ -16177,6 +16266,26 @@ CLEANFILES += part_bsd.marker
+ zfs_module_SOURCES  = fs/zfs/zfs.c fs/zfs/zfs_fletcher.c fs/zfs/zfs_lz4.c fs/zfs/zfs_lzjb.c fs/zfs/zfs_sha256.c  ## platform sources
+@@ -16864,6 +16886,28 @@ CLEANFILES += part_bsd.marker
  part_bsd.marker: $(part_bsd_module_SOURCES) $(nodist_part_bsd_module_SOURCES)
  	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(part_bsd_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
- 	grep 'MARKER' $@.new > $@; rm -f $@.new
+ 	grep 'MARKER' $@.new | grep -v '^#' > $@; rm -f $@.new
++
 +platform_PROGRAMS += part_igel.module
 +MODULE_FILES += part_igel.module$(EXEEXT)
 +part_igel_module_SOURCES  = partmap/igel.c partmap/directory.c  ## platform sources
@@ -185,154 +69,14 @@ Subject: [PATCH] Apply changes to patch
 +
 +part_igel.marker: $(part_igel_module_SOURCES) $(nodist_part_igel_module_SOURCES)
 +	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(part_igel_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
-+	grep 'MARKER' $@.new > $@; rm -f $@.new
++	grep 'MARKER' $@.new | grep -v '^#' > $@; rm -f $@.new
++
  platform_PROGRAMS += part_sunpc.module
  MODULE_FILES += part_sunpc.module$(EXEEXT)
  part_sunpc_module_SOURCES  = partmap/sunpc.c  ## platform sources
-@@ -16905,7 +17014,7 @@ endif
- if COND_i386_efi
- platform_PROGRAMS += serial.module
- MODULE_FILES += serial.module$(EXEEXT)
--serial_module_SOURCES  = term/ns8250.c term/efi/serial.c term/serial.c  ## platform sources
-+serial_module_SOURCES  = term/efi/serial.c term/ns8250.c term/serial.c  ## platform sources
- nodist_serial_module_SOURCES  =  ## platform nodist sources
- serial_module_LDADD  = 
- serial_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-@@ -17020,7 +17129,7 @@ endif
- if COND_x86_64_efi
- platform_PROGRAMS += serial.module
- MODULE_FILES += serial.module$(EXEEXT)
--serial_module_SOURCES  = term/ns8250.c term/efi/serial.c term/serial.c  ## platform sources
-+serial_module_SOURCES  = term/efi/serial.c term/ns8250.c term/serial.c  ## platform sources
- nodist_serial_module_SOURCES  =  ## platform nodist sources
- serial_module_LDADD  = 
- serial_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-@@ -22782,6 +22891,29 @@ gcry_whirlpool.marker: $(gcry_whirlpool_
- 	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(gcry_whirlpool_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
- 	grep 'MARKER' $@.new > $@; rm -f $@.new
- 
-+if COND_i386_pc
-+platform_PROGRAMS += 915resolution.module
-+MODULE_FILES += 915resolution.module$(EXEEXT)
-+915resolution_module_SOURCES  = contrib/915resolution/915resolution.c  ## platform sources
-+nodist_915resolution_module_SOURCES  =  ## platform nodist sources
-+915resolution_module_LDADD  = 
-+915resolution_module_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_MODULE) 
-+915resolution_module_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_MODULE) 
-+915resolution_module_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_MODULE) 
-+915resolution_module_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_MODULE) 
-+915resolution_module_DEPENDENCIES  = $(TARGET_OBJ2ELF) 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_915resolution_module_SOURCES)
-+CLEANFILES += $(nodist_915resolution_module_SOURCES)
-+MOD_FILES += 915resolution.mod
-+MARKER_FILES += 915resolution.marker
-+CLEANFILES += 915resolution.marker
-+
-+915resolution.marker: $(915resolution_module_SOURCES) $(nodist_915resolution_module_SOURCES)
-+	$(TARGET_CPP) -DGRUB_LST_GENERATOR $(CPPFLAGS_MARKER) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(915resolution_module_CPPFLAGS) $(CPPFLAGS) $^ > $@.new || (rm -f $@; exit 1)
-+	grep 'MARKER' $@.new > $@; rm -f $@.new
-+endif
-+
- if COND_emu
- platform_PROGRAMS += kernel.exec
- kernel_exec_SOURCES  = 
-@@ -22829,7 +22961,7 @@ endif
- if COND_i386_efi
- platform_PROGRAMS += kernel.exec
- kernel_exec_SOURCES  = kern/i386/efi/startup.S 
--kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/i386/efi/init.c bus/pci.c kern/i386/dl.c kern/i386/tsc.c kern/i386/tsc_pit.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c 
-+kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/i386/efi/init.c bus/pci.c kern/i386/dl.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/i386/tsc.c kern/i386/tsc_pit.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c  
- nodist_kernel_exec_SOURCES  = symlist.c  ## platform nodist sources
- kernel_exec_LDADD  = 
- kernel_exec_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_KERNEL) 
-@@ -22939,7 +23071,7 @@ endif
- if COND_x86_64_efi
- platform_PROGRAMS += kernel.exec
- kernel_exec_SOURCES  = kern/x86_64/efi/startup.S 
--kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/x86_64/efi/callwrap.S kern/i386/efi/init.c bus/pci.c kern/x86_64/dl.c kern/i386/tsc.c kern/i386/tsc_pit.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c 
-+kernel_exec_SOURCES += kern/i386/efi/tsc.c kern/i386/tsc_pmtimer.c kern/x86_64/efi/callwrap.S kern/i386/efi/init.c bus/pci.c kern/x86_64/dl.c disk/efi/efidisk.c kern/efi/efi.c kern/efi/init.c kern/efi/mm.c term/efi/console.c kern/acpi.c kern/efi/acpi.c kern/i386/tsc.c kern/i386/tsc_pit.c kern/efi/sb.c kern/lockdown.c kern/compiler-rt.c kern/mm.c kern/time.c kern/generic/millisleep.c kern/buffer.c kern/command.c kern/corecmd.c kern/device.c kern/disk.c kern/dl.c kern/env.c kern/err.c kern/file.c kern/fs.c kern/list.c kern/main.c kern/misc.c kern/parser.c kern/partition.c kern/rescue_parser.c kern/rescue_reader.c kern/term.c kern/verifiers.c 
- nodist_kernel_exec_SOURCES  = symlist.c  ## platform nodist sources
- kernel_exec_LDADD  = 
- kernel_exec_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_KERNEL) 
-@@ -23687,6 +23819,69 @@ fwstart_fuloong2f.img: fwstart_fuloong2f
- 	
- endif
- 
-+if COND_i386_pc
-+platform_PROGRAMS += g2hdr.image
-+g2hdr_image_SOURCES  = contrib/ntldr-img/g2hdr.S 
-+nodist_g2hdr_image_SOURCES  = ## platform nodist sources
-+g2hdr_image_LDADD  = 
-+g2hdr_image_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_IMAGE) 
-+g2hdr_image_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_IMAGE) $(TARGET_IMG_LDFLAGS) $(TARGET_IMG_BASE_LDOPT),0x0 
-+g2hdr_image_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_IMAGE) 
-+g2hdr_image_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_IMAGE) 
-+g2hdr_image_OBJCOPYFLAGS  = $(OBJCOPYFLAGS_IMAGE) -O binary 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_g2hdr_image_SOURCES)
-+CLEANFILES += $(nodist_g2hdr_image_SOURCES)
-+platform_DATA += g2hdr.img
-+CLEANFILES += g2hdr.img
-+
-+g2hdr.img: g2hdr.image$(EXEEXT)
-+	if test x$(TARGET_APPLE_LINKER) = x1; then   $(MACHO2IMG) $< $@; else   $(TARGET_OBJCOPY) $(g2hdr_image_OBJCOPYFLAGS) --strip-unneeded -R .note -R .comment -R .note.gnu.build-id -R .MIPS.abiflags -R .reginfo -R .rel.dyn -R .note.gnu.gold-version -R .ARM.exidx $< $@; fi
-+	
-+endif
-+
-+if COND_i386_pc
-+platform_PROGRAMS += grldr.image
-+grldr_image_SOURCES  = contrib/ntldr-img/grldrstart.S contrib/ntldr-img/ntfsbs.S 
-+nodist_grldr_image_SOURCES  = ## platform nodist sources
-+grldr_image_LDADD  = 
-+grldr_image_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_IMAGE) 
-+grldr_image_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_IMAGE) $(TARGET_IMG_LDFLAGS) $(TARGET_IMG_BASE_LDOPT),0x7c00 
-+grldr_image_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_IMAGE) 
-+grldr_image_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_IMAGE) -DGRLDR_MBR 
-+grldr_image_OBJCOPYFLAGS  = $(OBJCOPYFLAGS_IMAGE) -O binary 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_grldr_image_SOURCES)
-+CLEANFILES += $(nodist_grldr_image_SOURCES)
-+platform_DATA += grldr.img
-+CLEANFILES += grldr.img
-+
-+grldr.img: grldr.image$(EXEEXT)
-+	if test x$(TARGET_APPLE_LINKER) = x1; then   $(MACHO2IMG) $< $@; else   $(TARGET_OBJCOPY) $(grldr_image_OBJCOPYFLAGS) --strip-unneeded -R .note -R .comment -R .note.gnu.build-id -R .MIPS.abiflags -R .reginfo -R .rel.dyn -R .note.gnu.gold-version -R .ARM.exidx $< $@; fi
-+	
-+endif
-+
-+if COND_i386_pc
-+platform_PROGRAMS += g2ldr.image
-+g2ldr_image_SOURCES  = contrib/ntldr-img/grldrstart.S contrib/ntldr-img/ntfsbs.S 
-+nodist_g2ldr_image_SOURCES  = ## platform nodist sources
-+g2ldr_image_LDADD  = 
-+g2ldr_image_CFLAGS  = $(AM_CFLAGS) $(CFLAGS_IMAGE) 
-+g2ldr_image_LDFLAGS  = $(AM_LDFLAGS) $(LDFLAGS_IMAGE) $(TARGET_IMG_LDFLAGS) $(TARGET_IMG_BASE_LDOPT),0x7c00 
-+g2ldr_image_CPPFLAGS  = $(AM_CPPFLAGS) $(CPPFLAGS_IMAGE) 
-+g2ldr_image_CCASFLAGS  = $(AM_CCASFLAGS) $(CCASFLAGS_IMAGE) -DGRLDR_MBR -DBOOTGRUB2 
-+g2ldr_image_OBJCOPYFLAGS  = $(OBJCOPYFLAGS_IMAGE) -O binary 
-+dist_noinst_DATA += 
-+BUILT_SOURCES += $(nodist_g2ldr_image_SOURCES)
-+CLEANFILES += $(nodist_g2ldr_image_SOURCES)
-+platform_DATA += g2ldr.img
-+CLEANFILES += g2ldr.img
-+
-+g2ldr.img: g2ldr.image$(EXEEXT)
-+	if test x$(TARGET_APPLE_LINKER) = x1; then   $(MACHO2IMG) $< $@; else   $(TARGET_OBJCOPY) $(g2ldr_image_OBJCOPYFLAGS) --strip-unneeded -R .note -R .comment -R .note.gnu.build-id -R .MIPS.abiflags -R .reginfo -R .rel.dyn -R .note.gnu.gold-version -R .ARM.exidx $< $@; fi
-+	
-+endif
-+
- if COND_emu
- bin_PROGRAMS += grub-emu
- if COND_MAN_PAGES
-@@ -23792,3 +23987,4 @@ CLEANFILES += bootinfo.txt
- EXTRA_DIST += 
- dist_noinst_DATA += boot/powerpc/bootinfo.txt.in 
- endif
-+include contrib/ntldr-img/Makefile.core.common
 --- a/grub-core/Makefile.core.def
 +++ b/grub-core/Makefile.core.def
-@@ -1559,6 +1559,12 @@ module = {
+@@ -1600,6 +1600,12 @@ module = {
  };
  
  module = {
@@ -345,7 +89,7 @@ Subject: [PATCH] Apply changes to patch
    name = zfs;
    common = fs/zfs/zfs.c;
    common = fs/zfs/zfs_lzjb.c;
-@@ -2018,6 +2024,12 @@ module = {
+@@ -2069,6 +2075,12 @@ module = {
  };
  
  module = {
@@ -1431,7 +1175,7 @@ Subject: [PATCH] Apply changes to patch
 +
 +	GWRAP_SNPRINTF(buf, len, "%s%s", key, value);
 +
-+	
++	/* TODO scramble, encrypt here?? */
 +	old_key = search_key(hdr, key, 1);
 +
 +	if (0 != reserve_free_blocks(hdr, ind, blk_to_use))
@@ -2553,7 +2297,7 @@ Subject: [PATCH] Apply changes to patch
 +
 +  bootreg_get(bt_data, "serial_console_debug", &val);
 +  if (val != NULL && val[0] == '1')
-+    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " console=tty0 console=ttyUSB0,115200n8 console=ttyS0,115200n8");
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " console=tty0 console=ttyS0,115200n8");
 +
 +  test_and_free(val);
 +
@@ -2663,7 +2407,7 @@ Subject: [PATCH] Apply changes to patch
 +\n\
 +insmod regexp\n\
 +\n\
-+regexp --set=0:dev '(\\(hd[0-9]{1,},)' $cmdpath\n\
++regexp --set=0:dev '(\\(hd[0-9]{1,},)' $igeldev\n\
 +set device=\"${dev}igel1)\"\n\
 +set igel_part_check=false\n\
 +\n\
@@ -3406,7 +3150,7 @@ Subject: [PATCH] Apply changes to patch
 +
 +
 +
-+#define IGEL_BOOTREG_ENTRY_LEN 504
++#define IGEL_BOOTREG_ENTRY_LEN 504 // TODO: move this to igel.h
 +
 +
 +

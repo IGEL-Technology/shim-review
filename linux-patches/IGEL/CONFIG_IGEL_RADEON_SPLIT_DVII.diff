@@ -1,0 +1,333 @@
+IGEL_RADEON_SPLIT_DVII
+	  Split certain DVI-I connectors into a DVI-D and a VGA connector for
+	  radeon devices. This is done to use the DVI-D - VGA split cable and use
+	  both DVI and VGA at the same time.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/radeon/radeon.h b/drivers/gpu/drm/radeon/radeon.h
+index 63c47585afbc..ec6897f88e40 100644
+--- a/drivers/gpu/drm/radeon/radeon.h
+@@ -98,6 +98,12 @@ extern int radeon_gart_size;
+ extern int radeon_benchmarking;
+ extern int radeon_testing;
+ extern int radeon_connector_table;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++extern int radeon_split_dvii;
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++extern int radeon_lvds;
++#endif
+ extern int radeon_tv;
+ extern int radeon_audio;
+ extern int radeon_disp_priority;
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -821,7 +872,12 @@ bool radeon_get_atom_connector_info_from_object_table(struct drm_device *dev)
+ 						  igp_lane_info,
+ 						  connector_object_id,
+ 						  &hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++						  &router,
++						  0);
++#else
+ 						  &router);
++#endif
+ 
+ 		}
+ 	}
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -879,6 +935,9 @@ struct bios_connector {
+ 	int connector_type;
+ 	struct radeon_i2c_bus_rec ddc_bus;
+ 	struct radeon_hpd hpd;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	int splitted_dvii;
++#endif
+ };
+ 
+ bool radeon_get_atom_connector_info_from_supported_devices_table(struct
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -1047,6 +1106,33 @@ bool radeon_get_atom_connector_info_from_supported_devices_table(struct
+ 						     (bios_connectors[j].devices & (ATOM_DEVICE_CRT_SUPPORT))) ||
+ 						    ((bios_connectors[j].devices & (ATOM_DEVICE_DFP_SUPPORT)) &&
+ 						     (bios_connectors[i].devices & (ATOM_DEVICE_CRT_SUPPORT)))) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++							/* lang@igel: split DVI-I connector in analog + digital connector */
++							if (radeon_split_dvii) {
++								if (bios_connectors[i].splitted_dvii &&
++								bios_connectors[j].splitted_dvii)
++									continue;
++								DRM_INFO("split DVI-I connector in separate "
++								 "analog and digital connectors\n");
++								bios_connectors[i].splitted_dvii = 1;
++								bios_connectors[j].splitted_dvii = 1;
++								bios_connectors[i].connector_type = DRM_MODE_CONNECTOR_DVII;
++								bios_connectors[j].connector_type = DRM_MODE_CONNECTOR_DVII;
++								if (bios_connectors[j].devices & (ATOM_DEVICE_DFP_SUPPORT))
++								bios_connectors[i].hpd = bios_connectors[j].hpd;
++								if (bios_connectors[i].devices & (ATOM_DEVICE_DFP_SUPPORT))
++								bios_connectors[j].hpd = bios_connectors[i].hpd;
++							} else {
++								bios_connectors[i].devices |=
++									bios_connectors[j].devices;
++								bios_connectors[i].connector_type =
++									DRM_MODE_CONNECTOR_DVII;
++								if (bios_connectors[j].devices & (ATOM_DEVICE_DFP_SUPPORT))
++									bios_connectors[i].hpd =
++										bios_connectors[j].hpd;
++								bios_connectors[j].valid = false;
++							}
++#else
+ 							bios_connectors[i].devices |=
+ 								bios_connectors[j].devices;
+ 							bios_connectors[i].connector_type =
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -1078,7 +1165,12 @@ bool radeon_get_atom_connector_info_from_supported_devices_table(struct
+ 						  0,
+ 						  connector_object_id,
+ 						  &bios_connectors[i].hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++						  &router,
++						  bios_connectors[i].splitted_dvii);
++#else
+ 						  &router);
++#endif
+ 		}
+ 	}
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1317,6 +1368,21 @@ radeon_dvi_detect(struct drm_connector *connector, bool force)
+ 		}
+ 	}
+ 
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	/* lang@igel: split DVI-I connector in analog + digital connector:
++	   check if EDID fits to device type */
++	if (radeon_connector->splitted_dvii && (ret == connector_status_connected)) {
++		if ( (radeon_connector->use_digital && 
++		      ((radeon_connector->devices & (ATOM_DEVICE_DFP_SUPPORT)) == 0)) ||
++		     (! radeon_connector->use_digital && 
++		      ((radeon_connector->devices & (ATOM_DEVICE_CRT_SUPPORT)) == 0)) )
++			ret = connector_status_disconnected;
++	}
++	/* lang@igel: reset detected_by_load flag after EDID check */
++	if (radeon_connector->splitted_dvii && (ret == connector_status_connected))
++		radeon_connector->detected_by_load = false;
++#endif
++
+ 	if ((ret == connector_status_connected) && (radeon_connector->use_digital == true))
+ 		goto out;
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1335,6 +1401,17 @@ radeon_dvi_detect(struct drm_connector *connector, bool force)
+ 		goto out;
+ 	}
+ 
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	/* lang@igel: split DVI-I connector in analog + digital connector:
++	   never do destructive polling, you can see a black screen on analog output */
++	if (radeon_connector->splitted_dvii &&
++	    radeon_connector->detected_by_load &&
++	    (connector->status == connector_status_connected)) {
++		ret = connector->status;
++		goto out;
++	}
++#endif
++
+ 	/* find analog encoder */
+ 	if (radeon_connector->dac_load_detect) {
+ 		drm_connector_for_each_possible_encoder(connector, encoder) {
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1838,7 +1951,12 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 			  uint32_t igp_lane_info,
+ 			  uint16_t connector_object_id,
+ 			  struct radeon_hpd *hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			  struct radeon_router *router,
++			  int splitted_dvii)
++#else
+ 			  struct radeon_router *router)
++#endif
+ {
+ 	struct radeon_device *rdev = dev->dev_private;
+ 	struct drm_connector *connector;
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1851,6 +1969,12 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 	bool shared_ddc = false;
+ 	bool is_dp_bridge = false;
+ 	bool has_aux = false;
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++	struct pci_dev *pdev = to_pci_dev(dev->dev);
++#endif
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	bool dvii_shared = false;
++#endif
+ 
+ 	if (connector_type == DRM_MODE_CONNECTOR_Unknown)
+ 		return;
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1862,15 +1986,41 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 	    (radeon_tv == 0))
+ 		return;
+ 
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++	if (connector_type == DRM_MODE_CONNECTOR_VGA) {
++		/* gottwald@igel.com Samsung NC241, NC221 and TC2 workaround to not detect DVI monitor also as VGA */
++		if ((pdev->device == 0x9856 || pdev->device == 0x9851) &&
++		    (pdev->subsystem_vendor == 0x1022) &&
++		    (pdev->subsystem_device == 0x1234)) {
++			list_for_each_entry(connector, &dev->mode_config.connector_list, head)
++				if (connector->connector_type == DRM_MODE_CONNECTOR_DVII)
++					dvii_shared = true;
++		} else if (IS_SAMSUNG_TC2) {
++			list_for_each_entry(connector, &dev->mode_config.connector_list, head)
++				if (connector->connector_type == DRM_MODE_CONNECTOR_DVII)
++					dvii_shared = true;
++		}
++	}
++#endif
+ 	/* see if we already added it */
+ 	list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
+ 		radeon_connector = to_radeon_connector(connector);
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++		if ((radeon_connector->connector_id == connector_id) &&
++		     ! splitted_dvii) {
++#else
+ 		if (radeon_connector->connector_id == connector_id) {
++#endif
+ 			radeon_connector->devices |= supported_device;
+ 			return;
+ 		}
+ 		if (radeon_connector->ddc_bus && i2c_bus->valid) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			if (((radeon_connector->ddc_bus->rec.i2c_id == i2c_bus->i2c_id) 
++			      || dvii_shared) && ! splitted_dvii) {
++#else
+ 			if (radeon_connector->ddc_bus->rec.i2c_id == i2c_bus->i2c_id) {
++#endif
+ 				radeon_connector->shared_ddc = true;
+ 				shared_ddc = true;
+ 			}
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1908,6 +2058,9 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 	radeon_connector->shared_ddc = shared_ddc;
+ 	radeon_connector->connector_object_id = connector_object_id;
+ 	radeon_connector->hpd = *hpd;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	radeon_connector->splitted_dvii = splitted_dvii;
++#endif
+ 
+ 	radeon_connector->router = *router;
+ 	if (router->ddc_valid || router->cd_valid) {
+diff --git a/drivers/gpu/drm/radeon/radeon_device.c b/drivers/gpu/drm/radeon/radeon_device.c
+index 9e35b14e2bf0..61e1acb08dae 100644
+--- a/drivers/gpu/drm/radeon/radeon_device.c
+@@ -1724,9 +1727,24 @@ int radeon_resume_kms(struct drm_device *dev, bool resume, bool notify_clients)
+ 	/* blat the mode back in */
+ 	if (notify_clients) {
+ 		drm_helper_resume_force_mode(dev);
++#ifdef CONFIG_IGEL_RADEON_FIX_CURSOR_DISAPPEAR
++		/* lang@igel: reinitialize cursors */
++		for (i = 0; i < rdev->num_crtc; i++) {
++			if (rdev->mode_info.crtcs[i]) {
++				radeon_cursor_reset(&rdev->mode_info.crtcs[i]->base);
++			}
++		}
++#endif
+ 		/* turn on display hw */
+ 		drm_modeset_lock_all(dev);
+ 		list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			/* lang@igel: reset detected_by_load, so the the connector is probed again */
++			struct radeon_connector *radeon_connector = to_radeon_connector(connector);
++
++			if (radeon_connector && radeon_connector->splitted_dvii)
++				radeon_connector->detected_by_load = false;
++#endif
+ 			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
+ 		}
+ 		drm_modeset_unlock_all(dev);
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.c b/drivers/gpu/drm/radeon/radeon_drv.c
+index 9c8907bc61d9..4a19addb85a0 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.c
+@@ -126,6 +129,12 @@ int radeon_gart_size = -1; /* auto */
+ int radeon_benchmarking;
+ int radeon_testing;
+ int radeon_connector_table;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++int radeon_split_dvii = 1;
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++int radeon_lvds = 1;
++#endif
+ int radeon_tv = 1;
+ int radeon_audio = -1;
+ int radeon_disp_priority;
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.c b/drivers/gpu/drm/radeon/radeon_drv.c
+index 9c8907bc61d9..4a19addb85a0 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.c
+@@ -178,6 +195,15 @@ module_param_named(test, radeon_testing, int, 0444);
+ MODULE_PARM_DESC(connector_table, "Force connector table");
+ module_param_named(connector_table, radeon_connector_table, int, 0444);
+ 
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++MODULE_PARM_DESC(split_dvii, "Split DVI-I connector in 2 connectors (0 = disable)");
++module_param_named(split_dvii, radeon_split_dvii, int, 0444);
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++MODULE_PARM_DESC(lvds, "LVDS enable (0 = disable)");
++module_param_named(lvds, radeon_lvds, int, 0444);
++#endif
++
+ MODULE_PARM_DESC(tv, "TV enable (0 = disable)");
+ module_param_named(tv, radeon_tv, int, 0444);
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_mode.h b/drivers/gpu/drm/radeon/radeon_mode.h
+index 9e34da2cacef..a639e45b4ce6 100644
+--- a/drivers/gpu/drm/radeon/radeon_mode.h
+@@ -537,6 +537,10 @@ struct radeon_connector {
+ 	enum radeon_connector_audio audio;
+ 	enum radeon_connector_dither dither;
+ 	int pixelclock_for_modeset;
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++	/* lang@igel: split DVI-I connector in analog + digital connector */
++	int splitted_dvii;
++#endif
+ };
+ 
+ #define ENCODER_MODE_IS_DP(em) (((em) == ATOM_ENCODER_MODE_DP) || \
+diff --git a/drivers/gpu/drm/radeon/radeon_mode.h b/drivers/gpu/drm/radeon/radeon_mode.h
+index 9e34da2cacef..a639e45b4ce6 100644
+--- a/drivers/gpu/drm/radeon/radeon_mode.h
+@@ -663,7 +667,12 @@ radeon_add_atom_connector(struct drm_device *dev,
+ 			  uint32_t igp_lane_info,
+ 			  uint16_t connector_object_id,
+ 			  struct radeon_hpd *hpd,
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			  struct radeon_router *router,
++			  int splitted_dvii);
++#else
+ 			  struct radeon_router *router);
++#endif
+ extern void
+ radeon_add_legacy_connector(struct drm_device *dev,
+ 			    uint32_t connector_id,

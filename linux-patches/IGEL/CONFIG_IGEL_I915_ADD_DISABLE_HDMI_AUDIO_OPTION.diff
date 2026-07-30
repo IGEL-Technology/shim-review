@@ -1,0 +1,183 @@
+IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
+	  Make it possible to switch off the support for HDMI audio on i915 driver
+	  level as this is sometimes needed to get things running. And also can
+	  help debugging if the problem comes from audio.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index c09aa759f4d4..c4e436a36bfb 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -34,6 +34,10 @@
+ #include <drm/drm_print.h>
+ #include <drm/drm_privacy_screen_consumer.h>
+ 
++#if defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) ||\
++    defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION)
++#include "i915_drv.h"
++#endif
+ #include "i915_reg.h"
+ #include "i915_utils.h"
+ #include "icl_dsi.h"
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index c09aa759f4d4..c4e436a36bfb 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -4168,6 +4172,9 @@ static void intel_ddi_get_config(struct intel_encoder *encoder,
+ {
+ 	struct intel_display *display = to_intel_display(encoder);
+ 	enum transcoder cpu_transcoder = pipe_config->cpu_transcoder;
++#if (defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) || defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION)) && defined(_I915_PARAMS_H_)
++	bool has_audio = false;
++#endif
+ 
+ 	/* XXX: DSI transcoder paranoia */
+ 	if (drm_WARN_ON(display->drm, transcoder_is_dsi(cpu_transcoder)))
+diff --git a/drivers/gpu/drm/i915/display/intel_ddi.c b/drivers/gpu/drm/i915/display/intel_ddi.c
+index c09aa759f4d4..c4e436a36bfb 100644
+--- a/drivers/gpu/drm/i915/display/intel_ddi.c
+@@ -4177,8 +4184,15 @@ static void intel_ddi_get_config(struct intel_encoder *encoder,
+ 
+ 	intel_ddi_mso_get_config(encoder, pipe_config);
+ 
++#if (defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) || defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION)) && defined(_I915_PARAMS_H_)
++	has_audio = intel_ddi_is_audio_enabled(display, cpu_transcoder);
++	if ((enum intel_output_type) encoder->compute_output_type == (enum intel_output_type)INTEL_OUTPUT_DP && i915_modparams.disable_dp_audio)
++		has_audio = false;
++	pipe_config->has_audio = has_audio;
++#else
+ 	pipe_config->has_audio =
+ 		intel_ddi_is_audio_enabled(display, cpu_transcoder);
++#endif
+ 
+ 	if (encoder->type == INTEL_OUTPUT_EDP)
+ 		intel_edp_fixup_vbt_bpp(encoder, pipe_config->pipe_bpp);
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/display/intel_hdmi.c
+index 4ab7e2e3bfd4..b030469d066a 100644
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -45,6 +45,9 @@
+ #include <media/cec-notifier.h>
+ 
+ #include "g4x_hdmi.h"
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
++#include "i915_drv.h"
++#endif
+ #include "i915_utils.h"
+ #include "intel_atomic.h"
+ #include "intel_audio.h"
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/display/intel_hdmi.c
+index 4ab7e2e3bfd4..b030469d066a 100644
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -2222,6 +2225,11 @@ static bool intel_hdmi_has_audio(struct intel_encoder *encoder,
+ 	if (!crtc_state->has_hdmi_sink)
+ 		return false;
+ 
++#if defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION) && defined(_I915_PARAMS_H_)
++        if (i915_modparams.disable_hdmi_audio)
++		return false;
++#endif
++
+ 	if (intel_conn_state->force_audio == HDMI_AUDIO_AUTO)
+ 		return connector->base.display_info.has_audio;
+ 	else
+diff --git a/drivers/gpu/drm/i915/display/intel_hdmi.c b/drivers/gpu/drm/i915/display/intel_hdmi.c
+index 4ab7e2e3bfd4..b030469d066a 100644
+--- a/drivers/gpu/drm/i915/display/intel_hdmi.c
+@@ -2346,12 +2354,22 @@ int intel_hdmi_compute_config(struct intel_encoder *encoder,
+ 	if (adjusted_mode->flags & DRM_MODE_FLAG_DBLCLK)
+ 		pipe_config->pixel_multiplier = 2;
+ 
++#if defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION) && defined(_I915_PARAMS_H_)
++	if (i915_modparams.disable_hdmi_audio) {
++		pipe_config->has_audio = false;
++	} else {
++		pipe_config->has_audio =
++			intel_hdmi_has_audio(encoder, pipe_config, conn_state) &&
++			intel_audio_compute_config(encoder, pipe_config, conn_state);
++	}
++#else
+ 	if (!intel_link_bw_compute_pipe_bpp(pipe_config))
+ 		return -EINVAL;
+ 
+ 	pipe_config->has_audio =
+ 		intel_hdmi_has_audio(encoder, pipe_config, conn_state) &&
+ 		intel_audio_compute_config(encoder, pipe_config, conn_state);
++#endif
+ 
+ 	/*
+ 	 * Try to respect downstream TMDS clock limits first, if
+diff --git a/drivers/gpu/drm/i915/i915_params.c b/drivers/gpu/drm/i915/i915_params.c
+index 37746dd619fd..3caf6115c0e3 100644
+--- a/drivers/gpu/drm/i915/i915_params.c
+@@ -130,6 +130,55 @@ i915_param_named_unsafe(lmem_size, uint, 0400,
+ i915_param_named_unsafe(lmem_bar_size, uint, 0400,
+ 			"Set the lmem bar size(in MiB).");
+ 
++#ifdef CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION
++i915_param_named(lvds, int, 0444,
++	"LVDS enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION
++i915_param_named(tv, int, 0444,
++	"TV enable (0 = disable)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION
++/* gottwald@igel.com: sometimes a dp is wrongly detected as edp which makes
++ * problems with hotplug. Try to determine this automatically failed so
++ * added module param to fix this. */
++i915_param_named(edp_is_dp, bool, 0444,
++	"eDP is DP (0 = disable, 1 = edp is dp)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION
++/* gottwald@igel.com: sometimes the max dp link speed is not detected correctly
++ * to prevent black screen issues this parameter can be used to limit the
++ * max DisplayPort link speed */
++i915_param_named(limit_dp_max_rate, int, 0644,
++	"DP port max link rate (0 = not set (default), 162000, 216000, 270000, 324000, 432000, 540000, 648000, 810000)");
++#endif
++
++/* gottwald@igel.com: some devices have problems with higher resolutions and
++ * DP audio where the screen will get black if the DP audio get initialized
++ * to be able to work around this you can use this option to disable DP audio.
++ * Add the same option for HDMI also just to be sure... */
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION
++i915_param_named(disable_dp_audio, bool, 0644,
++	"Disable DP audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION
++i915_param_named(disable_hdmi_audio, bool, 0644,
++	"Disable HDMI audio support (0 = audio enabled (default), 1 audio disabled)");
++#endif
++#ifdef CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION
++/* gottwald@igel.com: M250C workaround to fix color space limit problems */
++i915_param_named(m250c_no_limited_color_range, bool, 0444,
++	"Do not use limited color range for DP1 on M250C (0 = not set (default), 1 = do not use limited color range)");
++#endif
++
++#ifdef CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER
++i915_param_named(reverse_enum_order, bool, 0444,
++       "Reverse connector enumeration order (0 = not set (default), 1 = reverse order)");
++#endif
++
+ #if IS_ENABLED(CONFIG_DRM_I915_REPLAY_GPU_HANGS_API)
+ i915_param_named(enable_debug_only_api, bool, 0400,
+ 		 "Enable support for unstable debug only userspace API. (default:false)");
+diff --git a/drivers/gpu/drm/i915/i915_params.h b/drivers/gpu/drm/i915/i915_params.h
+index 0fbcb5b6d7bf..8a2959c8c8b7 100644
+--- a/drivers/gpu/drm/i915/i915_params.h
+@@ -45,6 +45,14 @@ struct drm_printer;
+  * mode: debugfs file permissions, one of {0400, 0600, 0}, use 0 to not create
+  *       debugfs file
+  */
++#if ! defined(CONFIG_IGEL_I915_DISABLE_LVDS_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_DISABLE_TV_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_EDP_IS_DP_MODULE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_LIMIT_DP_RATE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_DISABLE_DP_AUDIO_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_DISABLE_HDMI_AUDIO_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_M250C_NO_LIMITED_COLOR_RANGE_OPTION) && \
++    ! defined(CONFIG_IGEL_I915_ADD_OPTION_TO_CHANGE_CONNECTOR_ENUM_ORDER)
+ #define I915_PARAMS_FOR_EACH(param) \
+ 	param(int, modeset, -1, 0400) \
+ 	param(int, enable_guc, -1, 0400) \

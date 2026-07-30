@@ -1,0 +1,31 @@
+Index: grub2/grub-core/fs/igelfs.c
+===================================================================
+--- grub2.orig/grub-core/fs/igelfs.c	2025-07-11 08:18:20.127558755 +0200
++++ grub2/grub-core/fs/igelfs.c	2025-07-11 08:22:33.144309596 +0200
+@@ -897,11 +897,23 @@
+ 	}\n\
+ fi\n\
+ \n\
+-export kernel\n\
+-export menu_prefix\n\
+-\n\
+ if [ -f $kernel ]; then\n\
++	export kernel\n\
++	export kernel_name\n\
++	export kernel_file\n\
++	export menu_prefix\n\
++	export sys_minor\n\
++	export dev\n\
++	export igel_dr_background\n\
++	export theme\n\
++	\n\
+ 	submenu \"Advanced Options\" --class advanced {\n\
++		set default=0\n\
++		\n\
++		menuentry \"<< Return back to Main Menu\" {\n\
++			configfile \"/boot/grub/grub.cfg\"\n\
++		}\n\
++		\n\
+ 		menuentry \"${menu_prefix}Verbose boot$kernel_name\" {\n\
+ 			set gfxpayload=keep\n\
+ 			insmod part_igel\n\

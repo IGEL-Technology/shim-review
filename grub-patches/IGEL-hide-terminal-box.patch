@@ -5,10 +5,8 @@ identical.
 Author: Eduard Göbl, IGEL Technology GmbH
 Origin: vendor, www.igel.com
 Last-Update: 2016-11-03
-Index: igelworkdir/grub-core/gfxmenu/view.c
-===================================================================
---- igelworkdir.orig/grub-core/gfxmenu/view.c
-+++ igelworkdir/grub-core/gfxmenu/view.c
+--- a/grub-core/gfxmenu/view.c
++++ b/grub-core/gfxmenu/view.c
 @@ -72,10 +72,13 @@ grub_gfxmenu_view_new (const char *theme
    view->screen.width = width;
    view->screen.height = height;

@@ -1,0 +1,72 @@
+IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
+	  Get Split DVI/VGA working for the IGEL M340C.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -450,6 +465,42 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
+ 		}
+ 	}
+ 
++#ifdef CONFIG_IGEL_FUJITSU_DVI_VGA_SPLIT_QUIRKS
++	/* Fujitsu D3003-S2 board lists DVI-I as DVI-I and VGA */
++	if ((pdev->device == 0x9805) &&
++	    (pdev->subsystem_vendor == 0x1734) &&
++	    (pdev->subsystem_device == 0x11bd)) {
++		if (*connector_type == DRM_MODE_CONNECTOR_VGA) {
++			/* gottwald@igel.com limit this only to the board which is mentioned in the 
++			 * BUG report https://bugs.freedesktop.org/show_bug.cgi?id=83184
++			 * this should fix the non working VGA port on Futro S700 devices */
++			product = dmi_get_system_info(DMI_BOARD_NAME);
++			if (product != NULL)
++				if (strstr(product, "D3003-S1"))
++					return false;
++		}
++	}
++#endif
++#ifdef CONFIG_IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
++	/* Handle IGEL M340C outputs correctly */
++	if ((pdev->device == 0x9854) &&
++	    (pdev->subsystem_vendor == 0x1002) &&
++	    (pdev->subsystem_device == 0x9854)) {
++		if (! IS_IGEL_M340C) {
++			product = dmi_get_system_info(DMI_BOARD_NAME);
++			if (product != NULL)
++				if (strstr(product, "M340C")) 
++					igel_platform = IGEL_M340C;
++		}
++	}
++
++	if (IS_IGEL_M340C) {
++		if ((*connector_type == DRM_MODE_CONNECTOR_DisplayPort) &&
++		    (supported_device == ATOM_DEVICE_DFP2_SUPPORT) ) {
++			*connector_type = DRM_MODE_CONNECTOR_DVID;
++		}
++	}
++#endif
+ 	return true;
+ }
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1282,9 +1324,18 @@ radeon_dvi_detect(struct drm_connector *connector, bool force)
+ 			/* some oems have boards with separate digital and analog connectors
+ 			 * with a shared ddc line (often vga + hdmi)
+ 			 */
++#ifdef CONFIG_IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
++			if ((!radeon_connector->use_digital) &&
++			    (radeon_connector->shared_ddc || IS_IGEL_M340C)) {
++#else
+ 			if ((!radeon_connector->use_digital) && radeon_connector->shared_ddc) {
++#endif
+ 				radeon_connector_free_edid(connector);
+ 				ret = connector_status_disconnected;
++#ifdef CONFIG_IGEL_M340C_DVI_VGA_SPLIT_QUIRKS
++				if (IS_IGEL_M340C)
++					goto out;
++#endif
+ 			} else {
+ 				ret = connector_status_connected;
+ 			}

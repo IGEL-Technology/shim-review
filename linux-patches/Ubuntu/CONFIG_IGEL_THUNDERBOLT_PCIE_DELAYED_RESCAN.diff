@@ -1,0 +1,103 @@
+IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN
+	  Spurious hotplug events after Thunderbolt tunnel activation can cause
+	  pciehp to miss PCIe devices behind the tunnel ~70% of the time.
+	  A delayed pci_rescan_bus() is scheduled 300 ms after tunnel activation
+	  to reliably enumerate devices without disrupting normally working systems.
+
+	  Source: Ubuntu
+	  Commit: 8aecf0856dfad63b913755ae58f21358100827d8
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 4a94cb406bdf..a9c8abdb88e4 100644
+--- a/drivers/thunderbolt/tb.c
+@@ -11,6 +11,9 @@
+ #include <linux/delay.h>
+ #include <linux/pm_runtime.h>
+ #include <linux/platform_data/x86/apple.h>
++#ifdef CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN
++#include <linux/pci.h>
++#endif /* CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN */
+ 
+ #include "tb.h"
+ #include "tb_regs.h"
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 4a94cb406bdf..a9c8abdb88e4 100644
+--- a/drivers/thunderbolt/tb.c
+@@ -18,6 +21,9 @@
+ 
+ #define TB_TIMEOUT		100	/* ms */
+ #define TB_RELEASE_BW_TIMEOUT	10000	/* ms */
++#ifdef CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN
++#define TB_PCIEHP_ENUMERATION_DELAY 300	/* ms */
++#endif /* CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN */
+ 
+ /*
+  * How many time bandwidth allocation request from graphics driver is
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 4a94cb406bdf..a9c8abdb88e4 100644
+--- a/drivers/thunderbolt/tb.c
+@@ -83,6 +89,14 @@ struct tb_hotplug_event {
+ 	int retry;
+ };
+ 
++#ifdef CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN
++/* Delayed work to rescan PCIe bus after tunnel activation */
++struct tb_pci_rescan_work {
++	struct delayed_work work;
++	struct pci_bus *bus;
++};
++#endif /* CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN */
++
+ static void tb_scan_port(struct tb_port *port);
+ static void tb_handle_hotplug(struct work_struct *work);
+ static void tb_dp_resource_unavailable(struct tb *tb, struct tb_port *port,
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 4a94cb406bdf..a9c8abdb88e4 100644
+--- a/drivers/thunderbolt/tb.c
+@@ -90,6 +104,19 @@ static void tb_dp_resource_unavailable(struct tb *tb, struct tb_port *port,
+ static void tb_queue_dp_bandwidth_request(struct tb *tb, u64 route, u8 port,
+ 					  int retry, unsigned long delay);
+ 
++#ifdef CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN
++static void tb_pci_rescan_work_fn(struct work_struct *work)
++{
++	struct tb_pci_rescan_work *rescan_work =
++		container_of(work, typeof(*rescan_work), work.work);
++
++	pci_lock_rescan_remove();
++	pci_rescan_bus(rescan_work->bus);
++	pci_unlock_rescan_remove();
++	kfree(rescan_work);
++}
++#endif /* CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN */
++
+ static void tb_queue_hotplug(struct tb *tb, u64 route, u8 port, bool unplug)
+ {
+ 	struct tb_hotplug_event *ev;
+diff --git a/drivers/thunderbolt/tb.c b/drivers/thunderbolt/tb.c
+index 4a94cb406bdf..a9c8abdb88e4 100644
+--- a/drivers/thunderbolt/tb.c
+@@ -2313,6 +2340,24 @@ static int tb_tunnel_pci(struct tb *tb, struct tb_switch *sw)
+ 		tb_sw_warn(sw, "failed to connect xHCI\n");
+ 
+ 	list_add_tail(&tunnel->list, &tcm->tunnel_list);
++
++#ifdef CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN
++	/* Schedule a delayed PCIe bus rescan in case pciehp misses devices */
++	if (tb->nhi && tb->nhi->pdev && tb->nhi->pdev->bus) {
++		struct pci_bus *bus = tb->nhi->pdev->bus;
++		struct tb_pci_rescan_work *rescan_work;
++
++		rescan_work = kmalloc(sizeof(*rescan_work), GFP_KERNEL);
++		if (!rescan_work)
++			return 0;
++
++		rescan_work->bus = bus->parent ? bus->parent : bus;
++		INIT_DELAYED_WORK(&rescan_work->work, tb_pci_rescan_work_fn);
++		queue_delayed_work(tb->wq, &rescan_work->work,
++				   msecs_to_jiffies(TB_PCIEHP_ENUMERATION_DELAY));
++	}
++#endif /* CONFIG_IGEL_THUNDERBOLT_PCIE_DELAYED_RESCAN */
++
+ 	return 0;
+ }
+ 

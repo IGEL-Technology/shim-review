@@ -1,0 +1,31 @@
+IGEL_ADD_GENERIC_USB_DEVICE_IDS
+	  Preset some known serial USB devices.
+
+	  Source: IGEL
+diff --git a/drivers/usb/serial/generic.c b/drivers/usb/serial/generic.c
+index 757f0a586ddb..1653b1c48418 100644
+--- a/drivers/usb/serial/generic.c
+@@ -32,7 +32,23 @@ MODULE_PARM_DESC(vendor, "User specified USB idVendor");
+ module_param(product, ushort, 0);
+ MODULE_PARM_DESC(product, "User specified USB idProduct");
+ 
++#ifdef CONFIG_IGEL_ADD_GENERIC_USB_DEVICE_IDS
++/* lechner@igel.com add some more devices in device table */
++
++static struct usb_device_id generic_device_ids[] = {
++	/* The first entry is a placeholder for the insmod-specified device */
++	{ USB_DEVICE(0x05f9, 0xffff) },
++	{ USB_DEVICE(0x0780, 0x1202) }, /* Sagem Monetel ORGA 900 */
++	{ USB_DEVICE(0x0780, 0x1302) }, /* Sagem Monetel ORGA 6000 */
++	{ USB_DEVICE(0x04e6, 0x1a02) }, /* SCM Microsystems eHealth500 */
++	{ USB_DEVICE(0x152a, 0x8180) }, /* Celectronic CARD STAR /medic2 and /memo3 */
++	{ }                             /* Terminating entry */
++};
++
++MODULE_DEVICE_TABLE (usb, generic_device_ids);
++#else
+ static struct usb_device_id generic_device_ids[2]; /* Initially all zeroes. */
++#endif
+ 
+ static int usb_serial_generic_probe(struct usb_serial *serial,
+ 					const struct usb_device_id *id)

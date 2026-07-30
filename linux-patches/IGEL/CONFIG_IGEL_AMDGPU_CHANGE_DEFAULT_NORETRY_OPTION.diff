@@ -1,0 +1,21 @@
+IGEL_AMDGPU_CHANGE_DEFAULT_NORETRY_OPTION
+	  Set amdgpu noretry module parameter to 0 by default.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -225,8 +225,12 @@ int amdgpu_discovery = -1;
+ int amdgpu_mes;
+ int amdgpu_mes_log_enable = 0;
+ int amdgpu_mes_kiq;
+-int amdgpu_uni_mes = 1;
++#ifdef CONFIG_IGEL_AMDGPU_CHANGE_DEFAULT_NORETRY_OPTION
++int amdgpu_noretry = 0;
++#else
+ int amdgpu_noretry = -1;
++#endif
++int amdgpu_uni_mes = 1;
+ int amdgpu_force_asic_type = -1;
+ int amdgpu_tmz = -1; /* auto */
+ uint amdgpu_freesync_vid_mode;

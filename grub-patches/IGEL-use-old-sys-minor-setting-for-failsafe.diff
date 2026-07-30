@@ -58,7 +58,7 @@
  static int check_chain_of_sections(grub_disk_t disk, grub_uint64_t part_offset, uint32_t part, grub_uint32_t first_sect, grub_uint32_t max_sections, grub_uint32_t *bad_chain);
  
  grub_err_t igelpart_disk_read (grub_disk_t disk, grub_uint64_t offset, grub_size_t size, void *buf)
-@@ -377,7 +377,7 @@ check_chain_of_sections(grub_disk_t disk
+@@ -376,7 +376,7 @@ check_chain_of_sections(grub_disk_t disk
  		    (sh.partition_minor != part) ||
  		    (sh.generation != version))
  		{
@@ -67,7 +67,7 @@
  			*bad_chain = first_sect;
  			return 0;
  		}
-@@ -671,13 +671,13 @@ check_sys_bspl_partition_header (grub_di
+@@ -670,13 +670,13 @@ check_sys_bspl_partition_header (grub_di
   */
  
  int
@@ -85,7 +85,7 @@
  	int done = 0;
  	int number_of_bad_chains = 0;
  	unsigned int diff;
-@@ -707,8 +707,39 @@ find_root_partition_secure(grub_disk_t d
+@@ -706,8 +706,39 @@ find_root_partition_secure(grub_disk_t d
  			/* setting sect_generation[0] = 0 disables the generation check in check_sys_bspl_partition_header */
  			sect_generation[0] = 0;
  			if (check_sys_bspl_partition_header(disk, part_offset, sect, sect_generation, &sect_minor, 1) == 1) {
@@ -125,7 +125,7 @@
  				/* version difference gives a hint about wrap arounds */
  				if (sect_generation[0] > version)
  					diff = sect_generation[0] - version;
-@@ -750,6 +781,46 @@ find_root_partition_secure(grub_disk_t d
+@@ -749,6 +780,46 @@ find_root_partition_secure(grub_disk_t d
  			}
  		}
  		grub_printf("\n");
@@ -172,7 +172,7 @@
  		if (version == 0)
  		{
  			grub_printf("No valid boot/system partition found\n\n");
-@@ -762,6 +833,14 @@ find_root_partition_secure(grub_disk_t d
+@@ -761,6 +832,14 @@ find_root_partition_secure(grub_disk_t d
  			sys_sect = first_sect;
  			sys_minor = first_minor;
  			return(0);
@@ -187,7 +187,7 @@
  		}
  
  		grub_printf("\n");
-@@ -800,7 +879,7 @@ iterate_real (grub_disk_t disk, const gr
+@@ -799,7 +878,7 @@ iterate_real (grub_disk_t disk, const gr
    grub_uint64_t part_offset = partition->start << GRUB_DISK_SECTOR_BITS;
    int number_of_sections;
    int directory_present = 0, secure_boot = 0, sect_check = 0;
@@ -196,7 +196,7 @@
    const char *part_check;
    grub_uint8_t found = 0;
    const char *arg;
-@@ -808,7 +887,7 @@ iterate_real (grub_disk_t disk, const gr
+@@ -807,7 +886,7 @@ iterate_real (grub_disk_t disk, const gr
    static grub_uint32_t n_sects;
    grub_uint16_t generation[2] = {0, 0};
    char string[32];
@@ -205,7 +205,7 @@
    const char *sys_generation = NULL, *bspl_generation = NULL;
    grub_uint8_t sys_hint_found = 0, bspl_hint_found = 0;
  
-@@ -890,6 +969,26 @@ iterate_real (grub_disk_t disk, const gr
+@@ -889,6 +968,26 @@ iterate_real (grub_disk_t disk, const gr
  	  }
  	}
        }
@@ -232,7 +232,7 @@
        bspl_minor_hint = grub_env_get ("bspl_minor_hint");
        if (bspl_minor_hint) {
          i = (int)grub_strtol(bspl_minor_hint,NULL,10);
-@@ -950,6 +1049,14 @@ iterate_real (grub_disk_t disk, const gr
+@@ -949,6 +1048,14 @@ iterate_real (grub_disk_t disk, const gr
  
    /* if section is still unknown use secure root find function */
    if (secure_boot != 0 || sys_first_section == end_section) {
@@ -247,7 +247,7 @@
      /* switch to console mode, so the grub_printf are displayed */
      arg = grub_strdup("console");
      args[0] = (char *)arg;
-@@ -961,7 +1068,7 @@ iterate_real (grub_disk_t disk, const gr
+@@ -960,7 +1067,7 @@ iterate_real (grub_disk_t disk, const gr
      } else {
        grub_printf("Searching system partition (failsafe boot):\n");
      }

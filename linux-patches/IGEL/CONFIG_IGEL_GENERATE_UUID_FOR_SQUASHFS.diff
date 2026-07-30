@@ -1,0 +1,24 @@
+IGEL_GENERATE_UUID_FOR_SQUASHFS
+	  As we now use overlayfs we get some warning messages regarding
+	  squashfs have a zero UUID which causes some warning messages which
+	  could be avoided with this change.
+
+	  Source: IGEL
+diff --git a/fs/squashfs/super.c b/fs/squashfs/super.c
+index 4465cf05603a..a089c1f00a41 100644
+--- a/fs/squashfs/super.c
+@@ -319,6 +319,14 @@ static int squashfs_fill_super(struct super_block *sb, struct fs_context *fc)
+ 	sb->s_flags |= SB_RDONLY;
+ 	sb->s_op = &squashfs_super_ops;
+ 
++#ifdef CONFIG_IGEL_GENERATE_UUID_FOR_SQUASHFS
++	memcpy(&sb->s_uuid.b[0], &sblk->inodes, 4);
++	memcpy(&sb->s_uuid.b[4], &sblk->mkfs_time, 4);
++	memcpy(&sb->s_uuid.b[8], &sblk->fragments, 4);
++	memcpy(&sb->s_uuid.b[12], &sblk->compression, 2);
++	memcpy(&sb->s_uuid.b[14], &sblk->block_log, 2);
++#endif
++
+ 	msblk->block_cache = squashfs_cache_init("metadata",
+ 			SQUASHFS_CACHED_BLKS, SQUASHFS_METADATA_SIZE);
+ 	if (IS_ERR(msblk->block_cache)) {

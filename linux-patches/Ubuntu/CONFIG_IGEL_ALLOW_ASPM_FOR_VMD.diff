@@ -1,0 +1,80 @@
+IGEL_ALLOW_ASPM_FOR_VMD
+	  Intel SoC cannot reach lower power states when mapped VMD PCIe
+	  bridges and NVMe devices don't have ASPM configured.
+	  Based on patches from canonicals linux-oem 6.17.
+
+	  Source: Ubuntu
+	  URL: https://wiki.ubuntu.com/Kernel/SourceCode
+	  Commit: [ 6a74379399879517eb7f14c0b3fa24539da8feae, 915083dc7e5e61f86200aab7cafae9b368c562e0 ]
+diff --git a/drivers/pci/controller/vmd.c b/drivers/pci/controller/vmd.c
+index b4b62b9ccc45..2818ab88a5e8 100644
+--- a/drivers/pci/controller/vmd.c
+@@ -755,6 +755,10 @@ static int vmd_pm_enable_quirk(struct pci_dev *pdev, void *userdata)
+ 	if (!(features & VMD_FEAT_BIOS_PM_QUIRK))
+ 		return 0;
+ 
++#ifdef CONFIG_IGEL_ALLOW_ASPM_FOR_VMD
++	pdev->aspm_os_control = 1;
++#endif /* CONFIG_IGEL_ALLOW_ASPM_FOR_VMD */
++
+ 	pos = pci_find_ext_capability(pdev, PCI_EXT_CAP_ID_LTR);
+ 	if (!pos)
+ 		goto out_state_change;
+diff --git a/drivers/pci/pcie/aspm.c b/drivers/pci/pcie/aspm.c
+index a1f275259f7d..d9b8b4b014ee 100644
+--- a/drivers/pci/pcie/aspm.c
+@@ -1416,8 +1416,17 @@ static int __pci_disable_link_state(struct pci_dev *pdev, int state, bool locked
+ 	 * ignored in this situation.
+ 	 */
+ 	if (aspm_disabled) {
++#ifdef CONFIG_IGEL_ALLOW_ASPM_FOR_VMD
++		if (aspm_support_enabled && pdev->aspm_os_control)
++			pci_info(pdev, "disable ASPM allowed by OS control override\n");
++		else {
++			pci_warn(pdev, "can't disable ASPM; OS doesn't have ASPM control\n");
++			return -EPERM;
++		}
++#else
+ 		pci_warn(pdev, "can't disable ASPM; OS doesn't have ASPM control\n");
+ 		return -EPERM;
++#endif /* CONFIG_IGEL_ALLOW_ASPM_FOR_VMD */
+ 	}
+ 
+ 	if (!locked)
+diff --git a/drivers/pci/pcie/aspm.c b/drivers/pci/pcie/aspm.c
+index a1f275259f7d..d9b8b4b014ee 100644
+--- a/drivers/pci/pcie/aspm.c
+@@ -1472,8 +1481,17 @@ static int __pci_enable_link_state(struct pci_dev *pdev, int state, bool locked)
+ 	 * the _OSC method), we can't honor that request.
+ 	 */
+ 	if (aspm_disabled) {
++#ifdef CONFIG_IGEL_ALLOW_ASPM_FOR_VMD
++		if (aspm_support_enabled && pdev->aspm_os_control)
++			pci_info(pdev, "BIOS can't program ASPM, let OS control it\n");
++		else {
++			pci_warn(pdev, "can't override BIOS ASPM; OS doesn't have ASPM control\n");
++			return -EPERM;
++		}
++#else
+ 		pci_warn(pdev, "can't override BIOS ASPM; OS doesn't have ASPM control\n");
+ 		return -EPERM;
++#endif /* CONFIG_IGEL_ALLOW_ASPM_FOR_VMD */
+ 	}
+ 
+ 	if (!locked)
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index 89f5a4290b6e..5cfd745bd13e 100644
+--- a/include/linux/pci.h
+@@ -488,6 +488,12 @@ struct pci_dev {
+ 	unsigned int	rom_bar_overlap:1;	/* ROM BAR disable broken */
+ 	unsigned int	rom_attr_enabled:1;	/* Display of ROM attribute enabled? */
+ 	unsigned int	non_mappable_bars:1;	/* BARs can't be mapped to user-space  */
++#ifdef CONFIG_IGEL_ALLOW_ASPM_FOR_VMD
++	unsigned int	aspm_os_control:1;	/* Allow OS ASPM control despite firmware policy */
++#endif /* CONFIG_IGEL_ALLOW_ASPM_FOR_VMD */
++#ifdef CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX
++	unsigned int	no_shutdown:1;		/* Do not touch device on shutdown */
++#endif /* CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX */
+ 	pci_dev_flags_t dev_flags;
+ 	atomic_t	enable_cnt;	/* pci_enable_device has been called */
+ 

@@ -1,0 +1,90 @@
+IGEL_ADD_I915_HW_DETECTION
+	  Added detection of specific IGEL hardware (H830C and TC215B for now)
+	  which is needed for special treatment later on.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/i915_drv.h b/drivers/gpu/drm/i915/i915_drv.h
+index 6a768aad8edd..388488130e55 100644
+--- a/drivers/gpu/drm/i915/i915_drv.h
+@@ -60,12 +60,29 @@
+ #include "intel_step.h"
+ #include "intel_uncore.h"
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++/* nagel@igel.com: define enum for IGEL platforms,
++ * that require special treatment. */
++enum igel_platforms {
++	NO_IGEL_PLATFORM = -1,
++	IGEL_H830C,
++	IGEL_TC215B
++};
++extern enum igel_platforms igel_platform;
++#define IS_IGEL_H830C (igel_platform==IGEL_H830C)
++#define IS_IGEL_TC215B (igel_platform==IGEL_TC215B)
++#endif
++
+ struct dram_info;
+ struct drm_i915_clock_gating_funcs;
+ struct intel_display;
+ struct intel_pxp;
+ struct vlv_s0ix_state;
+ 
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++#define QUIRK_SKIP_DP_DPMS_D3 (1<<15)
++#endif
++
+ /* Data Stolen Memory (DSM) aka "i915 stolen memory" */
+ struct i915_dsm {
+ 	/*
+diff --git a/drivers/gpu/drm/i915/i915_pci.c b/drivers/gpu/drm/i915/i915_pci.c
+index b2e311f4791a..c510b0506bd2 100644
+--- a/drivers/gpu/drm/i915/i915_pci.c
+@@ -22,6 +22,10 @@
+  *
+  */
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++#include <linux/dmi.h>
++#endif
++
+ #include <drm/drm_color_mgmt.h>
+ #include <drm/drm_drv.h>
+ #include <drm/intel/pciids.h>
+diff --git a/drivers/gpu/drm/i915/i915_pci.c b/drivers/gpu/drm/i915/i915_pci.c
+index b2e311f4791a..c510b0506bd2 100644
+--- a/drivers/gpu/drm/i915/i915_pci.c
+@@ -37,6 +41,10 @@
+ #include "i915_reg.h"
+ #include "intel_pci_config.h"
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++enum igel_platforms igel_platform = NO_IGEL_PLATFORM;
++#endif
++
+ __diag_push();
+ __diag_ignore_all("-Woverride-init", "Allow field initialization overrides for device info");
+ 
+diff --git a/drivers/gpu/drm/i915/i915_pci.c b/drivers/gpu/drm/i915/i915_pci.c
+index b2e311f4791a..c510b0506bd2 100644
+--- a/drivers/gpu/drm/i915/i915_pci.c
+@@ -1037,6 +1045,20 @@ static struct pci_driver i915_pci_driver = {
+ 
+ int i915_pci_register_driver(void)
+ {
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++	const char *product;
++	product = dmi_get_system_info(DMI_PRODUCT_NAME);
++
++	igel_platform = NO_IGEL_PLATFORM;
++
++	if (product != NULL) {
++		/* gottwald@igel.com Detect IGEL platform according to the DMI data */
++		if (strstr(product, "TC215B"))
++			igel_platform = IGEL_TC215B;
++		else if (strstr(product, "H830C"))
++			igel_platform = IGEL_H830C;
++	}
++#endif
+ 	return pci_register_driver(&i915_pci_driver);
+ }
+ 

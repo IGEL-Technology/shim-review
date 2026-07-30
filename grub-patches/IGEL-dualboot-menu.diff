@@ -1,0 +1,168 @@
+Index: grub2/grub-core/fs/igelfs.c
+===================================================================
+--- grub2.orig/grub-core/fs/igelfs.c	2025-06-27 14:08:49.447222519 +0200
++++ grub2/grub-core/fs/igelfs.c	2025-06-30 08:25:22.875691341 +0200
+@@ -336,7 +336,7 @@
+   dualboot = grub_env_get ("dualboot");
+   if (dualboot != NULL && dualboot[0] == '1') {
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " dualboot");
+-    grub_snprintf(menuprefix, 200, "set menu_prefix=\"IGEL OS 12 \"\n\
++    grub_snprintf(menuprefix, 200, "set menu_prefix=\"IGEL OS \"\n\
+ if [ ! -e %s/EFI/igel_show_menu ]; then\n\
+    set show_menu=\"\"\n\
+ else\n\
+@@ -351,14 +351,14 @@
+    fi\n\
+ fi\n\
+ if [ ! -e %s/EFI/igel_no_bootnext ]; then\n\
+-   menuentry 'Boot Windows' {\n\
++   menuentry 'Windows (default)' --class windows {\n\
+       find_win_boot_id --set=bootid\n\
+       if [ \"$bootid\" != \"\" ]; then\n\
+          set_next_boot $bootid\n\
+       fi\n\
+    }\n\
+ else\n\
+-   menuentry 'Boot Windows' {\n\
++   menuentry 'Windows (default)' --class windows {\n\
+       set root=%s\n\
+       chainloader /EFI/Microsoft/Boot/bootmgfw.efi\n\
+    }\n\
+@@ -816,7 +816,128 @@
+   grub_dprintf("igelfs", "writing the config\n");
+ 
+ 
+-  grub_snprintf((char *) *content, content_size, "%s\n\
++  if (dualboot != NULL && dualboot[0] == '1') {
++    grub_snprintf((char *) *content, content_size, "%s\n\
++if [ \"$show_menu\" != \"\" ]; then\n\
++	set timeout=5\n\
++	set timeout_style=menu\n\
++else\n\
++	set timeout=1\n\
++	set timeout_style=hidden\n\
++fi\n\
++\n\
++insmod regexp\n\
++\n\
++regexp --set=0:dev '(\\(hd[0-9]{1,},)' $igeldev\n\
++set device=\"${dev}igel%u)\"\n\
++set igel_part_check=false\n\
++set kernel1_file=\"vmlinuz%s\"\n\
++set kernel1=\"$device/${kernel1_file}\"\n\
++set kernel1_file=\"vmlinuz%s\"\n\
++set kernel2_suffix=\"%s\"\n\
++set kernel2=\"$device/${kernel2_file}\"\n\
++set kernel2_name=\"%s\"\n\
++\n\
++set default_opts=\"%s\"\n\
++\n\
++if [ ! -f $kernel1 ]; then\n\
++	if [ -f $kernel2 ]; then\n\
++		set kernel=\"$kernel2\"\n\
++		set kernel_file=\"$kernel2_file\"\n\
++		set kernel_name=\"$kernel2_name\"\n\
++		set kernel2=\"$kernel1\"\n\
++		set kernel_file=\"$kernel1_file\"\n\
++		set kernel2_name=\"$kernel1_name\"\n\
++	else\n\
++		set kernel=\"$kernel1\"\n\
++		set kernel_file=\"$kernel1_file\"\n\
++		set kernel_name=\"$kernel1_name\"\n\
++	fi\n\
++else\n\
++	set kernel=\"$kernel1\"\n\
++	set kernel_file=\"$kernel1_file\"\n\
++	set kernel_name=\"$kernel1_name\"\n\
++fi\n\
++\n\
++if [ -f $kernel2 ]; then\n\
++	set igel_default=%d\n\
++else\n\
++	set igel_default=%d\n\
++fi\n\n\
++set default=$igel_default\n\
++\n\
++%s\n\
++\n\
++if [ -f $kernel ]; then\n\
++	menuentry \"${menu_prefix}Dual Boot$kernel_name\" --class os12 {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel $default_opts %s %s\n\
++	}\n\
++fi\n\
++\n\
++if [ -f $kernel2 ]; then\n\
++	menuentry \"${menu_prefix}Quiet boot$kernel2_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel2 $default_opts %s %s\n\
++	}\n\
++	\n\
++	menuentry \"${menu_prefix}Verbose boot$kernel2_name\" {\n\
++		set gfxpayload=keep\n\
++		insmod part_igel\n\
++		linux $kernel2 systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
++	}\n\
++fi\n\
++\n\
++export kernel\n\
++export menu_prefix\n\
++\n\
++if [ -f $kernel ]; then\n\
++	submenu \"Advanced Options\" {\n\
++		menuentry \"${menu_prefix}Verbose boot$kernel_name\" {\n\
++			set gfxpayload=keep\n\
++			insmod part_igel\n\
++			linux $kernel systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
++		}\n\
++		\n\
++		menuentry \"${menu_prefix}VESA only boot$kernel_name\" {\n\
++			set gfxpayload=keep\n\
++			insmod part_igel\n\
++			linux $kernel nomodeset igel_syslog=quiet %s %s\n\
++		}\n\
++		\n\
++		menuentry \"${menu_prefix}Emergency boot (setup only)$kernel_name\" {\n\
++			set gfxpayload=keep\n\
++			insmod part_igel\n\
++			linux $kernel systemd.unit=igel-emergency-boot.target igel_syslog=emergency quiet %s %s\n\
++		}\n\
++		\n\
++		menuentry \"${menu_prefix}Failsafe boot with CRC check$kernel_name\" {\n\
++			set igel_part_check=true\n\
++			set gfxpayload=keep\n\
++			insmod part_igel\n\
++			ls ${dev}igel*)\n\
++			set failsafe_kernel=\"${dev}igel${sys_minor})/${kernel_file}\"\n\
++			linux $failsafe_kernel igel_syslog=quiet failsafe %s\n\
++		}\n\
++		\n\
++		menuentry \"${menu_prefix}Reset to factory defaults$kernel_name\" {\n\
++			set gfxpayload=keep\n\
++			insmod part_igel\n\
++			linux $kernel systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
++		}\n\
++		\n\
++		menuentry \"${menu_prefix}Custom boot command$kernel_name\" {\n\
++			set gfxpayload=keep\n\
++			insmod part_igel\n\
++			linux $kernel igel_syslog=quiet quiet %s %s %s\n\
++		}\n\
++	}\n\
++fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, splash, cmdline, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++  }
++  else {
++    grub_snprintf((char *) *content, content_size, "%s\n\
+ if [ \"$show_menu\" != \"\" ]; then\n\
+ 	set timeout=5\n\
+ 	set timeout_style=menu\n\
+@@ -929,6 +1050,7 @@
+ 		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 	}\n\
+ fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++  }
+ 
+   if(val != NULL){
+     if(val == empty){

@@ -1,0 +1,402 @@
+IGEL_SURFACE_WLAN_IMPROVEMENTS
+	  Change some things in the mwifiex driver to improve the stability and
+	  the performance of the WLAN in surface devices and possible others too.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index 25236fd97aed..ffca5751a1dd 100644
+--- a/drivers/bluetooth/btusb.c
+@@ -67,6 +67,9 @@ static struct usb_driver btusb_driver;
+ #define BTUSB_INTEL_NO_WBS_SUPPORT	BIT(26)
+ #define BTUSB_ACTIONS_SEMI		BIT(27)
+ #define BTUSB_BARROT			BIT(28)
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++#define BTUSB_LOWER_LESCAN_INTERVAL	BIT(29)
++#endif
+ 
+ static const struct usb_device_id btusb_table[] = {
+ 	/* Generic Bluetooth USB device */
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index 25236fd97aed..ffca5751a1dd 100644
+--- a/drivers/bluetooth/btusb.c
+@@ -472,6 +475,9 @@ static const struct usb_device_id quirks_table[] = {
+ 	{ USB_DEVICE(0x1286, 0x2044), .driver_info = BTUSB_MARVELL },
+ 	{ USB_DEVICE(0x1286, 0x2046), .driver_info = BTUSB_MARVELL },
+ 	{ USB_DEVICE(0x1286, 0x204e), .driver_info = BTUSB_MARVELL },
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	{ USB_DEVICE(0x1286, 0x204c), .driver_info = BTUSB_LOWER_LESCAN_INTERVAL },
++#endif
+ 
+ 	/* Intel Bluetooth devices */
+ 	{ USB_DEVICE(0x8087, 0x0025), .driver_info = BTUSB_INTEL_COMBINED },
+diff --git a/drivers/bluetooth/btusb.c b/drivers/bluetooth/btusb.c
+index 25236fd97aed..ffca5751a1dd 100644
+--- a/drivers/bluetooth/btusb.c
+@@ -4210,6 +4230,21 @@ static int btusb_probe(struct usb_interface *intf,
+ 	if (id->driver_info & BTUSB_MARVELL)
+ 		hdev->set_bdaddr = btusb_set_bdaddr_marvell;
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* The Marvell 88W8897 combined wifi and bluetooth card is known for
++	 * very bad bt+wifi coexisting performance.
++	 *
++	 * Decrease the passive BT Low Energy scan interval a bit
++	 * (0x0190 * 0.625 msec = 250 msec) and make the scan window shorter
++	 * (0x000a * 0,625 msec = 6.25 msec). This allows for significantly
++	 * higher wifi throughput while passively scanning for BT LE devices.
++	 */
++	if (id->driver_info & BTUSB_LOWER_LESCAN_INTERVAL) {
++		hdev->le_scan_interval = 0x0190;
++		hdev->le_scan_window = 0x000a;
++	}
++#endif
++
+ 	if (IS_ENABLED(CONFIG_BT_HCIBTUSB_MTK) &&
+ 	    (id->driver_info & BTUSB_MEDIATEK)) {
+ 		hdev->setup = btusb_mtk_setup;
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+index 9ae3595fb698..23be6b50aa45 100644
+--- a/drivers/net/wireless/ath/ath10k/core.c
+@@ -41,6 +41,11 @@ static bool fw_diag_log;
+ /* frame mode values are mapped as per enum ath10k_hw_txrx_mode */
+ unsigned int ath10k_frame_mode = ATH10K_HW_TXRX_NATIVE_WIFI;
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++static char *override_board = "";
++static char *override_board2 = "";
++#endif
++
+ unsigned long ath10k_coredump_mask = BIT(ATH10K_FW_CRASH_DUMP_REGISTERS) |
+ 				     BIT(ATH10K_FW_CRASH_DUMP_CE_DATA);
+ 
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+index 9ae3595fb698..23be6b50aa45 100644
+--- a/drivers/net/wireless/ath/ath10k/core.c
+@@ -53,6 +58,11 @@ module_param(fw_diag_log, bool, 0644);
+ module_param_named(frame_mode, ath10k_frame_mode, uint, 0644);
+ module_param_named(coredump_mask, ath10k_coredump_mask, ulong, 0444);
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++module_param(override_board, charp, 0644);
++module_param(override_board2, charp, 0644);
++#endif
++
+ MODULE_PARM_DESC(debug_mask, "Debugging mask");
+ MODULE_PARM_DESC(uart_print, "Uart target debugging");
+ MODULE_PARM_DESC(skip_otp, "Skip otp failure for calibration in testmode");
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+index 9ae3595fb698..23be6b50aa45 100644
+--- a/drivers/net/wireless/ath/ath10k/core.c
+@@ -62,6 +72,11 @@ MODULE_PARM_DESC(frame_mode,
+ MODULE_PARM_DESC(coredump_mask, "Bitfield of what to include in firmware crash file");
+ MODULE_PARM_DESC(fw_diag_log, "Diag based fw log debugging");
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++MODULE_PARM_DESC(override_board, "Override for board.bin file");
++MODULE_PARM_DESC(override_board2, "Override for board-2.bin file");
++#endif
++
+ static const struct ath10k_hw_params ath10k_hw_params_list[] = {
+ 	{
+ 		.id = QCA988X_HW_2_0_VERSION,
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+index 9ae3595fb698..23be6b50aa45 100644
+--- a/drivers/net/wireless/ath/ath10k/core.c
+@@ -932,6 +947,44 @@ static int ath10k_init_configure_target(struct ath10k *ar)
+ 	return 0;
+ }
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++static const char *ath10k_override_board_fw_file(struct ath10k *ar,
++						 const char *file)
++{
++	if (strcmp(file, "board.bin") == 0) {
++		if (strcmp(override_board, "") == 0)
++			return file;
++
++		if (strcmp(override_board, "none") == 0) {
++			dev_info(ar->dev, "firmware override: pretending 'board.bin' does not exist\n");
++			return NULL;
++		}
++
++		dev_info(ar->dev, "firmware override: replacing 'board.bin' with '%s'\n",
++			 override_board);
++
++		return override_board;
++	}
++
++	if (strcmp(file, "board-2.bin") == 0) {
++		if (strcmp(override_board2, "") == 0)
++			return file;
++
++		if (strcmp(override_board2, "none") == 0) {
++			dev_info(ar->dev, "firmware override: pretending 'board-2.bin' does not exist\n");
++			return NULL;
++		}
++
++		dev_info(ar->dev, "firmware override: replacing 'board-2.bin' with '%s'\n",
++			 override_board2);
++
++		return override_board2;
++	}
++
++	return file;
++}
++#endif
++
+ static const struct firmware *ath10k_fetch_fw_file(struct ath10k *ar,
+ 						   const char *dir,
+ 						   const char *file)
+diff --git a/drivers/net/wireless/ath/ath10k/core.c b/drivers/net/wireless/ath/ath10k/core.c
+index 9ae3595fb698..23be6b50aa45 100644
+--- a/drivers/net/wireless/ath/ath10k/core.c
+@@ -946,6 +999,21 @@ static const struct firmware *ath10k_fetch_fw_file(struct ath10k *ar,
+ 	if (dir == NULL)
+ 		dir = ".";
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* HACK: Override board.bin and board-2.bin files if specified.
++	 *
++	 * Some Surface devices perform better with a different board
++	 * configuration. To this end, one would need to replace the board.bin
++	 * file with the modified config and remove the board-2.bin file.
++	 * Unfortunately, that's not a solution that we can easily package. So
++	 * we add module options to perform these overrides here.
++	 */
++
++	file = ath10k_override_board_fw_file(ar, file);
++	if (!file)
++		return ERR_PTR(-ENOENT);
++#endif
++
+ 	if (ar->board_name) {
+ 		snprintf(filename, sizeof(filename), "%s/%s/%s",
+ 			 dir, ar->board_name, file);
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie.c b/drivers/net/wireless/marvell/mwifiex/pcie.c
+index a760de191fce..49c7970a905b 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie.c
+@@ -377,6 +377,9 @@ static int mwifiex_pcie_probe(struct pci_dev *pdev,
+ 					const struct pci_device_id *ent)
+ {
+ 	struct pcie_service_card *card;
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	struct pci_dev *parent_pdev = pci_upstream_bridge(pdev);
++#endif
+ 	int ret;
+ 
+ 	pr_debug("info: vendor=0x%4.04X device=0x%4.04X rev=%d\n",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie.c b/drivers/net/wireless/marvell/mwifiex/pcie.c
+index a760de191fce..49c7970a905b 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie.c
+@@ -418,6 +421,14 @@ static int mwifiex_pcie_probe(struct pci_dev *pdev,
+ 		return -1;
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* disable bridge_d3 for Surface gen4+ devices to fix fw crashing
++	 * after suspend
++	 */
++	if (card->quirks & QUIRK_NO_BRIDGE_D3)
++		parent_pdev->bridge_d3 = false;
++#endif
++
+ 	return 0;
+ }
+ 
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie.c b/drivers/net/wireless/marvell/mwifiex/pcie.c
+index a760de191fce..49c7970a905b 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie.c
+@@ -1702,9 +1713,25 @@ mwifiex_pcie_send_boot_cmd(struct mwifiex_adapter *adapter, struct sk_buff *skb)
+ static void mwifiex_pcie_init_fw_port(struct mwifiex_adapter *adapter)
+ {
+ 	struct pcie_service_card *card = adapter->card;
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	struct pci_dev *pdev = card->dev;
++	struct pci_dev *parent_pdev = pci_upstream_bridge(pdev);
++#endif
+ 	const struct mwifiex_pcie_card_reg *reg = card->pcie.reg;
+ 	int tx_wrap = card->txbd_wrptr & reg->tx_wrap_mask;
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	/* Trigger a function level reset of the PCI bridge device, this makes
++	 * the firmware of PCIe 88W8897 cards stop reporting a fixed LTR value
++	 * that prevents the system from entering package C10 and S0ix powersaving
++	 * states.
++	 * We need to do it here because it must happen after firmware
++	 * initialization and this function is called after that is done.
++	 */
++	if (card->quirks & QUIRK_DO_FLR_ON_BRIDGE)
++		pci_reset_function(parent_pdev);
++#endif
++
+ 	/* Write the RX ring read pointer in to reg->rx_rdptr */
+ 	mwifiex_write_reg(adapter, reg->rx_rdptr, card->rxbd_rdptr | tx_wrap);
+ }
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -13,7 +13,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 4"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Pro 5",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -22,7 +28,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_1796"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Pro 5 (LTE)",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -31,7 +43,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_1807"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Pro 6",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -39,7 +57,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Pro 6"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Book 1",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -47,7 +71,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Book"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Book 2",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -55,7 +85,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Book 2"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Laptop 1",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -63,7 +99,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Laptop"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{
+ 		.ident = "Surface Laptop 2",
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -71,7 +113,13 @@ static const struct dmi_system_id mwifiex_quirk_table[] = {
+ 			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
+ 			DMI_EXACT_MATCH(DMI_PRODUCT_NAME, "Surface Laptop 2"),
+ 		},
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++		.driver_data = (void *)(QUIRK_FW_RST_D3COLD |
++					QUIRK_NO_BRIDGE_D3 |
++					QUIRK_DO_FLR_ON_BRIDGE),
++#else
+ 		.driver_data = (void *)QUIRK_FW_RST_D3COLD,
++#endif
+ 	},
+ 	{}
+ };
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+index dd6d21f1dbfd..09f21881e916 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.c
+@@ -89,6 +137,13 @@ void mwifiex_initialize_quirks(struct pcie_service_card *card)
+ 		dev_info(&pdev->dev, "no quirks enabled\n");
+ 	if (card->quirks & QUIRK_FW_RST_D3COLD)
+ 		dev_info(&pdev->dev, "quirk reset_d3cold enabled\n");
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++	if (card->quirks & QUIRK_DO_FLR_ON_BRIDGE)
++		dev_info(&pdev->dev, "quirk do_flr_on_bridge enabled\n");
++	if (card->quirks & QUIRK_NO_BRIDGE_D3)
++		dev_info(&pdev->dev,
++			 "quirk no_brigde_d3 enabled\n");
++#endif
+ }
+ 
+ static void mwifiex_pcie_set_power_d3cold(struct pci_dev *pdev)
+diff --git a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h b/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h
+index d6ff964aec5b..665a7bfccbde 100644
+--- a/drivers/net/wireless/marvell/mwifiex/pcie_quirks.h
+@@ -5,5 +5,10 @@
+ 
+ #define QUIRK_FW_RST_D3COLD	BIT(0)
+ 
++#ifdef CONFIG_IGEL_SURFACE_WLAN_IMPROVEMENTS
++#define QUIRK_DO_FLR_ON_BRIDGE	BIT(1)
++#define QUIRK_NO_BRIDGE_D3	BIT(2)
++#endif
++
+ void mwifiex_initialize_quirks(struct pcie_service_card *card);
+ int mwifiex_pcie_reset_d3cold_quirk(struct pci_dev *pdev);

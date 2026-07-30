@@ -1,0 +1,55 @@
+IGEL_FIX_R8169_WOL
+	  Fix some issues with r8169 driver does not always handle WOL reliable.
+
+	  Source: IGEL
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -1630,7 +1679,16 @@ static void rtl8169_get_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
+ {
+ 	struct rtl8169_private *tp = netdev_priv(dev);
+ 
++#ifdef CONFIG_IGEL_FIX_R8169_WOL
++	/*
++	 *  waffler@igel.de :  for some reason the chip doesn't wake up
++	 *                     by any method if BCAST is involved
++	 *                     the hotfix is not to declare WAKE_BCAST as supported
++	 */
++	wol->supported = WAKE_ANY & (~WAKE_BCAST);
++#else
+ 	wol->supported = WAKE_ANY;
++#endif
+ 	wol->wolopts = tp->saved_wolopts;
+ }
+ 
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -2659,7 +2717,12 @@ static void rtl_enable_rxdvgate(struct rtl8169_private *tp)
+ 
+ static void rtl_wol_enable_rx(struct rtl8169_private *tp)
+ {
++#ifdef CONFIG_IGEL_FIX_R8169_WOL
++	/* IGEL change use suspend quirk for more devices */
++	if (tp->mac_version >= RTL_GIGA_MAC_VER_18)
++#else
+ 	if (tp->mac_version >= RTL_GIGA_MAC_VER_25)
++#endif
+ 		RTL_W32(tp, RxConfig, RTL_R32(tp, RxConfig) |
+ 			AcceptBroadcast | AcceptMulticast | AcceptMyPhys);
+ 
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -5479,6 +5579,11 @@ static int rtl_init_one(struct pci_dev *pdev, const struct pci_device_id *ent)
+ 
+ 	tp->irq = pci_irq_vector(pdev, 0);
+ 
++#ifdef CONFIG_IGEL_FIX_R8169_WOL
++	/* IGEL change: set WOL to zero first */
++	__rtl8169_set_wol(tp, 0);
++#endif
++
+ 	INIT_WORK(&tp->wk.work, rtl_task);
+ 	disable_work(&tp->wk.work);
+ 

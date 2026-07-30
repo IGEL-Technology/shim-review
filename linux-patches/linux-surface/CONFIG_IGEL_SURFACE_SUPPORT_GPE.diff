@@ -1,0 +1,46 @@
+IGEL_SURFACE_SUPPORT_GPE
+	  Add surface support for GPE and Surface Pro 9.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/platform/surface/surface_gpe.c b/drivers/platform/surface/surface_gpe.c
+index b359413903b1..c5acdc7ae55f 100644
+--- a/drivers/platform/surface/surface_gpe.c
+@@ -41,6 +41,13 @@ static const struct property_entry lid_device_props_l4F[] = {
+ 	{},
+ };
+ 
++#ifdef CONFIG_IGEL_SURFACE_SUPPORT_GPE
++static const struct property_entry lid_device_props_l52[] = {
++	PROPERTY_ENTRY_U32("gpe", 0x52),
++	{},
++};
++#endif /* CONFIG_IGEL_SURFACE_SUPPORT_GPE  */
++
+ static const struct property_entry lid_device_props_l57[] = {
+ 	PROPERTY_ENTRY_U32("gpe", 0x57),
+ 	{},
+diff --git a/drivers/platform/surface/surface_gpe.c b/drivers/platform/surface/surface_gpe.c
+index b359413903b1..c5acdc7ae55f 100644
+--- a/drivers/platform/surface/surface_gpe.c
+@@ -107,6 +114,20 @@ static const struct dmi_system_id dmi_lid_device_table[] = {
+ 		},
+ 		.driver_data = (void *)lid_device_props_l4B,
+ 	},
++#ifdef CONFIG_IGEL_SURFACE_SUPPORT_GPE
++	{
++		/*
++		 * We match for SKU here due to product name clash with the ARM
++		 * version.
++		 */
++		.ident = "Surface Pro 9",
++		.matches = {
++			DMI_EXACT_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_EXACT_MATCH(DMI_PRODUCT_SKU, "Surface_Pro_9_2038"),
++		},
++		.driver_data = (void *)lid_device_props_l52,
++	},
++#endif /* CONFIG_IGEL_SURFACE_SUPPORT_GPE */
+ 	{
+ 		.ident = "Surface Book 1",
+ 		.matches = {

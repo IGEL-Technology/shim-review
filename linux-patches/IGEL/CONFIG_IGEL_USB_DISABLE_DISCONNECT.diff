@@ -1,0 +1,209 @@
+IGEL_USB_DISABLE_DISCONNECT
+	  Say Y here if you want to be able to block redirect or
+	  disconnect events for a given USB device. If setting the sysfs
+	  key the device will be protected from redirects or disconnects.
+	  Warning this is not a really clean solution and probably need
+	  some more work to polish it but it worked for a while now.
+
+	  Source: IGEL
+diff --git a/drivers/usb/core/devio.c b/drivers/usb/core/devio.c
+index f6ce6e26e0d4..69f98f8558c6 100644
+--- a/drivers/usb/core/devio.c
+@@ -2355,6 +2355,15 @@ static int proc_ioctl(struct usb_dev_state *ps, struct usbdevfs_ioctl *ctl)
+ 	/* disconnect kernel driver from interface */
+ 	case USBDEVFS_DISCONNECT:
+ 		if (intf->dev.driver) {
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++			struct usb_device       *udev = ps->dev;
++			/* gottwald@igel.com disable disconnect if it was disabled via sysfs */
++			if (udev->disable_disconnect) {
++				printk(KERN_WARNING "Blocked usbdevfs disconnect ioctl for USB device protected by disable_disconnect\n");
++				retval = -EACCES;
++				break;
++			}
++#endif
+ 			driver = to_usb_driver(intf->dev.driver);
+ 			dev_dbg(&intf->dev, "disconnect by usbfs\n");
+ 			usb_driver_release_interface(driver, intf);
+diff --git a/drivers/usb/core/devio.c b/drivers/usb/core/devio.c
+index f6ce6e26e0d4..69f98f8558c6 100644
+--- a/drivers/usb/core/devio.c
+@@ -2464,6 +2473,9 @@ static int proc_disconnect_claim(struct usb_dev_state *ps, void __user *arg)
+ {
+ 	struct usbdevfs_disconnect_claim dc;
+ 	struct usb_interface *intf;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	struct usb_device *udev = ps->dev;
++#endif
+ 
+ 	if (copy_from_user(&dc, arg, sizeof(dc)))
+ 		return -EFAULT;
+diff --git a/drivers/usb/core/devio.c b/drivers/usb/core/devio.c
+index f6ce6e26e0d4..69f98f8558c6 100644
+--- a/drivers/usb/core/devio.c
+@@ -2472,6 +2484,15 @@ static int proc_disconnect_claim(struct usb_dev_state *ps, void __user *arg)
+ 	if (!intf)
+ 		return -EINVAL;
+ 
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* gottwald@igel.com disable disconnect if it was disabled via sysfs */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked disconnect claim ioctl for USB device protected by disable_disconnect\n");
++		return -EACCES;
++	}
++#endif
++
+ 	if (intf->dev.driver) {
+ 		struct usb_driver *driver = to_usb_driver(intf->dev.driver);
+ 
+diff --git a/drivers/usb/core/driver.c b/drivers/usb/core/driver.c
+index 74b8bdc27dbf..8e538107abaf 100644
+--- a/drivers/usb/core/driver.c
+@@ -305,6 +305,14 @@ static int usb_unbind_device(struct device *dev)
+ 	struct usb_device *udev = to_usb_device(dev);
+ 	struct usb_device_driver *udriver = to_usb_device_driver(dev->driver);
+ 
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* gottwald@igel.com prevent device from being released */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked usb_unbind_device for USB device protected by disable_disconnect\n");
++		return -ENODEV;
++	}
++#endif
+ 	if (udriver->disconnect)
+ 		udriver->disconnect(udev);
+ 	if (udriver->generic_subclass)
+diff --git a/drivers/usb/core/driver.c b/drivers/usb/core/driver.c
+index 74b8bdc27dbf..8e538107abaf 100644
+--- a/drivers/usb/core/driver.c
+@@ -434,10 +442,24 @@ static int usb_unbind_interface(struct device *dev)
+ 	int i, j, error, r;
+ 	int lpm_disable_error = -ENODEV;
+ 
++#ifndef CONFIG_IGEL_USB_DISABLE_DISCONNECT
+ 	intf->condition = USB_INTERFACE_UNBINDING;
+ 
+ 	/* Autoresume for set_interface call below */
+ 	udev = interface_to_usbdev(intf);
++#else
++	/* Autoresume for set_interface call below */
++	udev = interface_to_usbdev(intf);
++
++	/* gottwald@igel.com prevent device from being released */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked usb_unbind_interface for USB device protected by disable_disconnect\n");
++		return lpm_disable_error;
++	}
++
++	intf->condition = USB_INTERFACE_UNBINDING;
++#endif
+ 	error = usb_autoresume_device(udev);
+ 
+ 	/* If hub-initiated LPM policy may change, attempt to disable LPM until
+diff --git a/drivers/usb/core/driver.c b/drivers/usb/core/driver.c
+index 74b8bdc27dbf..8e538107abaf 100644
+--- a/drivers/usb/core/driver.c
+@@ -623,6 +645,9 @@ void usb_driver_release_interface(struct usb_driver *driver,
+ 					struct usb_interface *iface)
+ {
+ 	struct device *dev = &iface->dev;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	struct usb_device *udev = interface_to_usbdev(iface);
++#endif
+ 
+ 	/* this should never happen, don't release something that's not ours */
+ 	if (!dev->driver || dev->driver != &driver->driver)
+diff --git a/drivers/usb/core/driver.c b/drivers/usb/core/driver.c
+index 74b8bdc27dbf..8e538107abaf 100644
+--- a/drivers/usb/core/driver.c
+@@ -631,6 +656,14 @@ void usb_driver_release_interface(struct usb_driver *driver,
+ 	/* don't release from within disconnect() */
+ 	if (iface->condition != USB_INTERFACE_BOUND)
+ 		return;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* gottwald@igel.com prevent device from being released */
++
++	if (udev->disable_disconnect) {
++		printk(KERN_WARNING "Blocked usb_driver_release_interface for USB device protected by disable_disconnect\n");
++		return;
++	}
++#endif
+ 	iface->condition = USB_INTERFACE_UNBINDING;
+ 
+ 	/* Release via the driver core only if the interface
+diff --git a/drivers/usb/core/sysfs.c b/drivers/usb/core/sysfs.c
+index a07866f1060c..aa45e0241364 100644
+--- a/drivers/usb/core/sysfs.c
+@@ -419,6 +419,42 @@ static ssize_t autosuspend_store(struct device *dev,
+ }
+ static DEVICE_ATTR_RW(autosuspend);
+ 
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++/* gottwald@igel.com added sysfs entry to disable USB device disconnect */
++
++static ssize_t disable_disconnect_show(struct device *dev,
++				struct device_attribute *attr, char *buf)
++{
++	struct usb_device *udev = to_usb_device(dev);
++	return sprintf(buf, "%d\n", udev->disable_disconnect);
++}
++
++static ssize_t disable_disconnect_store(struct device *dev,
++				 struct device_attribute *attr, const char *buf,
++				 size_t count)
++{
++	int value;
++	struct usb_interface *intf = to_usb_interface(dev);
++	struct usb_device *udev = to_usb_device(dev);
++	struct usb_device *udev2 = interface_to_usbdev(intf);
++
++	if (sscanf(buf, "%d", &value) != 1 || value > 1 ||
++			value < 0)
++		return -EINVAL;
++
++	usb_lock_device(udev);
++	udev->disable_disconnect = value;
++	usb_unlock_device(udev);
++
++	usb_lock_device(udev2);
++	udev2->disable_disconnect = value;
++	usb_unlock_device(udev2);
++
++	return count;
++}
++static DEVICE_ATTR_RW(disable_disconnect);
++#endif
++
+ static const char on_string[] = "on";
+ static const char auto_string[] = "auto";
+ 
+diff --git a/drivers/usb/core/sysfs.c b/drivers/usb/core/sysfs.c
+index a07866f1060c..aa45e0241364 100644
+--- a/drivers/usb/core/sysfs.c
+@@ -806,6 +842,9 @@ static struct attribute *dev_attrs[] = {
+ 	&dev_attr_avoid_reset_quirk.attr,
+ 	&dev_attr_authorized.attr,
+ 	&dev_attr_remove.attr,
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	&dev_attr_disable_disconnect.attr,
++#endif
+ 	&dev_attr_ltm_capable.attr,
+ #ifdef CONFIG_OF
+ 	&dev_attr_devspec.attr,
+diff --git a/include/linux/usb.h b/include/linux/usb.h
+index 375ee6e202db..62f006196548 100644
+--- a/include/linux/usb.h
+@@ -743,6 +743,10 @@ struct usb_device {
+ 
+ 	u16 hub_delay;
+ 	unsigned use_generic_driver:1;
++#ifdef CONFIG_IGEL_USB_DISABLE_DISCONNECT
++	/* IGEL to prevent driver disconnect */
++	unsigned disable_disconnect:1;
++#endif
+ };
+ 
+ #define to_usb_device(__dev)	container_of_const(__dev, struct usb_device, dev)

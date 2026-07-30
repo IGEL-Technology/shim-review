@@ -1,0 +1,167 @@
+--- a/grub-core/fs/bootregfs.c
++++ b/grub-core/fs/bootregfs.c
+@@ -149,6 +149,44 @@ char* GWRAP_STRSEP(char** str, const cha
+ 		return NULL;
+ }
+ 
++char* GWRAP_STRCAT(char *dest, const char *src)
++{
++        char *tmp = dest;
++
++        while (*dest)
++                dest++;
++        while ((*dest++ = *src++) != '\0')
++                ;
++        return tmp;
++}
++
++int strContains(char* string, const char* toFind)
++{
++    int slen = GWRAP_STRLEN(string);
++    int tFlen = GWRAP_STRLEN(toFind);
++    int found = 0;
++    int s, t;
++
++    if( slen >= tFlen )
++    {
++        for(s=0, t=0; s<slen; s++)
++        {
++            do{
++
++                if( string[s] == toFind[t] )
++                {
++                    if( ++found == tFlen ) return 1;
++                    s++;
++                    t++;
++                }
++                else { s -= found; found=0; t=0; }
++
++              }while(found);
++        }
++        return 0;
++    }
++    else return -1;
++}
+ #endif
+ 
+ /* helper functions */
+@@ -1872,3 +1910,44 @@ extern void bootreg_debug_output(bootreg
+ 	}
+ }
+ #endif
++
++
++void filter_bootcmd(char *bootcmd, char *filtered)
++{
++  const char *allowed[] = {"quiet=", "debug=", "log_target=", "log_level=", "log_location="};
++  char *ptr;
++  int i, j = 0, k = 0;
++
++  /* Single bootcmd */
++  ptr = GWRAP_STRTOK(bootcmd, " ");
++
++  while(ptr != NULL) {
++    /* Another bootcmd is expected */
++    if(k > 0) {
++      GWRAP_STRCAT(filtered, " ");
++    }
++
++    /* Find 'systemd' in single bootcmd */
++    if(strContains(ptr, "systemd") > 0) {
++      /* Identify if the boot command is allowed */
++      for(i=0; i<5; i++) {
++        if(strContains(ptr, (char*)allowed[i]) > 0)
++          j++;
++      }
++      /* Match with allowed systemd command */
++      if(j > 0) {
++        j = 0;
++        /* Attach allowed systemd bootcmd string */
++        GWRAP_STRCAT(filtered, ptr);
++      }
++    } else {
++      /* Attach bootcmd string */
++      GWRAP_STRCAT(filtered, ptr);
++    }
++
++    /* Single bootcmd */
++    ptr = GWRAP_STRTOK(NULL, " ");
++
++    k++;
++  }
++}
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -251,6 +251,7 @@ grub_igelconfig_bootreg_to_config(unsign
+   char *menuprefix = (char *) grub_zalloc(200);
+   char splash[100];
+   char *val = NULL;
++  char *bootcmd_fltr = NULL;
+   char *empty = (char *) grub_zalloc(1*sizeof(char));
+   const char *custom_splash, *dualboot = NULL, *efidev = NULL;
+   unsigned long value;
+@@ -821,8 +822,16 @@ fi\n\n", efidev, efidev, efidev, efidev)
+   bootreg_get(bt_data, "boot_cmd", &val);
+   if (val == NULL) {
+     val = empty;
++    bootcmd_fltr = empty;
++  } else {
++    bootcmd_fltr = (char *) grub_zalloc(grub_strlen(val)*sizeof(char));
++    if (bootcmd_fltr != NULL) {
++      filter_bootcmd(val, bootcmd_fltr);
++    } else {
++      bootcmd_fltr = val;
++    }
+   }
+-  
++
+   grub_dprintf("igelfs", "right before content malloc\n");
+ 
+   size_params = grub_strlen(cmdline) + grub_strlen(val) + 2;
+@@ -994,7 +1003,7 @@ if [ -f $kernel ]; then\n\
+ 			linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 		}\n\
+ 	}\n\
+-fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, splash, cmdline, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, splash, cmdline, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, bootcmd_fltr);
+   }
+   else {
+     grub_snprintf((char *) *content, content_size, "%s\n\
+@@ -1109,7 +1118,7 @@ if [ -f $kernel ]; then\n\
+ 		insmod part_igel\n\
+ 		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 	}\n\
+-fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, bootcmd_fltr);
+   }
+ 
+   if(val != NULL){
+@@ -1119,6 +1128,15 @@ fi\n", menuprefix, sys_minor, add1, kern
+     grub_free(val);
+   }
+ 
++  // if bootcmd_fltr == val it will cause a double free
++
++  if(bootcmd_fltr != NULL && bootcmd_fltr != val) {
++    if(bootcmd_fltr == empty){
++      empty = NULL;
++    }
++    grub_free(bootcmd_fltr);
++  }
++
+   grub_dprintf("igelfs", "finished config write\n");
+   test_and_free(cmdline);
+   test_and_free(empty);
+--- a/include/grub/bootregfs.h
++++ b/include/grub/bootregfs.h
+@@ -54,6 +54,10 @@ extern "C" {
+ 	#define uintptr_t grub_addr_t
+ 	char* GWRAP_STRTOK(char* input, const char* delim);
+ 	char* GWRAP_STRSEP(char** str, const char* delim);
++    char* GWRAP_STRCAT(char *dest, const char *src);
++    int strContains(char* string, const char* toFind);
++    void filter_bootcmd(char *bootcmd, char *filtered);
++
+ 
+ #else
+ 	#define _GNU_SOURCE

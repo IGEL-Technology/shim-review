@@ -1,0 +1,186 @@
+IGEL_ALLOW_HP_LNXBCU_IOPL
+	  The raw io port lockdown prevents the use of LnxBCU binary to
+	  read/write BIOS settings, update the BIOS version or set/change
+	  the BIOS password. This allows the iopl syscall for LnxBCU even 
+	  if lockdown is active.
+
+	  Source: IGEL
+diff --git a/arch/x86/kernel/ioport.c b/arch/x86/kernel/ioport.c
+index ff40f09ad911..a1850ff57639 100644
+--- a/arch/x86/kernel/ioport.c
+@@ -15,6 +15,16 @@
+ #include <asm/desc.h>
+ #include <asm/syscalls.h>
+ 
++#ifdef CONFIG_IGEL_ALLOW_HP_LNXBCU_IOPL
++#include <linux/fs.h>
++#include <linux/mm.h>
++#include <linux/dcache.h>
++#include <linux/path.h>
++#include <linux/namei.h>
++#include <linux/stat.h>
++#include <linux/fs.h>
++#endif
++
+ #ifdef CONFIG_X86_IOPL_IOPERM
+ 
+ static atomic64_t io_bitmap_sequence;
+diff --git a/arch/x86/kernel/ioport.c b/arch/x86/kernel/ioport.c
+index ff40f09ad911..a1850ff57639 100644
+--- a/arch/x86/kernel/ioport.c
+@@ -192,9 +202,155 @@ SYSCALL_DEFINE1(iopl, unsigned int, level)
+ 
+ 	/* Trying to gain more privileges? */
+ 	if (level > old) {
++#ifdef CONFIG_IGEL_ALLOW_HP_LNXBCU_IOPL
++		if (!capable(CAP_SYS_RAWIO) ||
++		    security_locked_down(LOCKDOWN_IOPORT)) {
++			char name[TASK_COMM_LEN];
++			struct mm_struct *mm;
++			struct file *exe_file;
++			char *buf, *buf1, *buf2;
++			char *path1;
++			static char *path2 = "/dev/.mnt-system/ro/services/hp_bios_tools/hp/LnxBCU";
++			#define BUF_SIZE 4096
++			struct file *f1, *f2;
++			loff_t pos1 = 0, pos2 = 0;
++			ssize_t r1, r2;
++			struct task_struct *task;
++
++			task = container_of(t, struct task_struct, thread);
++			if (!task) {
++				return -EPERM;
++			}
++			get_task_comm(name, task);
++			if (strcmp(name, "LnxBCU") != 0) {
++				return -EPERM;
++			}
++			mm = get_task_mm(task);
++			if (!mm) {
++				printk(KERN_ERR "LnxBCU check - No mm_struct (probably a kernel thread)\n");
++				return -EPERM;
++			}
++			exe_file = mm->exe_file;
++			if (!exe_file) {
++				printk(KERN_ERR "LnxBCU check - exe_file is NULL\n");
++				mmput(mm);
++				return -ENOENT;
++			}
++			buf = kmalloc(PATH_MAX, GFP_KERNEL);
++			if (!buf) {
++				printk(KERN_ERR "LnxBCU check - kmalloc for buf failed\n");
++				mmput(mm);
++				return -ENOMEM;
++			}
++			path1 = d_path(&exe_file->f_path, buf, PATH_MAX);
++			if (IS_ERR(path1)) {
++				printk(KERN_ERR "LnxBCU check - d_path() failed\n");
++				kfree(buf);
++				mmput(mm);
++				return PTR_ERR(path1);
++			}
++			mmput(mm);
++			if (strcmp(path1, "/services/hp_bios_tools/hp/LnxBCU") != 0) {
++				printk(KERN_ERR "LnxBCU check - %s not at expected path.\n", path1);
++				kfree(buf);
++				return -EPERM;
++			}
++			f1 = filp_open(path1, O_RDONLY, 0);
++			if (IS_ERR(f1)) {
++				printk(KERN_ERR "LnxBCU check - Error opening file %s\n", path1);
++				kfree(buf);
++				return PTR_ERR(f1);
++			}
++			f2 = filp_open(path2, O_RDONLY, 0);
++			if (IS_ERR(f2)) {
++				printk(KERN_ERR "LnxBCU check - Error opening file %s\n", path2);
++				kfree(buf);
++				filp_close(f1, NULL);
++				return PTR_ERR(f2);
++			}
++			buf1 = kmalloc(BUF_SIZE, GFP_KERNEL);
++			buf2 = kmalloc(BUF_SIZE, GFP_KERNEL);
++			if (!buf1 || !buf2) {
++				printk(KERN_ERR "LnxBCU check - kmalloc for buf1 or buf2 failed.\n");
++				goto EXIT_NO_PERMISSION;
++			}
++			printk(KERN_INFO "LnxBCU check - Comparing %s against ro %s\n", path1, path2);
++			while (true) {
++				r1 = kernel_read(f1, buf1, BUF_SIZE, &pos1);
++				r2 = kernel_read(f2, buf2, BUF_SIZE, &pos2);
++				if (r1 != r2 || r1 < 0 || r2 < 0) {
++					printk(KERN_ERR "LnxBCU check - Aborting comparison due to error in kernel_read.\n");
++					goto EXIT_NO_PERMISSION;
++				}
++				if (r1 == 0)
++					break;  /* both EOF */
++				if (memcmp(buf1, buf2, r1) != 0) {
++					printk(KERN_ERR "LnxBCU check - %s differs from %s\n", path1, path2);
++					goto EXIT_NO_PERMISSION;
++				}
++			}
++			/*Binaries are the same. Compare mtime for extra security*/
++			struct path p1, p2;
++			struct kstat st1, st2;
++			int err;
++			err = kern_path(path1, LOOKUP_FOLLOW, &p1);
++			if (err) {
++				printk(KERN_ERR "LncBCU check - Error getting kern_path of %s: %d\n", path1, err);
++				return err;
++			}
++			err = kern_path(path2, LOOKUP_FOLLOW, &p2);
++			if (err) {
++				printk(KERN_ERR "LncBCU check - Error getting kern_path of %s: %d\n", path2, err);
++				path_put(&p1);
++				return err;
++			}
++			err = vfs_getattr(&p1, &st1, STATX_MTIME, AT_STATX_SYNC_AS_STAT);
++			if (err) {
++				printk(KERN_ERR "LncBCU check - statx %s failed: %d\n", path1, err);
++				goto EXIT_TIME_COMPARE;
++			}
++			err = vfs_getattr(&p2, &st2, STATX_MTIME, AT_STATX_SYNC_AS_STAT);
++			if (err) {
++				printk(KERN_ERR "LncBCU check - tatx %s failed: %d\n", path2, err);
++				goto EXIT_TIME_COMPARE;
++			}
++			if ((st1.mtime.tv_sec != st2.mtime.tv_sec) ||
++				(st1.mtime.tv_nsec != st2.mtime.tv_nsec))
++			{
++				printk(KERN_ERR "LncBCU check - mtime differs for %s and %s\n", path1, path2);
++				printk(KERN_DEBUG "LncBCU check -%s : %lld.%09ld\n", 
++						path1,
++						(long long)st1.mtime.tv_sec,
++						st1.mtime.tv_nsec);
++				printk(KERN_DEBUG "LncBCU check -%s : %lld.%09ld\n", 
++						path2,
++						(long long)st2.mtime.tv_sec,
++						st2.mtime.tv_nsec);
++				goto EXIT_TIME_COMPARE;
++			}
++			goto BINARY_COMPARISON_SUCCEEDED;
++EXIT_TIME_COMPARE:
++			path_put(&p2);
++			path_put(&p1);
++EXIT_NO_PERMISSION:
++			filp_close(f1, NULL);
++			filp_close(f2, NULL);
++			kfree(buf);
++			kfree(buf1);
++			kfree(buf2);
++			return -EPERM;
++BINARY_COMPARISON_SUCCEEDED:
++			filp_close(f1, NULL);
++			filp_close(f2, NULL);
++			kfree(buf);
++			kfree(buf1);
++			kfree(buf2);
++		}
++#else
+ 		if (!capable(CAP_SYS_RAWIO) ||
+ 		    security_locked_down(LOCKDOWN_IOPORT))
+ 			return -EPERM;
++#endif
+ 	}
+ 
+ 	t->iopl_emul = level;

@@ -1,0 +1,21 @@
+IGEL_FAKE_DUAL_CHANNEL_ON_AMD_STONEY
+	  Fake a dual channel RAM configuration on AMD stoney devices to improve
+	  the supported resolutions a bit.
+
+	  Source: AMD
+diff --git a/drivers/gpu/drm/amd/display/dc/basics/dce_calcs.c b/drivers/gpu/drm/amd/display/dc/basics/dce_calcs.c
+index 4da5adab799c..d1f6539bb9cf 100644
+--- a/drivers/gpu/drm/amd/display/dc/basics/dce_calcs.c
+@@ -2526,7 +2526,12 @@ void bw_calcs_init(struct bw_calcs_dceip *bw_dceip,
+ 	case BW_CALCS_VERSION_STONEY:
+ 		vbios->memory_type = bw_def_gddr5;
+ 		vbios->dram_channel_width_in_bits = 64;
++#ifdef CONFIG_IGEL_FAKE_DUAL_CHANNEL_ON_AMD_STONEY
++		/* gottwald@igel.com fake dual channel RAM */
++		vbios->number_of_dram_channels = 2;
++#else
+ 		vbios->number_of_dram_channels = asic_id.vram_width / vbios->dram_channel_width_in_bits;
++#endif
+ 		vbios->number_of_dram_banks = 8;
+ 		vbios->high_yclk = bw_int_to_fixed(1866);
+ 		vbios->mid_yclk = bw_int_to_fixed(1866);

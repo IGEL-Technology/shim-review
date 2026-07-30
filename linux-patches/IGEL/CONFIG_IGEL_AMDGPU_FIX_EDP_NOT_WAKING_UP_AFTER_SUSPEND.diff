@@ -1,0 +1,184 @@
+IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
+	  Since kernel 6.10.x there is a issue that the internal display does
+	  not work after resume from suspend. As it is not sure if this is
+	  a general issue or a device issue we add a kernel parameter to
+	  solve this.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index 803b6fc360a0..fcdf7456bc45 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -250,6 +250,18 @@ extern bool pcie_p2p;
+ 
+ extern int amdgpu_tmz;
+ extern int amdgpu_reset_method;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++extern int amdgpu_use_fbc;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++extern int amdgpu_prefer_vram_over_gtt;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++extern int amdgpu_disable_mst_support;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++extern int amdgpu_support_edp0_on_dp1;
++#endif
+ 
+ #ifdef CONFIG_DRM_AMDGPU_SI
+ extern int amdgpu_si_support;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index 803b6fc360a0..fcdf7456bc45 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -1443,8 +1455,12 @@ int emu_soc_asic_init(struct amdgpu_device *adev);
+ #define RREG32(reg) amdgpu_device_rreg(adev, (reg), 0)
+ #define DREG32(reg) printk(KERN_INFO "REGISTER: " #reg " : 0x%08X\n", amdgpu_device_rreg(adev, (reg), 0))
+ #define WREG32(reg, v) amdgpu_device_wreg(adev, (reg), (v), 0)
++#ifndef REG_SET // CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
+ #define REG_SET(FIELD, v) (((v) << FIELD##_SHIFT) & FIELD##_MASK)
++#endif
++#ifndef REG_GET // CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
+ #define REG_GET(FIELD, v) (((v) << FIELD##_SHIFT) & FIELD##_MASK)
++#endif
+ #define RREG32_XCC(reg, inst) amdgpu_device_xcc_rreg(adev, (reg), 0, inst)
+ #define WREG32_XCC(reg, v, inst) amdgpu_device_xcc_wreg(adev, (reg), (v), 0, inst)
+ #define RREG32_PCIE(reg) adev->pcie_rreg(adev, (reg))
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -235,6 +239,18 @@ int amdgpu_num_kcq = -1;
+ int amdgpu_smartshift_bias;
+ int amdgpu_use_xgmi_p2p = 1;
+ int amdgpu_vcnfw_log;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++int amdgpu_use_fbc = 0;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++int amdgpu_prefer_vram_over_gtt = -1;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++int amdgpu_disable_mst_support = 0;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++int amdgpu_support_edp0_on_dp1 = -1;
++#endif
+ int amdgpu_sg_display = -1; /* auto */
+ int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
+ int amdgpu_umsch_mm;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -1107,6 +1122,26 @@ MODULE_PARM_DESC(wbrf,
+ 	"Enable Wifi RFI interference mitigation (0 = disabled, 1 = enabled, -1 = auto(default)");
+ module_param_named(wbrf, amdgpu_wbrf, int, 0444);
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++MODULE_PARM_DESC(use_fbc, "Use framebuffer compression. (0=disable, 1=enable)");
++module_param_named(use_fbc, amdgpu_use_fbc, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++MODULE_PARM_DESC(prefer_vram_over_gtt, "Prefer use of VRAM over GTT (-1=auto, 0=disable, 1=enable)");
++module_param_named(prefer_vram_over_gtt, amdgpu_prefer_vram_over_gtt, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++MODULE_PARM_DESC(disable_mst, "Disable DP MST support (0=no (default), 1=yes)");
++module_param_named(disable_mst, amdgpu_disable_mst_support, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++MODULE_PARM_DESC(support_edp0_on_dp1, "Support eDP0 on DP1 (0 = disabled, 1 = enabled, -1 = auto(default)");
++module_param_named(support_edp0_on_dp1, amdgpu_support_edp0_on_dp1, int, 0644);
++#endif
++
+ /**
+  * DOC: rebar (int)
+  * Allow BAR resizing.  Disable this to prevent the driver from attempting
+diff --git a/drivers/gpu/drm/amd/display/dc/dcn31/dcn31_panel_cntl.c b/drivers/gpu/drm/amd/display/dc/dcn31/dcn31_panel_cntl.c
+index f9961a6446f3..2e866e504d4b 100644
+--- a/drivers/gpu/drm/amd/display/dc/dcn31/dcn31_panel_cntl.c
+@@ -28,6 +28,9 @@
+ #include "dc_dmub_srv.h"
+ #include "dcn31_panel_cntl.h"
+ #include "atom.h"
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++#include "amdgpu.h"
++#endif
+ 
+ #define TO_DCN31_PANEL_CNTL(panel_cntl)\
+ 	container_of(panel_cntl, struct dcn31_panel_cntl, base)
+diff --git a/drivers/gpu/drm/amd/display/dc/dcn31/dcn31_panel_cntl.c b/drivers/gpu/drm/amd/display/dc/dcn31/dcn31_panel_cntl.c
+index f9961a6446f3..2e866e504d4b 100644
+--- a/drivers/gpu/drm/amd/display/dc/dcn31/dcn31_panel_cntl.c
+@@ -168,33 +171,52 @@ void dcn31_panel_cntl_construct(
+ 	struct dcn31_panel_cntl *dcn31_panel_cntl,
+ 	const struct panel_cntl_init_data *init_data)
+ {
++	uint8_t pwrseq_inst = 0xF;
+ 
+ 	dcn31_panel_cntl->base.funcs = &dcn31_link_panel_cntl_funcs;
+ 	dcn31_panel_cntl->base.ctx = init_data->ctx;
+ 	dcn31_panel_cntl->base.inst = init_data->inst;
+ 
+-	if (dcn31_panel_cntl->base.ctx->dc->config.support_edp0_on_dp1) {
+-		//If supported, power sequencer mapping shall follow the DIG instance
+-		uint8_t pwrseq_inst = 0xF;
+-
+-		switch (init_data->eng_id) {
+-		case ENGINE_ID_DIGA:
+-			pwrseq_inst = 0;
+-			break;
+-		case ENGINE_ID_DIGB:
+-			pwrseq_inst = 1;
+-			break;
+-		default:
+-			DC_LOG_WARNING("Unsupported pwrseq engine id: %d!\n", init_data->eng_id);
+-			ASSERT(false);
+-			break;
+-		}
++	switch (init_data->eng_id) {
++	case ENGINE_ID_DIGA:
++		pwrseq_inst = 0;
++		break;
++	case ENGINE_ID_DIGB:
++		pwrseq_inst = 1;
++		break;
++	default:
++		DC_LOG_WARNING("Unsupported pwrseq engine id: %d!\n", init_data->eng_id);
++		ASSERT(false);
++		break;
++	}
+ 
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++	if (amdgpu_support_edp0_on_dp1 == 0) {
++		/* If not supported, pwrseq will be assigned in order,
++                 * so first pwrseq will be assigned to first panel instance (legacy behavior)
++                 */
++                dcn31_panel_cntl->base.pwrseq_inst = dcn31_panel_cntl->base.inst;
++	} else if (amdgpu_support_edp0_on_dp1 == 1) {
++		//If supported, power sequencer mapping shall follow the DIG instance
++                dcn31_panel_cntl->base.pwrseq_inst = pwrseq_inst;
++	} else if (amdgpu_support_edp0_on_dp1 == -1) {
++		if (dcn31_panel_cntl->base.ctx->dc->config.support_edp0_on_dp1)
++			//If supported, power sequencer mapping shall follow the DIG instance
++			dcn31_panel_cntl->base.pwrseq_inst = pwrseq_inst;
++		else
++			/* If not supported, pwrseq will be assigned in order,
++			 * so first pwrseq will be assigned to first panel instance (legacy behavior)
++			 */
++			dcn31_panel_cntl->base.pwrseq_inst = dcn31_panel_cntl->base.inst;
++	}
++#else
++	if (dcn31_panel_cntl->base.ctx->dc->config.support_edp0_on_dp1)
++		//If supported, power sequencer mapping shall follow the DIG instance
+ 		dcn31_panel_cntl->base.pwrseq_inst = pwrseq_inst;
+-	} else {
++	else
+ 		/* If not supported, pwrseq will be assigned in order,
+ 		 * so first pwrseq will be assigned to first panel instance (legacy behavior)
+ 		 */
+ 		dcn31_panel_cntl->base.pwrseq_inst = dcn31_panel_cntl->base.inst;
+-	}
++#endif
+ }

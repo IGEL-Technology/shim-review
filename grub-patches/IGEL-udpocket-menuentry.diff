@@ -1,0 +1,191 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -838,6 +838,8 @@ set kernel2_suffix=\"%s\"\n\
+ set kernel2=\"$device/${kernel2_file}\"\n\
+ set kernel2_name=\"%s\"\n\
+ \n\
++find_udp_boot_id --set=udp_bootid\n\
++\n\
+ set default_opts=\"%s\"\n\
+ \n\
+ if [ ! -f $kernel1 ]; then\n\
+@@ -874,6 +876,12 @@ if [ -f $kernel ]; then\n\
+ 		insmod part_igel\n\
+ 		linux $kernel $default_opts %s %s\n\
+ 	}\n\
++\n\
++	if [ \"$udp_bootid\" != \"\" ]; then\n\
++		menuentry \"${menu_prefix}USB Boot UD Pocket\" --class usb {\n\
++			set_next_boot $udp_bootid\n\
++		}\n\
++  	fi\n\
+ fi\n\
+ \n\
+ if [ -f $kernel2 ]; then\n\
+@@ -894,7 +902,7 @@ export kernel\n\
+ export menu_prefix\n\
+ \n\
+ if [ -f $kernel ]; then\n\
+-	submenu \"Advanced Options\" {\n\
++	submenu \"Advanced Options\" --class advanced {\n\
+ 		menuentry \"${menu_prefix}Verbose boot$kernel_name\" {\n\
+ 			set gfxpayload=keep\n\
+ 			insmod part_igel\n\
+--- /dev/null
++++ b/grub-core/commands/efi/find_udp_boot_id.c
+@@ -0,0 +1,138 @@
++#include <grub/types.h>
++#include <grub/mm.h>
++#include <grub/misc.h>
++#include <grub/efi/api.h>
++#include <grub/efi/efi.h>
++#include <grub/extcmd.h>
++#include <grub/env.h>
++#include <grub/charset.h>
++
++GRUB_MOD_LICENSE ("GPLv3+");
++
++static const struct grub_arg_option options[] = {
++  {"set", 's', GRUB_ARG_OPTION_OPTIONAL, N_("Save parsed result to environment variable)."), N_("ENV_VAR"), ARG_TYPE_STRING},
++  {0, 0, 0, 0, 0, 0}
++};
++
++static grub_err_t
++grub_find_udp_boot_id(struct grub_extcmd_context *ctxt,
++		      int argc __attribute__ ((unused)),
++		      char **args __attribute__ ((unused)))
++{
++  struct grub_arg_list *state = ctxt->state;
++  grub_err_t status = GRUB_ERR_NONE;
++  grub_efi_char16_t *name = NULL;
++  grub_guid_t guid = GRUB_EFI_GLOBAL_VARIABLE_GUID;
++  grub_uint8_t *buf = NULL, *bp;
++  char id[12], varname[201], *var;
++  void *efi_var = NULL;
++  grub_size_t efi_var_size = 0;
++  grub_uint16_t i = 0, p = 0, c = 0, found = 0;
++  grub_int32_t maybe = -1;
++
++  if (argc == 1)
++    grub_printf("%s\n", args[0]);
++
++  buf = grub_zalloc(512);
++  if (buf == NULL) {
++    status = grub_error (GRUB_ERR_OUT_OF_MEMORY, N_("out of memory"));
++    return status;
++  }
++
++  id[0] = '\0';
++
++  for (i=0;i<12288;i++) {
++    if (i <= 0xf) {
++      grub_snprintf(varname, 200, "Boot000%x", i);
++    } else if (i <= 0xff) {
++      grub_snprintf(varname, 200, "Boot00%x", i);
++    } else if (i <= 0xfff) {
++      grub_snprintf(varname, 200, "Boot0%x", i);
++    } else {
++      grub_snprintf(varname, 200, "Boot%x", i);
++    }
++    grub_efi_get_variable (varname, &guid, &efi_var_size, &efi_var);
++    if (!efi_var || !efi_var_size)
++    {
++      continue;
++    }
++
++    c=0;
++    var = (char *)efi_var;
++    for (p=0;p<efi_var_size;p++) {
++      if (var[p] == '\0')
++        continue;
++      if (var[p] == '\n') {
++        break;
++      }
++      buf[c++] = var[p];
++    }
++    buf[c]='\0';
++
++    grub_free(efi_var);
++
++    grub_dprintf("udpboot","%s: buf = %s\n", varname, buf);
++    found = 0;
++    bp = buf;
++    while (*bp != '\0' && found == 0 && grub_strlen((char *)bp) >= 4) {
++      if (grub_strncasecmp((char *)bp, "IGEL UD Pocket", 14) == 0 || grub_strncasecmp((char *)bp, "IGEL BC/DR USB", 14) == 0) {
++        found = 1;
++        break;
++      }
++      if (grub_strncasecmp((char *)bp, "USB:", 4) == 0) {
++        maybe = i;
++        break;
++      }
++      bp++;
++    }
++    if (found == 0 && maybe > 0) {
++      i = (grub_uint16_t)maybe;
++      found = 1;
++    }
++    if (found != 0) {
++      if (i <= 0xf) {
++        grub_snprintf(id, 11, "000%x", i);
++      } else if (i <= 0xff) {
++        grub_snprintf(id, 11, "00%x", i);
++      } else if (i <= 0xfff) {
++        grub_snprintf(id, 11, "0%x", i);
++      } else {
++        grub_snprintf(id, 11, "%x", i);
++      }
++      grub_dprintf("udpboot","%s: UD Pocket boot entry found with id %s\n", varname, id);
++      break;
++    }
++    grub_dprintf("udpboot","%s: is not a UD Pocket boot entry\n", varname);
++  }
++
++  if (name) {
++    grub_free(name);
++    name = NULL;
++  }
++
++  if (id[0] != '\0') {
++    if (state[0].set) {
++      status = grub_env_set (state[0].arg, id);
++    } else {
++      grub_printf("%s\n", (const char *)id);
++      status = GRUB_ERR_NONE;
++    }
++  }
++
++  return status;
++}
++
++static grub_extcmd_t cmd = NULL;
++
++GRUB_MOD_INIT (find_udp_boot_id)
++{
++  cmd = grub_register_extcmd ("find_udp_boot_id", grub_find_udp_boot_id, 0, N_("[-s ENV_VAR]"),
++ N_("Get boot id from Windows bootloader."), options);
++}
++
++GRUB_MOD_FINI (find_udp_boot_id)
++{
++  if (cmd)
++    grub_unregister_extcmd (cmd);
++}
++
+--- a/grub-core/Makefile.core.def
++++ b/grub-core/Makefile.core.def
+@@ -800,6 +800,14 @@ module = {
+ };
+ 
+ module = {
++  name = find_udp_boot_id;
++
++  common = commands/efi/find_udp_boot_id.c;
++
++  enable = efi;
++};
++
++module = {
+   name = lsacpi;
+ 
+   common = commands/lsacpi.c;

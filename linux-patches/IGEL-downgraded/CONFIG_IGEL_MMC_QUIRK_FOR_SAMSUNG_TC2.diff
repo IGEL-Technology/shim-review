@@ -1,0 +1,26 @@
+IGEL_MMC_QUIRK_FOR_SAMSUNG_TC2
+	  In older kernels the brock HS200 quirk was used for specific AMD
+	  chipsets but was removed later on. The Samsung TC2 has one of those
+	  chipsets and without this quirk had not worked reliable so this
+	  option will add the quirk again.
+
+	  Source: IGEL-downgraded
+	  URL: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/drivers/mmc/host/sdhci-pci-core.c?h=linux-4.10.y
+diff --git a/drivers/mmc/host/sdhci-pci-core.c b/drivers/mmc/host/sdhci-pci-core.c
+index 47a0a738862b..244d17a6caa9 100644
+--- a/drivers/mmc/host/sdhci-pci-core.c
+@@ -1798,8 +1814,13 @@ static int amd_probe(struct sdhci_pci_chip *chip)
+ 
+ 	pci_dev_put(smbus_dev);
+ 
+-	if (gen == AMD_CHIPSET_BEFORE_ML || gen == AMD_CHIPSET_CZ)
++	if (gen == AMD_CHIPSET_BEFORE_ML || gen == AMD_CHIPSET_CZ) {
+ 		chip->quirks2 |= SDHCI_QUIRK2_CLEAR_TRANSFERMODE_REG_BEFORE_CMD;
++#ifdef CONFIG_IGEL_MMC_QUIRK_FOR_SAMSUNG_TC2
++		/* gottwald@igel.com : Fix MMC support for Samsung TC2 */
++		chip->quirks2 |= SDHCI_QUIRK2_BROKEN_HS200;
++#endif
++	}
+ 
+ 	return 0;
+ }

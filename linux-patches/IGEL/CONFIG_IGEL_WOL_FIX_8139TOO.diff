@@ -1,0 +1,96 @@
+IGEL_WOL_FIX_8139TOO
+	  Enable WOL for Realtek 8139 network devices.
+
+	  Source: IGEL
+diff --git a/drivers/net/ethernet/realtek/8139too.c b/drivers/net/ethernet/realtek/8139too.c
+index a73dcaffa8c5..f30f4f3187ee 100644
+--- a/drivers/net/ethernet/realtek/8139too.c
+@@ -1103,6 +1103,12 @@ static int rtl8139_init_one(struct pci_dev *pdev,
+ 	if (rtl_chip_info[tp->chipset].flags & HasHltClk)
+ 		RTL_W8 (HltClk, 'H');	/* 'R' would leave the clock running. */
+ 
++#ifdef CONFIG_IGEL_WOL_FIX_8139TOO
++	// lugmair@igel.com Kernel Patch
++	/* lang@igel.de: enable WOL */
++	if (rtl_chip_info[tp->chipset].flags & HasLWake)
++		device_set_wakeup_enable(&tp->pci_dev->dev, true);
++#endif
+ 	return 0;
+ 
+ err_out:
+diff --git a/drivers/net/ethernet/realtek/8139too.c b/drivers/net/ethernet/realtek/8139too.c
+index a73dcaffa8c5..f30f4f3187ee 100644
+--- a/drivers/net/ethernet/realtek/8139too.c
+@@ -2374,6 +2380,11 @@ static int rtl8139_set_wol(struct net_device *dev, struct ethtool_wolinfo *wol)
+ 	if (wol->wolopts & WAKE_BCAST)
+ 		cfg5 |= Cfg5_BWF;
+ 	RTL_W8 (Config5, cfg5);	/* need not unlock via Cfg9346 */
++#ifdef CONFIG_IGEL_WOL_FIX_8139TOO
++	// lugmair@igel.com Kernel patch
++	/* lang@igel.de: enable WOL */
++	device_set_wakeup_enable(&tp->pci_dev->dev, wol->wolopts);
++#endif
+ 	spin_unlock_irq(&tp->lock);
+ 
+ 	return 0;
+diff --git a/drivers/net/ethernet/realtek/8139too.c b/drivers/net/ethernet/realtek/8139too.c
+index a73dcaffa8c5..f30f4f3187ee 100644
+--- a/drivers/net/ethernet/realtek/8139too.c
+@@ -2613,8 +2624,20 @@ static int __maybe_unused rtl8139_suspend(struct device *device)
+ 	void __iomem *ioaddr = tp->mmio_addr;
+ 	unsigned long flags;
+ 
++#ifdef CONFIG_IGEL_WOL_FIX_8139TOO
++	// lugmair@igel.com Kernel patch
++	if (!netif_running (dev)) {
++		if (tp->pci_dev != NULL) {
++			/* lang@igel.de: enable WOL from d3 state */
++			pci_wake_from_d3(tp->pci_dev, true);
++			pci_set_power_state (tp->pci_dev, PCI_D3hot);
++		}
++		return 0;
++	}
++#else
+ 	if (!netif_running (dev))
+ 		return 0;
++#endif
+ 
+ 	netif_device_detach (dev);
+ 
+diff --git a/drivers/net/ethernet/realtek/8139too.c b/drivers/net/ethernet/realtek/8139too.c
+index a73dcaffa8c5..f30f4f3187ee 100644
+--- a/drivers/net/ethernet/realtek/8139too.c
+@@ -2630,6 +2653,14 @@ static int __maybe_unused rtl8139_suspend(struct device *device)
+ 
+ 	spin_unlock_irqrestore (&tp->lock, flags);
+ 
++#ifdef CONFIG_IGEL_WOL_FIX_8139TOO
++	// lugmair@igel.com Kernel patch
++	/* lang@igel.de: enable WOL from d3 state */
++	if (tp->pci_dev != NULL) {
++		pci_wake_from_d3(tp->pci_dev, true);
++		pci_set_power_state (tp->pci_dev, PCI_D3hot);
++	}
++#endif
+ 	return 0;
+ }
+ 
+diff --git a/drivers/net/ethernet/realtek/8139too.c b/drivers/net/ethernet/realtek/8139too.c
+index a73dcaffa8c5..f30f4f3187ee 100644
+--- a/drivers/net/ethernet/realtek/8139too.c
+@@ -2637,6 +2668,15 @@ static int __maybe_unused rtl8139_resume(struct device *device)
+ {
+ 	struct net_device *dev = dev_get_drvdata(device);
+ 
++#ifdef CONFIG_IGEL_WOL_FIX_8139TOO
++	struct rtl8139_private *tp = netdev_priv(dev);
++	/* lang@igel.de: disable WOL from d3 state */
++	if (tp->pci_dev != NULL) {
++		pci_set_power_state (tp->pci_dev, PCI_D0);
++		pci_wake_from_d3(tp->pci_dev, false);
++	}
++#endif
++
+ 	if (!netif_running (dev))
+ 		return 0;
+ 

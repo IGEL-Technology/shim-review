@@ -1,0 +1,18 @@
+--- a/grub-core/partmap/igel.c
++++ b/grub-core/partmap/igel.c
+@@ -569,6 +569,7 @@ check_sys_bspl_partition_header (grub_di
+ 			return 0;
+ 		}
+ 
++# if 0
+ 		if (efi_secureboot == GRUB_EFI_SECUREBOOT_MODE_ENABLED) {
+ 			if ((kernel = grub_malloc(kernel_length)) == NULL) {
+ 				grub_printf("\n\nError could not allocate %llu bytes of memory to do kernel check!\n", (unsigned long long) IGF_SECTION_SIZE);
+@@ -577,6 +578,7 @@ check_sys_bspl_partition_header (grub_di
+ 		} else {
+ 			kernel = NULL;
+ 		}
++#endif
+ 
+ 		makecrc();
+ 		section = sect;

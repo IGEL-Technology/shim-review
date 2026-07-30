@@ -1,0 +1,37 @@
+IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
+	  The WWAN rfkill switch is not present on a lenovo thinkpad L480 which
+	  lead to problems as the WWAN is blocked due to rfkill. So this option
+	  will disable the WWAN rfkill for this device.
+
+	  Source: IGEL
+diff --git a/drivers/platform/x86/lenovo/thinkpad_acpi.c b/drivers/platform/x86/lenovo/thinkpad_acpi.c
+index 075543cd0e77..20801050e790 100644
+--- a/drivers/platform/x86/lenovo/thinkpad_acpi.c
+@@ -4399,7 +4413,27 @@ enum {
+ static int wan_get_status(void)
+ {
+ 	int status;
++#ifdef CONFIG_IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
++	const char *vendor;
++	const char *version;
++#endif
++#ifdef CONFIG_IGEL_THINKPAD_RFKILL_MODULE_PARAM
++	if (!wwan_rfkill)
++		return TPACPI_RFK_RADIO_ON;
++#endif
+ 
++#ifdef CONFIG_IGEL_FIX_WWAN_RFKILL_FOR_THINKPAD_L480
++	/* gottwald@igel.com rfkill for wwan is invalid for Lenovo ThinkPad L480 */
++	vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++	version = dmi_get_system_info(DMI_PRODUCT_VERSION);
++
++	if (vendor != NULL && version != NULL) {
++		if (strstr(vendor, "LENOVO") &&
++                    strstr(version, "ThinkPad L480")) {
++			return TPACPI_RFK_RADIO_ON;
++		}
++	}
++#endif
+ #ifdef CONFIG_THINKPAD_ACPI_DEBUGFACILITIES
+ 	if (dbg_wwanemul)
+ 		return (tpacpi_wwan_emulstate) ?

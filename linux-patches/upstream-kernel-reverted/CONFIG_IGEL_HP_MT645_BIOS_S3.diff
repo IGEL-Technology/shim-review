@@ -1,0 +1,35 @@
+IGEL_HP_MT645_BIOS_S3
+	  Fix issues with BIOS not working properly is using S3 feature seems
+	  like the Lenovo BIOS needs some OSI strings here which have been
+	  removed recently so this readds them which should make resume work
+	  again.
+
+	  Source: upstream-kernel-reverted
+	  version: 6.0
+	  commit: e54049d481a9b25f5ae292f671e6aecb6d79f532
+diff --git a/drivers/acpi/osi.c b/drivers/acpi/osi.c
+index 9470f1830ff5..25f7387865a8 100644
+--- a/drivers/acpi/osi.c
+@@ -43,6 +43,22 @@ osi_setup_entries[OSI_STRING_ENTRIES_MAX] __initdata = {
+ 	{"Module Device", true},
+ 	{"Processor Device", true},
+ 	{"Processor Aggregator Device", true},
++#ifdef CONFIG_IGEL_HP_MT645_BIOS_S3
++	/*
++	 * Following is no longer supported since kernel 6.1:
++	 *
++	 * In the past _OSI strings have been abused by other BIOS vendors to change
++	 * completely unrelated code on completely unrelated systems.  This prompted
++	 * an evaluation of all of it's uses. This uncovered that they aren't needed
++	 * for any of the original reasons. As such, the kernel will not respond to
++	 * any custom Linux-* strings by default.
++	 *
++	 * Below defined _OSI string is used by hp mt645
++	 * System BIOS: U81 Ver.01.10.01 01/09/2023
++	 * for S3 (suspend to ram) functionality.
++	 */
++	{"Linux-HPI-Hybrid-Graphics", true},
++#endif
+ };
+ 
+ static u32 acpi_osi_handler(acpi_string interface, u32 supported)

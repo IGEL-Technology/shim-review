@@ -1,0 +1,27 @@
+IGEL_DISABLE_RTL8XXXU_USB_IDS_HANDLED_BY_8192EU
+	  This driver has problems with some devices it officially support so
+	  remove the non working USB IDs from the list of supported devices.
+
+	  Source: IGEL
+diff --git a/drivers/net/wireless/realtek/rtl8xxxu/core.c b/drivers/net/wireless/realtek/rtl8xxxu/core.c
+index 25e5fd48b8e2..7f2803ba9a68 100644
+--- a/drivers/net/wireless/realtek/rtl8xxxu/core.c
+@@ -8042,6 +8042,7 @@ static const struct usb_device_id dev_table[] = {
+ 	.driver_info = (unsigned long)&rtl8723au_fops},
+ {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x0724, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8723au_fops},
++#ifndef CONFIG_IGEL_DISABLE_RTL8XXXU_USB_IDS_HANDLED_BY_8192EU
+ {USB_DEVICE_AND_INTERFACE_INFO(USB_VENDOR_ID_REALTEK, 0x818b, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192eu_fops},
+ /* TP-Link TL-WN822N v4 */
+diff --git a/drivers/net/wireless/realtek/rtl8xxxu/core.c b/drivers/net/wireless/realtek/rtl8xxxu/core.c
+index 25e5fd48b8e2..7f2803ba9a68 100644
+--- a/drivers/net/wireless/realtek/rtl8xxxu/core.c
+@@ -8300,6 +8302,7 @@ static const struct usb_device_id dev_table[] = {
+ {USB_DEVICE_AND_INTERFACE_INFO(0x7392, 0x7822, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192cu_fops},
+ /* found in rtl8192eu vendor driver */
++#ifndef CONFIG_IGEL_DISABLE_RTL8XXXU_USB_IDS_HANDLED_BY_8192EU
+ {USB_DEVICE_AND_INTERFACE_INFO(0x2357, 0x0107, 0xff, 0xff, 0xff),
+ 	.driver_info = (unsigned long)&rtl8192eu_fops},
+ {USB_DEVICE_AND_INTERFACE_INFO(0x2019, 0xab33, 0xff, 0xff, 0xff),

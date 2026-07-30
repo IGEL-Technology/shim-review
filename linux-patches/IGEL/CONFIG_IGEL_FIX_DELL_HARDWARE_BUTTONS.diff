@@ -1,0 +1,170 @@
+IGEL_FIX_DELL_HARDWARE_BUTTONS
+	  Force enable ACPI GPEs for specified Dell hardware. Fixes the
+	  Wyze 5470 AIO side buttons not working. Allows to add additional
+	  devices via DMI, if the DSDT handlers and offsets are known.
+
+	  Source: IGEL
+diff --git a/drivers/platform/x86/dell/dell-wmi-base.c b/drivers/platform/x86/dell/dell-wmi-base.c
+index 907f1da01c8d..11d69371242b 100644
+--- a/drivers/platform/x86/dell/dell-wmi-base.c
+@@ -42,6 +42,9 @@ struct dell_wmi_priv {
+ 	struct input_dev *input_dev;
+ 	struct input_dev *tabletswitch_dev;
+ 	u32 interface_version;
++#ifdef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS
++	bool single_event_quirk;
++#endif /* CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
+ };
+ 
+ static int __init dmi_matched(const struct dmi_system_id *dmi)
+diff --git a/drivers/platform/x86/dell/dell-wmi-base.c b/drivers/platform/x86/dell/dell-wmi-base.c
+index 907f1da01c8d..11d69371242b 100644
+--- a/drivers/platform/x86/dell/dell-wmi-base.c
+@@ -70,6 +73,49 @@ static const struct dmi_system_id dell_wmi_smbios_list[] __initconst = {
+ 	{ }
+ };
+ 
++#ifdef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS
++/*
++ * Some Dell AIO machines define ACPI _Lxx GPE handlers for hardware buttons
++ * but the firmware does not set the corresponding hardware enable bits in the
++ * GPE0_EN register during Linux boot, even though the ACPI core marks them as
++ * enabled internally. Store a 0-terminated list of GPE numbers to
++ * force-enable per machine via the DMI quirk table below.
++ *
++ * single_event: The machine's _WED method fills only the first entry of the
++ * returned buffer but does not zero the remainder. With interface_version > 0
++ * the notify handler iterates the full buffer and hits garbage in later words,
++ * printing a spurious "Invalid length" warning. Setting this flag applies the
++ * same single-entry trimming that interface_version == 0 uses.
++ */
++struct dell_wmi_gpe_quirk {
++	u8 gpes[4];
++	bool single_event;
++};
++
++static const struct dell_wmi_gpe_quirk wyse_5470_aio_gpe_quirk = {
++	/*
++	 *   GPE 0x43 -> _L43 -> Notify(GFX0.DD1F, 0x86) ->  brightness up
++	 *   GPE 0x44 -> _L44 -> Notify(GFX0.DD1F, 0x87) ->  brightness down
++	 *   GPE 0x45 -> _L45 -> QEVC = 0xe027           ->  KEY_DISPLAYTOGGLE
++	 */
++	.gpes = { 0x43, 0x44, 0x45, 0 },
++	.single_event = true,
++};
++
++static const struct dmi_system_id dell_wmi_gpe_quirk_table[] = {
++	{
++		.ident = "Dell Wyse 5470 AIO",
++		.driver_data = (void *)&wyse_5470_aio_gpe_quirk,
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Dell Inc."),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Wyse 5470 AIO"),
++		},
++	},
++	{ }
++};
++
++static bool dell_wmi_single_event_quirk;
++#endif /* CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
+ /*
+  * Keymap for WMI events of type 0x0000
+  *
+diff --git a/drivers/platform/x86/dell/dell-wmi-base.c b/drivers/platform/x86/dell/dell-wmi-base.c
+index 907f1da01c8d..11d69371242b 100644
+--- a/drivers/platform/x86/dell/dell-wmi-base.c
+@@ -495,7 +541,12 @@ static void dell_wmi_notify(struct wmi_device *wdev,
+ 	 * So to prevent reading garbage from buffer we will process only first
+ 	 * one event on devices with WMI interface version 0.
+ 	 */
++#ifdef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS
++	if ((priv->interface_version == 0 || priv->single_event_quirk) &&
++	    buffer_entry < buffer_end)
++#else
+ 	if (priv->interface_version == 0 && buffer_entry < buffer_end)
++#endif /* CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
+ 		if (buffer_end > buffer_entry + buffer_entry[0] + 1)
+ 			buffer_end = buffer_entry + buffer_entry[0] + 1;
+ 
+diff --git a/drivers/platform/x86/dell/dell-wmi-base.c b/drivers/platform/x86/dell/dell-wmi-base.c
+index 907f1da01c8d..11d69371242b 100644
+--- a/drivers/platform/x86/dell/dell-wmi-base.c
+@@ -813,6 +864,9 @@ static int dell_wmi_probe(struct wmi_device *wdev, const void *context)
+ 	if (!dell_wmi_get_interface_version(&priv->interface_version))
+ 		return -EPROBE_DEFER;
+ 
++#ifdef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS
++	priv->single_event_quirk = dell_wmi_single_event_quirk;
++#endif /* CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
+ 	return dell_wmi_input_setup(wdev);
+ }
+ 
+diff --git a/drivers/platform/x86/dell/dell-wmi-base.c b/drivers/platform/x86/dell/dell-wmi-base.c
+index 907f1da01c8d..11d69371242b 100644
+--- a/drivers/platform/x86/dell/dell-wmi-base.c
+@@ -838,6 +892,13 @@ static struct wmi_driver dell_wmi_driver = {
+ static int __init dell_wmi_init(void)
+ {
+ 	int err;
++#ifdef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS
++	const struct dmi_system_id *dmi_id;
++	const struct dell_wmi_gpe_quirk *quirk;
++	acpi_status status;
++	int i;
++	pr_debug("IGEL GPE quirk: dell_wmi_init() entered\n");
++#endif /* CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
+ 
+ 	dmi_check_system(dell_wmi_smbios_list);
+ 
+diff --git a/drivers/platform/x86/dell/dell-wmi-base.c b/drivers/platform/x86/dell/dell-wmi-base.c
+index 907f1da01c8d..11d69371242b 100644
+--- a/drivers/platform/x86/dell/dell-wmi-base.c
+@@ -853,7 +914,48 @@ static int __init dell_wmi_init(void)
+ 	if (err)
+ 		return err;
+ 
++#ifndef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS
+ 	return wmi_driver_register(&dell_wmi_driver);
++#else /* #ifdef CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
++	dmi_id = dmi_first_match(dell_wmi_gpe_quirk_table);
++	if (dmi_id) {
++		quirk = (const struct dell_wmi_gpe_quirk *)dmi_id->driver_data;
++		dell_wmi_single_event_quirk = quirk->single_event;
++		pr_debug("IGEL GPE quirk: DMI match found: %s (single_event=%d)\n",
++			dmi_id->ident, quirk->single_event);
++	} else {
++		pr_debug("IGEL GPE quirk: no DMI match for this machine - quirk not applied\n");
++	}
++
++	err = wmi_driver_register(&dell_wmi_driver);
++	if (err)
++		return err;
++
++	/*
++	 * Cannot use acpi_enable_gpe(), because it only writes the hardware register
++	 * on the 0->1 reference count transition, which already happened.
++	 * Using acpi_set_gpe() instead, which bypasses the reference count to directly
++	 * set the hardware enable bit.
++	 */
++	if (dmi_id) {
++		pr_info("IGEL GPE quirk: DMI match found, attempting to enable GPEs\n");
++		quirk = (const struct dell_wmi_gpe_quirk *)dmi_id->driver_data;
++		for (i = 0; quirk->gpes[i]; i++) {
++			pr_debug("IGEL GPE quirk: calling acpi_set_gpe(NULL, 0x%02x, ENABLE)\n",
++				quirk->gpes[i]);
++			status = acpi_set_gpe(NULL, quirk->gpes[i],
++					      ACPI_GPE_ENABLE);
++			if (ACPI_FAILURE(status))
++				pr_warn("Failed to force-enable GPE 0x%02x: %s\n",
++					quirk->gpes[i],
++					acpi_format_exception(status));
++			else
++				pr_debug("IGEL GPE quirk: GPE 0x%02x force-enabled OK\n",
++					quirk->gpes[i]);
++		}
++	}
++	return 0;
++#endif /* CONFIG_IGEL_FIX_DELL_HARDWARE_BUTTONS */
+ }
+ late_initcall(dell_wmi_init);
+ 

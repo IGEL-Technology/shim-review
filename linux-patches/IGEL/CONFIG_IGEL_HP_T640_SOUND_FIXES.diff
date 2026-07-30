@@ -1,0 +1,82 @@
+IGEL_HP_T640_SOUND_FIXES
+	  Fix some HP t640 speaker noise issues.
+
+	  Source: IGEL
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -2952,6 +3063,32 @@ static void alc285_fixup_hp_spectre_x360(struct hda_codec *codec,
+ 	}
+ }
+ 
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++static void alc256_hp_playback_pcm_hook(struct hda_pcm_stream *hinfo,
++					struct hda_codec *codec,
++					struct snd_pcm_substream *substream,
++					int action)
++{
++	switch (action) {
++	case HDA_GEN_PCM_ACT_OPEN:
++		alc_auto_setup_eapd(codec, true);
++		break;
++	case HDA_GEN_PCM_ACT_CLOSE:
++		alc_auto_setup_eapd(codec, false);
++		break;
++	}
++}
++
++static void alc_fixup_hp_spk_noise(struct hda_codec *codec,
++				   const struct hda_fixup *fix, int action)
++{
++	struct alc_spec *spec = codec->spec;
++
++	if (action == HDA_FIXUP_ACT_PRE_PROBE)
++		spec->gen.pcm_playback_hook = alc256_hp_playback_pcm_hook;
++}
++#endif
++
+ static void alc285_fixup_hp_envy_x360(struct hda_codec *codec,
+ 				      const struct hda_fixup *fix,
+ 				      int action)
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -3949,6 +4093,9 @@ enum {
+ 	ALC287_FIXUP_LEGION_16ITHG6,
+ 	ALC287_FIXUP_YOGA9_14IAP7_BASS_SPK,
+ 	ALC287_FIXUP_YOGA9_14IAP7_BASS_SPK_PIN,
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++	ALC256_FIXUP_HP_SPK_NOISE,
++#endif
+ 	ALC287_FIXUP_YOGA9_14IMH9_BASS_SPK_PIN,
+ 	ALC295_FIXUP_DELL_INSPIRON_TOP_SPEAKERS,
+ 	ALC236_FIXUP_DELL_DUAL_CODECS,
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -6250,6 +6456,12 @@ static const struct hda_fixup alc269_fixups[] = {
+ 		.chained = true,
+ 		.chain_id = ALC287_FIXUP_YOGA9_14IAP7_BASS_SPK,
+ 	},
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++	[ALC256_FIXUP_HP_SPK_NOISE] = {
++		.type = HDA_FIXUP_FUNC,
++		.v.func = alc_fixup_hp_spk_noise,
++	},
++#endif
+ 	[ALC287_FIXUP_YOGA9_14IMH9_BASS_SPK_PIN] = {
+ 		.type = HDA_FIXUP_FUNC,
+ 		.v.func = alc287_fixup_yoga9_14iap7_bass_spk_pin,
+diff --git a/sound/hda/codecs/realtek/alc269.c b/sound/hda/codecs/realtek/alc269.c
+index c18c18f9e652..62f7619061e9 100644
+--- a/sound/hda/codecs/realtek/alc269.c
+@@ -7581,6 +7811,9 @@ static const struct hda_quirk alc269_fixup_tbl[] = {
+ 	SND_PCI_QUIRK(0xf111, 0x000b, "Framework Laptop", ALC295_FIXUP_FRAMEWORK_LAPTOP_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0xf111, 0x000c, "Framework Laptop", ALC295_FIXUP_FRAMEWORK_LAPTOP_MIC_NO_PRESENCE),
+ 	SND_PCI_QUIRK(0xf111, 0x000f, "Framework Laptop", ALC295_FIXUP_FRAMEWORK_LAPTOP_MIC_NO_PRESENCE),
++#ifdef CONFIG_IGEL_HP_T640_SOUND_FIXES
++	SND_PCI_QUIRK(0x103c, 0x8523, "HP t640", ALC256_FIXUP_HP_SPK_NOISE),
++#endif
+ 
+ #if 0
+ 	/* Below is a quirk table taken from the old code.

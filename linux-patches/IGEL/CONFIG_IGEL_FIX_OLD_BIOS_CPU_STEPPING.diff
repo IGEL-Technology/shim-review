@@ -1,0 +1,47 @@
+IGEL_FIX_OLD_BIOS_CPU_STEPPING
+	  We donwgraded the BIOS on some J1900 CPU based devices which leads to
+	  serious trouble as the BIOS do not initialize the CPU correctly but if
+	  we prevent the switching of the C states the device do not crash regularly.
+	  This will detect the new stepping and the old BIOS so the C states will be
+	  limited automatically.
+
+	  Source: IGEL
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index 9ba83954c255..e6dc7e2cf26e 100644
+--- a/drivers/idle/intel_idle.c
+@@ -52,6 +52,9 @@
+ #include <linux/notifier.h>
+ #include <linux/cpu.h>
+ #include <linux/moduleparam.h>
++#ifdef CONFIG_IGEL_FIX_OLD_BIOS_CPU_STEPPING
++#include <linux/dmi.h>
++#endif
+ #include <linux/sysfs.h>
+ #include <asm/cpuid/api.h>
+ #include <asm/cpu_device_id.h>
+diff --git a/drivers/idle/intel_idle.c b/drivers/idle/intel_idle.c
+index 9ba83954c255..e6dc7e2cf26e 100644
+--- a/drivers/idle/intel_idle.c
+@@ -2447,6 +2462,22 @@ static int __init intel_idle_init(void)
+ 			return -ENODEV;
+ 	}
+ 
++#ifdef CONFIG_IGEL_FIX_OLD_BIOS_CPU_STEPPING
++	if (max_cstate == CPUIDLE_STATE_MAX - 1) {
++		if (boot_cpu_data.x86_vendor == X86_VENDOR_INTEL &&
++		    boot_cpu_data.x86 ==  6 &&
++		    boot_cpu_data.x86_model == 0x37 &&
++		    boot_cpu_data.x86_stepping == 0x9) {
++			int year, month, day;
++			dmi_get_date(DMI_BIOS_DATE, &year, &month, &day);
++			if (year < 2018 || (year == 2018 && month < 11))
++				max_cstate = 1;
++		}
++	}
++#endif
++	if (boot_cpu_data.cpuid_level < CPUID_LEAF_MWAIT)
++		return -ENODEV;
++
+ 	cpuid(CPUID_LEAF_MWAIT, &eax, &ebx, &ecx, &mwait_substates);
+ 
+ 	if (!(ecx & CPUID5_ECX_EXTENSIONS_SUPPORTED) ||

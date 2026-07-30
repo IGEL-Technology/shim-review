@@ -1,0 +1,243 @@
+IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
+	  Add a kernel module option to prefer VRAM over GTT memory.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu.h b/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+index 803b6fc360a0..fcdf7456bc45 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu.h
+@@ -250,6 +250,18 @@ extern bool pcie_p2p;
+ 
+ extern int amdgpu_tmz;
+ extern int amdgpu_reset_method;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++extern int amdgpu_use_fbc;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++extern int amdgpu_prefer_vram_over_gtt;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++extern int amdgpu_disable_mst_support;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++extern int amdgpu_support_edp0_on_dp1;
++#endif
+ 
+ #ifdef CONFIG_DRM_AMDGPU_SI
+ extern int amdgpu_si_support;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -235,6 +239,18 @@ int amdgpu_num_kcq = -1;
+ int amdgpu_smartshift_bias;
+ int amdgpu_use_xgmi_p2p = 1;
+ int amdgpu_vcnfw_log;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++int amdgpu_use_fbc = 0;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++int amdgpu_prefer_vram_over_gtt = -1;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++int amdgpu_disable_mst_support = 0;
++#endif
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++int amdgpu_support_edp0_on_dp1 = -1;
++#endif
+ int amdgpu_sg_display = -1; /* auto */
+ int amdgpu_user_partt_mode = AMDGPU_AUTO_COMPUTE_PARTITION_MODE;
+ int amdgpu_umsch_mm;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+index 7248947835f1..90f91c65ede6 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_drv.c
+@@ -1107,6 +1122,26 @@ MODULE_PARM_DESC(wbrf,
+ 	"Enable Wifi RFI interference mitigation (0 = disabled, 1 = enabled, -1 = auto(default)");
+ module_param_named(wbrf, amdgpu_wbrf, int, 0444);
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_USE_FBC_MOD_OPTION
++MODULE_PARM_DESC(use_fbc, "Use framebuffer compression. (0=disable, 1=enable)");
++module_param_named(use_fbc, amdgpu_use_fbc, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++MODULE_PARM_DESC(prefer_vram_over_gtt, "Prefer use of VRAM over GTT (-1=auto, 0=disable, 1=enable)");
++module_param_named(prefer_vram_over_gtt, amdgpu_prefer_vram_over_gtt, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_DISABLE_MST_SUPPORT_MOD_OPTION
++MODULE_PARM_DESC(disable_mst, "Disable DP MST support (0=no (default), 1=yes)");
++module_param_named(disable_mst, amdgpu_disable_mst_support, int, 0600);
++#endif
++
++#ifdef CONFIG_IGEL_AMDGPU_FIX_EDP_NOT_WAKING_UP_AFTER_SUSPEND
++MODULE_PARM_DESC(support_edp0_on_dp1, "Support eDP0 on DP1 (0 = disabled, 1 = enabled, -1 = auto(default)");
++module_param_named(support_edp0_on_dp1, amdgpu_support_edp0_on_dp1, int, 0644);
++#endif
++
+ /**
+  * DOC: rebar (int)
+  * Allow BAR resizing.  Disable this to prevent the driver from attempting
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index e08f58de4b17..eccc6ddcc92d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -935,6 +935,9 @@ int amdgpu_bo_pin(struct amdgpu_bo *bo, u32 domain)
+ 	struct amdgpu_device *adev = amdgpu_ttm_adev(bo->tbo.bdev);
+ 	struct ttm_operation_ctx ctx = { false, false };
+ 	int r, i;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++	u32 orig_domain;
++#endif
+ 
+ 	if (amdgpu_ttm_tt_get_usermm(bo->tbo.ttm))
+ 		return -EPERM;
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index e08f58de4b17..eccc6ddcc92d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -951,12 +954,21 @@ int amdgpu_bo_pin(struct amdgpu_bo *bo, u32 domain)
+ 			return -EINVAL;
+ 	}
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++	orig_domain = domain;
++#endif
++
+ 	if (bo->tbo.pin_count) {
+ 		uint32_t mem_type = bo->tbo.resource->mem_type;
+ 		uint32_t mem_flags = bo->tbo.resource->placement;
+ 
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		if (!(orig_domain & amdgpu_mem_type_to_domain(mem_type)))
++			return -EINVAL;
++#else
+ 		if (!(domain & amdgpu_mem_type_to_domain(mem_type)))
+ 			return -EINVAL;
++#endif
+ 
+ 		if ((mem_type == TTM_PL_VRAM) &&
+ 		    (bo->flags & AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS) &&
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index e08f58de4b17..eccc6ddcc92d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -970,7 +982,11 @@ int amdgpu_bo_pin(struct amdgpu_bo *bo, u32 domain)
+ 	/* This assumes only APU display buffers are pinned with (VRAM|GTT).
+ 	 * See function amdgpu_display_supported_domains()
+ 	 */
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++	domain = amdgpu_bo_get_preferred_domain(adev, orig_domain);
++#else
+ 	domain = amdgpu_bo_get_preferred_domain(adev, domain);
++#endif
+ 
+ 	if (drm_gem_is_imported(&bo->tbo.base))
+ 		dma_buf_pin(bo->tbo.base.import_attach);
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index e08f58de4b17..eccc6ddcc92d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -978,6 +994,9 @@ int amdgpu_bo_pin(struct amdgpu_bo *bo, u32 domain)
+ 	/* force to pin into visible video ram */
+ 	if (!(bo->flags & AMDGPU_GEM_CREATE_NO_CPU_ACCESS))
+ 		bo->flags |= AMDGPU_GEM_CREATE_CPU_ACCESS_REQUIRED;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++retry_bo_pin:
++#endif
+ 	amdgpu_bo_placement_from_domain(bo, domain);
+ 	for (i = 0; i < bo->placement.num_placement; i++) {
+ 		if (bo->flags & AMDGPU_GEM_CREATE_VRAM_CONTIGUOUS &&
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index e08f58de4b17..eccc6ddcc92d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -987,6 +1006,15 @@ int amdgpu_bo_pin(struct amdgpu_bo *bo, u32 domain)
+ 
+ 	r = ttm_bo_validate(&bo->tbo, &bo->placement, &ctx);
+ 	if (unlikely(r)) {
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		if (r == -ENOMEM &&
++		    orig_domain == (AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT) &&
++		    domain == AMDGPU_GEM_DOMAIN_VRAM) {
++			domain = AMDGPU_GEM_DOMAIN_GTT;
++			dev_err(adev->dev, "%p pin goto retry bo pin\n", bo);
++			goto retry_bo_pin;
++		}
++#endif
+ 		dev_err(adev->dev, "%p pin failed\n", bo);
+ 		goto error;
+ 	}
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+index e08f58de4b17..eccc6ddcc92d 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.c
+@@ -1575,11 +1603,33 @@ uint32_t amdgpu_bo_get_preferred_domain(struct amdgpu_device *adev,
+ 	if ((domain == (AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT)) &&
+ 	    ((adev->asic_type == CHIP_CARRIZO) || (adev->asic_type == CHIP_STONEY))) {
+ 		domain = AMDGPU_GEM_DOMAIN_VRAM;
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		if (amdgpu_prefer_vram_over_gtt == 0) {
++			domain = AMDGPU_GEM_DOMAIN_GTT;
++		} else if (amdgpu_prefer_vram_over_gtt != 1) {
++			if (adev->gmc.real_vram_size <= AMDGPU_SG_THRESHOLD)
++                 	       domain = AMDGPU_GEM_DOMAIN_GTT;
++		}
++#else
+ 		if (adev->gmc.real_vram_size <= AMDGPU_SG_THRESHOLD)
+ 			domain = AMDGPU_GEM_DOMAIN_GTT;
++#endif
++	}
++	return domain;
++}
++
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++uint32_t amdgpu_bo_get_preferred_fbc_domain(struct amdgpu_device *adev,
++					    uint32_t domain)
++{
++	if (domain == (AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT)) {
++		domain = AMDGPU_GEM_DOMAIN_VRAM;
++		if (amdgpu_prefer_vram_over_gtt != 1)
++			domain = AMDGPU_GEM_DOMAIN_GTT;
+ 	}
+ 	return domain;
+ }
++#endif
+ 
+ #if defined(CONFIG_DEBUG_FS)
+ #define amdgpu_bo_print_flag(m, bo, flag)		        \
+diff --git a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h b/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h
+index 52c2d1731aab..e78efcca755f 100644
+--- a/drivers/gpu/drm/amd/amdgpu/amdgpu_object.h
+@@ -312,6 +312,10 @@ u64 amdgpu_bo_gpu_offset_no_check(struct amdgpu_bo *bo);
+ uint32_t amdgpu_bo_mem_stats_placement(struct amdgpu_bo *bo);
+ uint32_t amdgpu_bo_get_preferred_domain(struct amdgpu_device *adev,
+ 					    uint32_t domain);
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++uint32_t amdgpu_bo_get_preferred_fbc_domain(struct amdgpu_device *adev,
++					    uint32_t domain);
++#endif
+ 
+ /*
+  * sub allocation
+diff --git a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c b/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+index ae10e8365ae1..2a78fa47e95b 100644
+--- a/drivers/gpu/drm/amd/display/amdgpu_dm/amdgpu_dm.c
+@@ -1091,6 +1096,25 @@ static void amdgpu_dm_fbc_init(struct drm_connector *connector)
+ 	}
+ 
+ 	if (max_size) {
++#ifdef CONFIG_IGEL_AMDGPU_ADD_PREFER_VRAM_MOD_OPTION
++		uint32_t domain = amdgpu_bo_get_preferred_fbc_domain(adev,
++					(AMDGPU_GEM_DOMAIN_VRAM | AMDGPU_GEM_DOMAIN_GTT));
++		int r = amdgpu_bo_create_kernel(adev, max_size * 4, PAGE_SIZE,
++			    domain, &compressor->bo_ptr,
++			    &compressor->gpu_addr, &compressor->cpu_addr);
++		if (r == -ENOMEM && domain == AMDGPU_GEM_DOMAIN_VRAM) {
++			r = amdgpu_bo_create_kernel(adev, max_size * 4, PAGE_SIZE,
++				    AMDGPU_GEM_DOMAIN_GTT, &compressor->bo_ptr,
++				    &compressor->gpu_addr, &compressor->cpu_addr);
++		}
++
++		if (r)
++			DRM_ERROR("DM: Failed to initialize FBC\n");
++		else {
++			adev->dm.dc->ctx->fbc_gpu_addr = compressor->gpu_addr;
++			DRM_INFO("DM: FBC alloc %lu\n", max_size*4);
++		}
++#else
+ 		int r = amdgpu_bo_create_kernel(adev, max_size * 4, PAGE_SIZE,
+ 			    AMDGPU_GEM_DOMAIN_GTT, &compressor->bo_ptr,
+ 			    &compressor->gpu_addr, &compressor->cpu_addr);

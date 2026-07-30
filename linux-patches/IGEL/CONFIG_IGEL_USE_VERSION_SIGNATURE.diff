@@ -1,0 +1,13 @@
+IGEL_USE_VERSION_SIGNATURE
+	  Create a /proc/version_signature file with the
+	  IGEL_VERSION_SIGNATURE inside it.
+
+	  Source: IGEL
+diff --git a/fs/proc/Makefile b/fs/proc/Makefile
+index 7b4db9c56e6a..576a4f5a0f5a 100644
+--- a/fs/proc/Makefile
+@@ -34,3 +34,4 @@ proc-$(CONFIG_PROC_VMCORE)	+= vmcore.o
+ proc-$(CONFIG_PRINTK)	+= kmsg.o
+ proc-$(CONFIG_PROC_PAGE_MONITOR)	+= page.o
+ proc-$(CONFIG_BOOT_CONFIG)	+= bootconfig.o
++proc-$(CONFIG_IGEL_USE_VERSION_SIGNATURE)	+= version_signature.o

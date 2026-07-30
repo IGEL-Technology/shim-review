@@ -1,0 +1,124 @@
+IGEL_SURFACE_ACPI_CHANGES
+	  Some smaller ACPI changes for surface devices.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/acpi/acpi_tad.c b/drivers/acpi/acpi_tad.c
+index 33418dd6768a..e1a599a2998b 100644
+--- a/drivers/acpi/acpi_tad.c
+@@ -433,6 +433,16 @@ static ssize_t caps_show(struct device *dev, struct device_attribute *attr,
+ 
+ static DEVICE_ATTR_RO(caps);
+ 
++#ifdef CONFIG_IGEL_SURFACE_ACPI_CHANGES
++static struct attribute *acpi_tad_attrs[] = {
++	&dev_attr_caps.attr,
++	NULL,
++};
++static const struct attribute_group acpi_tad_attr_group = {
++	.attrs	= acpi_tad_attrs,
++};
++#endif
++
+ static ssize_t ac_alarm_store(struct device *dev, struct device_attribute *attr,
+ 			      const char *buf, size_t count)
+ {
+diff --git a/drivers/acpi/acpi_tad.c b/drivers/acpi/acpi_tad.c
+index 33418dd6768a..e1a599a2998b 100644
+--- a/drivers/acpi/acpi_tad.c
+@@ -481,16 +491,26 @@ static ssize_t ac_status_show(struct device *dev, struct device_attribute *attr,
+ 
+ static DEVICE_ATTR_RW(ac_status);
+ 
++#ifdef CONFIG_IGEL_SURFACE_ACPI_CHANGES
++static struct attribute *acpi_tad_ac_attrs[] = {
++#else
+ static struct attribute *acpi_tad_attrs[] = {
+ 	&dev_attr_caps.attr,
++#endif
+ 	&dev_attr_ac_alarm.attr,
+ 	&dev_attr_ac_policy.attr,
+ 	&dev_attr_ac_status.attr,
+ 	NULL,
+ };
++#ifdef CONFIG_IGEL_SURFACE_ACPI_CHANGES
++static const struct attribute_group acpi_tad_ac_attr_group = {
++	.attrs	= acpi_tad_ac_attrs,
++};
++#else
+ static const struct attribute_group acpi_tad_attr_group = {
+ 	.attrs	= acpi_tad_attrs,
+ };
++#endif
+ 
+ static ssize_t dc_alarm_store(struct device *dev, struct device_attribute *attr,
+ 			      const char *buf, size_t count)
+diff --git a/drivers/acpi/acpi_tad.c b/drivers/acpi/acpi_tad.c
+index 33418dd6768a..e1a599a2998b 100644
+--- a/drivers/acpi/acpi_tad.c
+@@ -565,6 +585,11 @@ static void acpi_tad_remove(struct platform_device *pdev)
+ 
+ 	pm_runtime_get_sync(dev);
+ 
++#ifdef CONFIG_IGEL_SURFACE_ACPI_CHANGES
++	if (dd->capabilities & ACPI_TAD_AC_WAKE)
++		sysfs_remove_group(&dev->kobj, &acpi_tad_ac_attr_group);
++#endif
++
+ 	if (dd->capabilities & ACPI_TAD_RT)
+ 		sysfs_remove_group(&dev->kobj, &acpi_tad_time_attr_group);
+ 
+diff --git a/drivers/acpi/acpi_tad.c b/drivers/acpi/acpi_tad.c
+index 33418dd6768a..e1a599a2998b 100644
+--- a/drivers/acpi/acpi_tad.c
+@@ -573,8 +598,15 @@ static void acpi_tad_remove(struct platform_device *pdev)
+ 
+ 	sysfs_remove_group(&dev->kobj, &acpi_tad_attr_group);
+ 
++#ifdef CONFIG_IGEL_SURFACE_ACPI_CHANGES
++	if (dd->capabilities & ACPI_TAD_AC_WAKE) {
++		acpi_tad_disable_timer(dev, ACPI_TAD_AC_TIMER);
++		acpi_tad_clear_status(dev, ACPI_TAD_AC_TIMER);
++	}
++#else
+ 	acpi_tad_disable_timer(dev, ACPI_TAD_AC_TIMER);
+ 	acpi_tad_clear_status(dev, ACPI_TAD_AC_TIMER);
++#endif
+ 	if (dd->capabilities & ACPI_TAD_DC_WAKE) {
+ 		acpi_tad_disable_timer(dev, ACPI_TAD_DC_TIMER);
+ 		acpi_tad_clear_status(dev, ACPI_TAD_DC_TIMER);
+diff --git a/drivers/acpi/acpi_tad.c b/drivers/acpi/acpi_tad.c
+index 33418dd6768a..e1a599a2998b 100644
+--- a/drivers/acpi/acpi_tad.c
+@@ -616,11 +648,13 @@ static int acpi_tad_probe(struct platform_device *pdev)
+ 		goto remove_handler;
+ 	}
+ 
++#ifndef CONFIG_IGEL_SURFACE_ACPI_CHANGES
+ 	if (!acpi_has_method(handle, "_PRW")) {
+ 		dev_info(dev, "Missing _PRW\n");
+ 		ret = -ENODEV;
+ 		goto remove_handler;
+ 	}
++#endif
+ 
+ 	dd = devm_kzalloc(dev, sizeof(*dd), GFP_KERNEL);
+ 	if (!dd) {
+diff --git a/drivers/acpi/acpi_tad.c b/drivers/acpi/acpi_tad.c
+index 33418dd6768a..e1a599a2998b 100644
+--- a/drivers/acpi/acpi_tad.c
+@@ -652,6 +686,14 @@ static int acpi_tad_probe(struct platform_device *pdev)
+ 	if (ret)
+ 		goto fail;
+ 
++#ifdef CONFIG_IGEL_SURFACE_ACPI_CHANGES
++	if (caps & ACPI_TAD_AC_WAKE) {
++		ret = sysfs_create_group(&dev->kobj, &acpi_tad_ac_attr_group);
++		if (ret)
++			goto fail;
++	}
++#endif
++
+ 	if (caps & ACPI_TAD_DC_WAKE) {
+ 		ret = sysfs_create_group(&dev->kobj, &acpi_tad_dc_attr_group);
+ 		if (ret)

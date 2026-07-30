@@ -1,0 +1,15 @@
+IGEL_NO_TIMESTAMP_WARNING
+	  Enable this to get rid of ...supports timestamp until 2038 warnings.
+
+	  Source: IGEL
+diff --git a/fs/namespace.c b/fs/namespace.c
+index 8531b8deee41..7647d098faf3 100644
+--- a/fs/namespace.c
+@@ -3176,6 +3176,7 @@ static void set_mount_attributes(struct mount *mnt, unsigned int mnt_flags)
+ static void mnt_warn_timestamp_expiry(const struct path *mountpoint,
+ 				      struct vfsmount *mnt)
+ {
++#ifndef CONFIG_IGEL_NO_TIMESTAMP_WARNING
+ 	struct super_block *sb = mnt->mnt_sb;
+ 
+ 	if (!__mnt_is_readonly(mnt) &&

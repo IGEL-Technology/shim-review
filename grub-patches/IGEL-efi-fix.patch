@@ -19,7 +19,7 @@
      grub_uint32_t r;
  
 +    /* with gfxmode=auto use only modes with width > 800 */
-     if ((! efi_call_5 (uga->get_mode, uga, &w, &h, &d, &r)) &&
+     if ((! uga->get_mode (uga, &w, &h, &d, &r)) &&
 -	((! width) || (width == w)) &&
 +	((! width && w > 800) || (width == w)) &&
  	((! height) || (height == h)) &&

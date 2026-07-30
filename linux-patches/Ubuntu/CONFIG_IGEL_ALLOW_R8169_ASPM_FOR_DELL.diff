@@ -1,0 +1,79 @@
+IGEL_ALLOW_R8169_ASPM_FOR_DELL
+	  By default the r8169 driver disables ASPM feature to avoid random link
+	  failures and system hangs on problematic systems. Dell's new models will
+	  be verified to work reliably with RTL NIC PCIe ASPM feature is enabled.
+	  And Dell will push RTL to fix any issues result from the ASPM.
+
+	  Source: Ubuntu
+	  URL: https://wiki.ubuntu.com/Kernel/SourceCode
+	  Commit: [ 05bda1b689ffb9bc29af2d28681565defc097c11, 0d9aba26504ddef497aab134c0600758ab2c5881 ]
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -15,6 +15,9 @@
+ #include <linux/etherdevice.h>
+ #include <linux/clk.h>
+ #include <linux/delay.h>
++#ifdef CONFIG_IGEL_ALLOW_R8169_ASPM_FOR_DELL
++#include <linux/dmi.h>
++#endif /* CONFIG_IGEL_ALLOW_R8169_ASPM_FOR_DELL */
+ #include <linux/ethtool.h>
+ #include <linux/phy.h>
+ #include <linux/if_vlan.h>
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -5373,6 +5436,38 @@ static void rtl_init_mac_address(struct rtl8169_private *tp)
+ 	rtl_rar_set(tp, mac_addr);
+ }
+ 
++#ifdef CONFIG_IGEL_ALLOW_R8169_ASPM_FOR_DELL
++static bool rtl_aspm_new_dell_platforms(void)
++{
++	const char *family = dmi_get_system_info(DMI_PRODUCT_FAMILY);
++	static const char * const dell_product_families[] = {
++		"Alienware",
++		"Dell Laptops",
++		"Dell Pro Laptops",
++		"Dell Pro Max Laptops",
++		"Dell Desktops",
++		"Dell Pro Desktops",
++		"Dell Pro Max Desktops",
++		"Dell Pro Rugged Laptops",
++		"Dell Pro Precision",
++		"Dell Pro Essential",
++		"Dell Pro Education",
++		"XPS"
++	};
++	int i;
++
++	if (!family)
++		return false;
++
++	for (i = 0; i < ARRAY_SIZE(dell_product_families); i++) {
++		if (str_has_prefix(family, dell_product_families[i]))
++			return true;
++	}
++
++	return false;
++}
++
++#endif /* CONFIG_IGEL_ALLOW_R8169_ASPM_FOR_DELL */
+ /* register is set if system vendor successfully tested ASPM 1.2 */
+ static bool rtl_aspm_is_safe(struct rtl8169_private *tp)
+ {
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -5380,6 +5475,11 @@ static bool rtl_aspm_is_safe(struct rtl8169_private *tp)
+ 	    r8168_mac_ocp_read(tp, 0xc0b2) & 0xf)
+ 		return true;
+ 
++#ifdef CONFIG_IGEL_ALLOW_R8169_ASPM_FOR_DELL
++	if (rtl_aspm_new_dell_platforms())
++		return true;
++
++#endif /* CONFIG_IGEL_ALLOW_R8169_ASPM_FOR_DELL */
+ 	return false;
+ }
+ 

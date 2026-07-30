@@ -1,0 +1,59 @@
+IGEL_I915_H830_CHANGE_CONNECTOR_ORDER
+	  Change order of monitor output connectors so it match the former
+	  ones.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index 3f40028e79cf..d3c18ae6773e 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
+@@ -7757,6 +7757,9 @@ bool assert_port_valid(struct intel_display *display, enum port port)
+ 
+ void intel_setup_outputs(struct intel_display *display)
+ {
++#if defined(CONFIG_IGEL_I915_H830_CHANGE_CONNECTOR_ORDER) && defined(_I915_DRV_H_)
++	struct drm_i915_private *dev_priv = to_i915(display->drm);
++#endif
+ 	struct intel_encoder *encoder;
+ 	bool dpd_is_edp = false;
+ 
+diff --git a/drivers/gpu/drm/i915/display/intel_display.c b/drivers/gpu/drm/i915/display/intel_display.c
+index 3f40028e79cf..d3c18ae6773e 100644
+--- a/drivers/gpu/drm/i915/display/intel_display.c
+@@ -7809,6 +7812,37 @@ void intel_setup_outputs(struct intel_display *display)
+ 
+ 		if (intel_de_read(display, PCH_DP_D) & DP_DETECTED)
+ 			g4x_dp_init(display, PCH_DP_D, PORT_D);
++#if defined(CONFIG_IGEL_I915_H830_CHANGE_CONNECTOR_ORDER) && defined(_I915_DRV_H_)
++	} else if (IS_VALLEYVIEW(dev_priv) && IS_IGEL_H830C) {
++		bool has_edp, has_port;
++
++		if (IS_VALLEYVIEW(dev_priv) && dev_priv->display->vbt.int_crt_support)
++			intel_crt_init(display);
++
++		/* nagel@igel.com:
++		 * On IGEL_H830C board, the DVI connector is init'd first and will get
++		 * numbered as 'HDMI1', as the DVI/DisplayPort connectors on the PCB are switched.
++		 * Because the DVI connector of the H820C got numbered as 'HDMI2',
++		 * this may cause switched monitors when migrating from a H820C to a H830C,
++		 * while using a dual-monitor setup.
++		 */
++
++		has_edp = intel_dp_is_port_edp(display, PORT_C);
++		has_port = intel_bios_is_port_present(display, PORT_C);
++		if (intel_de_read(display, VLV_DP_C) & DP_DETECTED || has_port)
++			has_edp &= g4x_dp_init(display, VLV_DP_C, PORT_C);
++		if ((intel_de_read(display, VLV_HDMIC) & SDVO_DETECTED || has_port) && !has_edp)
++			g4x_hdmi_init(display, VLV_HDMIC, PORT_C);
++
++		has_edp = intel_dp_is_port_edp(display, PORT_B);
++		has_port = intel_bios_is_port_present(display, PORT_B);
++		if (intel_de_read(display, VLV_DP_B) & DP_DETECTED || has_port)
++			has_edp &= g4x_dp_init(display, VLV_DP_B, PORT_B);
++		if ((intel_de_read(display, VLV_HDMIB) & SDVO_DETECTED || has_port) && !has_edp)
++			g4x_hdmi_init(display, VLV_HDMIB, PORT_B);
++
++		vlv_dsi_init(display);
++#endif
+ 	} else if (display->platform.valleyview || display->platform.cherryview) {
+ 		bool has_edp, has_port;
+ 

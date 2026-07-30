@@ -1,0 +1,142 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -247,10 +247,11 @@ grub_igelconfig_bootreg_to_config(unsign
+ {
+   int size_params = 0, content_size = 4096;
+   char *cmdline = (char *) grub_zalloc(4097); //allocate to heap to avoid unaligned pointer problem
++  char *winchain = (char *) grub_zalloc(600);
+   char splash[100];
+   char *val = NULL;
+   char *empty = (char *) grub_zalloc(1*sizeof(char));
+-  const char *custom_splash;
++  const char *custom_splash, *dualboot = NULL, *efidev = NULL;
+   unsigned long value;
+   int bootreg_type = -1;
+   bootreg_data* bt_data = (bootreg_data*) grub_zalloc(sizeof(bootreg_data)); //Use this to wrapper new libbottreg functions, TODO HEap malloc???
+@@ -258,7 +259,7 @@ grub_igelconfig_bootreg_to_config(unsign
+   bt_data->page = (char *) buf;
+   char kernel1[] = "", kernel2[] = " (2nd kernel)", added1[] = "", added2[] = "-2nd", std[30];
+   char *kern1, *kern2, *add1, *add2;
+-  int def=0;
++  int def=0, def1=0;
+ 
+   grub_dprintf("igelfs", "entering bootreg to config, bootreg_type at 0x%lx, bootreg_data at 0x%lx, ptr 0x%lx\n", (unsigned long)&bootreg_type, (unsigned long)(bt_data), (unsigned long)(&bt_data));
+   grub_dprintf("igelfs", "cmdline at 0x%lx, splash at 0x%lx, empty at 0x%lx\n", (unsigned long) cmdline, (unsigned long) splash, (unsigned long)empty);
+@@ -330,6 +331,24 @@ menuentry \"Please contact your admin\"
+     test_and_free(val); //avoid memleak from read_key (boot_id), free is necessary after each read_key call!!!
+   }
+ 
++  efidev = grub_env_get ("efidev");
++  dualboot = grub_env_get ("dualboot");
++  if (dualboot != NULL && dualboot[0] == '1') {
++    grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " dualboot");
++    grub_snprintf(winchain, 400, "set win_default=0\n\n\
++if [ ! -e %s/EFI/boot_igel ]; then\n\
++   if [ ! -e %s/EFI/boot_igel_once ]; then\n\
++      if [ \"$igel_boot\" != \"1\" ]; then\n\
++         set default=$win_default\n\
++      fi\n\
++   fi\n\
++fi\n\n\
++menuentry 'Boot Windows' {\n\
++   set root=%s\n\
++   chainloader /EFI/Microsoft/Boot/bootmgfw.efi\n\
++}\n\n", efidev, efidev, efidev);
++  }
++
+   if (sys_minor != 0 && sys_minor != 1) {
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " sys_minor=%u", sys_minor);
+   }
+@@ -752,6 +771,11 @@ menuentry \"Please contact your admin\"
+ 
+   size_params = grub_strlen(cmdline) + grub_strlen(val) + 2;
+ 
++  if (dualboot != NULL && dualboot[0] == '1') {
++    size_params += 610;
++    def1 += 1;
++    def += 1;
++  }
+   if ((size_params * 9 + 3000) > content_size) {
+ 	  content_size = (size_params * 9 + 3000);
+   }
+@@ -813,10 +837,13 @@ else\n\
+ fi\n\
+ \n\
+ if [ -f $kernel2 ]; then\n\
+-	set default=%d\n\
++	set igel_default=%d\n\
+ else\n\
+-	set default=0\n\
+-fi\n\
++	set igel_default=%d\n\
++fi\n\n\
++set default=$igel_default\n\
++\n\
++%s\n\
+ \n\
+ if [ -f $kernel ]; then\n\
+ 	menuentry \"Quiet boot$kernel_name\" {\n\
+@@ -879,7 +906,7 @@ if [ -f $kernel ]; then\n\
+ 		insmod part_igel\n\
+ 		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 	}\n\
+-fi\n", sys_minor, add1, kern1, add2, kern2, std, def, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++fi\n", sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
+ 
+   if(val != NULL){
+     if(val == empty){
+@@ -1561,12 +1588,26 @@ grub_igelfs_close (grub_file_t file)
+   return grub_errno;
+ }
+ 
++static grub_err_t
++grub_igelfs_label (grub_device_t device, char **label)
++{
++  struct grub_archelp_data *data;
++  data = grub_igelfs_mount (device->disk);
++  if (!data)
++    return grub_errno;
++
++  *label = grub_xasprintf("igelfs");
++
++  return grub_errno;
++}
++
+ static struct grub_fs grub_igel_fs = {
+   .name = "igelfs",
+   .fs_dir = grub_igelfs_dir,
+   .fs_open = grub_igelfs_open,
+   .fs_read = grub_igelfs_read,
+   .fs_close = grub_igelfs_close,
++  .fs_label = grub_igelfs_label,
+ #ifdef GRUB_UTIL
+   .reserved_first_sector = 0,
+   .blocklist_install = 0,
+--- a/grub-core/kern/term.c
++++ b/grub-core/kern/term.c
+@@ -141,6 +141,15 @@ grub_getkeystatus (void)
+ int
+ grub_key_is_interrupt (int key)
+ {
++  const char *igel_default;
++
++  if (key == GRUB_TERM_KEY_F4 || key == GRUB_TERM_KEY_F5 || key == 'r' || key == '+') {
++    grub_env_set("igel_boot", "1");
++    igel_default = grub_env_get("igel_default");
++    if (igel_default) {
++      grub_env_set("default", igel_default);
++    }
++  }
+   /*
+    * ESC sometimes is the BIOS setup hotkey and may be hard to discover, also
+    * check F4, which was chosen because is not used as a hotkey to enter the
+--- a/grub-core/normal/menu.c
++++ b/grub-core/normal/menu.c
+@@ -676,6 +676,7 @@ run_menu (grub_menu_t menu, int nested,
+ 	}
+     }
+ 
++  default_entry = get_entry_number (menu, "default");
+   /* If timeout is 0, drawing is pointless (and ugly).  */
+   if (timeout == 0)
+     {

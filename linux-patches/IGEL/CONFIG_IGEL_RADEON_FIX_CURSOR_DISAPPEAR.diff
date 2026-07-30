@@ -1,0 +1,63 @@
+IGEL_RADEON_FIX_CURSOR_DISAPPEAR
+	  Sometimes as cursor will disappear where it should be visible but
+	  sometimes appear where it should not. This should fix the issues
+	  for the radeon graphic driver. This was mostly a suspend/resume
+	  issue.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/radeon/radeon_device.c b/drivers/gpu/drm/radeon/radeon_device.c
+index 9e35b14e2bf0..61e1acb08dae 100644
+--- a/drivers/gpu/drm/radeon/radeon_device.c
+@@ -1654,6 +1654,9 @@ int radeon_resume_kms(struct drm_device *dev, bool resume, bool notify_clients)
+ 	struct pci_dev *pdev = to_pci_dev(dev->dev);
+ 	struct drm_crtc *crtc;
+ 	int r;
++#ifdef CONFIG_IGEL_RADEON_FIX_CURSOR_DISAPPEAR
++	int i;
++#endif
+ 
+ 	if (dev->switch_power_state == DRM_SWITCH_POWER_OFF)
+ 		return 0;
+diff --git a/drivers/gpu/drm/radeon/radeon_device.c b/drivers/gpu/drm/radeon/radeon_device.c
+index 9e35b14e2bf0..61e1acb08dae 100644
+--- a/drivers/gpu/drm/radeon/radeon_device.c
+@@ -1724,9 +1727,24 @@ int radeon_resume_kms(struct drm_device *dev, bool resume, bool notify_clients)
+ 	/* blat the mode back in */
+ 	if (notify_clients) {
+ 		drm_helper_resume_force_mode(dev);
++#ifdef CONFIG_IGEL_RADEON_FIX_CURSOR_DISAPPEAR
++		/* lang@igel: reinitialize cursors */
++		for (i = 0; i < rdev->num_crtc; i++) {
++			if (rdev->mode_info.crtcs[i]) {
++				radeon_cursor_reset(&rdev->mode_info.crtcs[i]->base);
++			}
++		}
++#endif
+ 		/* turn on display hw */
+ 		drm_modeset_lock_all(dev);
+ 		list_for_each_entry(connector, &dev->mode_config.connector_list, head) {
++#ifdef CONFIG_IGEL_RADEON_SPLIT_DVII
++			/* lang@igel: reset detected_by_load, so the the connector is probed again */
++			struct radeon_connector *radeon_connector = to_radeon_connector(connector);
++
++			if (radeon_connector && radeon_connector->splitted_dvii)
++				radeon_connector->detected_by_load = false;
++#endif
+ 			drm_helper_connector_dpms(connector, DRM_MODE_DPMS_ON);
+ 		}
+ 		drm_modeset_unlock_all(dev);
+diff --git a/drivers/gpu/drm/radeon/radeon_display.c b/drivers/gpu/drm/radeon/radeon_display.c
+index 351b9dfcdad8..a5c1e68ee458 100644
+--- a/drivers/gpu/drm/radeon/radeon_display.c
+@@ -713,6 +713,11 @@ static void radeon_crtc_init(struct drm_device *dev, int index)
+ 		radeon_atombios_init_crtc(dev, radeon_crtc);
+ 	else
+ 		radeon_legacy_init_crtc(dev, radeon_crtc);
++
++#ifdef CONFIG_IGEL_RADEON_FIX_CURSOR_DISAPPEAR
++	/* lang@igel: initialize cursor registers */
++	radeon_crtc_cursor_set2(&radeon_crtc->base, NULL, 0, 0, 0, 0, 0);
++#endif
+ }
+ 
+ static const char *encoder_names[38] = {

@@ -1,0 +1,126 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -248,6 +248,7 @@ grub_igelconfig_bootreg_to_config(unsign
+   int size_params = 0, content_size = 4096;
+   char *cmdline = (char *) grub_zalloc(4097); //allocate to heap to avoid unaligned pointer problem
+   char *winchain = (char *) grub_zalloc(600);
++  char *menuprefix = (char *) grub_zalloc(200);
+   char splash[100];
+   char *val = NULL;
+   char *empty = (char *) grub_zalloc(1*sizeof(char));
+@@ -335,6 +336,12 @@ menuentry \"Please contact your admin\"
+   dualboot = grub_env_get ("dualboot");
+   if (dualboot != NULL && dualboot[0] == '1') {
+     grub_snprintf(&cmdline[grub_strlen(cmdline)], 4096 - grub_strlen(cmdline), " dualboot");
++    grub_snprintf(menuprefix, 200, "set menu_prefix=\"IGEL OS 12 \"\n\
++if [ ! -e %s/EFI/igel_show_menu ]; then\n\
++   set show_menu=\"\"\n\
++else\n\
++   set show_menu=\"1\"\n\
++fi\n\n", efidev);
+     grub_snprintf(winchain, 600, "set win_default=0\n\n\
+ if [ ! -e %s/EFI/boot_igel ]; then\n\
+    if [ ! -e %s/EFI/boot_igel_once ]; then\n\
+@@ -781,7 +788,7 @@ fi\n\n", efidev, efidev, efidev, efidev)
+   size_params = grub_strlen(cmdline) + grub_strlen(val) + 2;
+ 
+   if (dualboot != NULL && dualboot[0] == '1') {
+-    size_params += grub_strlen(winchain) + 20;
++    size_params += grub_strlen(winchain) + grub_strlen(menuprefix) + 20;
+     def1 += 1;
+     def += 1;
+   }
+@@ -809,8 +816,14 @@ fi\n\n", efidev, efidev, efidev, efidev)
+   grub_dprintf("igelfs", "writing the config\n");
+ 
+ 
+-  grub_snprintf((char *) *content, content_size, "set timeout=1\n\
+-set timeout_style=hidden\n\
++  grub_snprintf((char *) *content, content_size, "%s\n\
++if [ \"$show_menu\" != \"\" ]; then\n\
++	set timeout=5\n\
++	set timeout_style=menu\n\
++else\n\
++	set timeout=1\n\
++	set timeout_style=hidden\n\
++fi\n\
+ \n\
+ insmod regexp\n\
+ \n\
+@@ -855,13 +868,13 @@ set default=$igel_default\n\
+ %s\n\
+ \n\
+ if [ -f $kernel ]; then\n\
+-	menuentry \"Quiet boot$kernel_name\" {\n\
++	menuentry \"${menu_prefix}Quiet boot$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel $default_opts %s %s\n\
+ 	}\n\
+ \n\
+-	menuentry \"Verbose boot$kernel_name\" {\n\
++	menuentry \"${menu_prefix}Verbose boot$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
+@@ -869,13 +882,13 @@ if [ -f $kernel ]; then\n\
+ fi\n\
+ \n\
+ if [ -f $kernel2 ]; then\n\
+-	menuentry \"Quiet boot$kernel2_name\" {\n\
++	menuentry \"${menu_prefix}Quiet boot$kernel2_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel2 $default_opts %s %s\n\
+ 	}\n\
+ 	\n\
+-	menuentry \"Verbose boot$kernel2_name\" {\n\
++	menuentry \"${menu_prefix}Verbose boot$kernel2_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel2 systemd.unit=igel-verbose-boot.target igel_syslog=verbose %s\n\
+@@ -883,19 +896,19 @@ if [ -f $kernel2 ]; then\n\
+ fi\n\
+ \n\
+ if [ -f $kernel ]; then\n\
+-	menuentry \"VESA only boot$kernel_name\" {\n\
++	menuentry \"${menu_prefix}VESA only boot$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel nomodeset igel_syslog=quiet %s %s\n\
+ 	}\n\
+ 	\n\
+-	menuentry \"Emergency boot (setup only)$kernel_name\" {\n\
++	menuentry \"${menu_prefix}Emergency boot (setup only)$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel systemd.unit=igel-emergency-boot.target igel_syslog=emergency quiet %s %s\n\
+ 	}\n\
+ 	\n\
+-	menuentry \"Failsafe boot with CRC check$kernel_name\" {\n\
++	menuentry \"${menu_prefix}Failsafe boot with CRC check$kernel_name\" {\n\
+ 		set igel_part_check=true\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+@@ -904,18 +917,18 @@ if [ -f $kernel ]; then\n\
+ 		linux $failsafe_kernel igel_syslog=quiet failsafe %s\n\
+ 	}\n\
+ 	\n\
+-	menuentry \"Reset to factory defaults$kernel_name\" {\n\
++	menuentry \"${menu_prefix}Reset to factory defaults$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel systemd.unit=igel-reset-to-factory-defaults.target igel_syslog=resetdefaults quiet %s %s\n\
+ 	}\n\
+ 	\n\
+-	menuentry \"Custom boot command$kernel_name\" {\n\
++	menuentry \"${menu_prefix}Custom boot command$kernel_name\" {\n\
+ 		set gfxpayload=keep\n\
+ 		insmod part_igel\n\
+ 		linux $kernel igel_syslog=quiet quiet %s %s %s\n\
+ 	}\n\
+-fi\n", sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
++fi\n", menuprefix, sys_minor, add1, kern1, add2, kern2, std, def1, def, winchain, cmdline, splash, cmdline, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, cmdline, cmdline, splash, cmdline, splash, val);
+ 
+   if(val != NULL){
+     if(val == empty){

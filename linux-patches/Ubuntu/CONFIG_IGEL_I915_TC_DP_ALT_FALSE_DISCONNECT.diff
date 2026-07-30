@@ -1,0 +1,26 @@
+IGEL_I915_TC_DP_ALT_FALSE_DISCONNECT
+	  On XELPDP+ platforms (Lunar Lake and later), the HPD live status bit
+	  deasserts transiently during a long HPD pulse, causing a false disconnect
+	  of an active DP-alt TC port and disabling displays unexpectedly.
+	  This fix trusts the PHY ownership register over the transient HPD live
+	  status when a link is active to prevent spurious disconnections.
+
+	  Source: Ubuntu
+	  Commit: 4d8202ebc42f103dd37c800540629b527edd7cbc
+diff --git a/drivers/gpu/drm/i915/display/intel_tc.c b/drivers/gpu/drm/i915/display/intel_tc.c
+index c4a5601c5107..118e03bea17d 100644
+--- a/drivers/gpu/drm/i915/display/intel_tc.c
+@@ -1725,6 +1725,13 @@ bool intel_tc_port_connected(struct intel_encoder *encoder)
+ 	if (tc->mode != TC_PORT_DISCONNECTED)
+ 		mask = BIT(tc->mode);
+ 
++#ifdef CONFIG_IGEL_I915_TC_DP_ALT_FALSE_DISCONNECT
++	if (tc->link_refcount > 0 &&
++	    tc->mode == TC_PORT_DP_ALT &&
++	    tc_phy_is_owned(tc))
++		return true;
++#endif /* CONFIG_IGEL_I915_TC_DP_ALT_FALSE_DISCONNECT */
++
+ 	return tc_phy_hpd_live_status(tc) & mask;
+ }
+ 

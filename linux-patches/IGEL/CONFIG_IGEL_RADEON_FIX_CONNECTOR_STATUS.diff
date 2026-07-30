@@ -1,0 +1,94 @@
+IGEL_RADEON_FIX_CONNECTOR_STATUS
+	  Sometimes the radeon dirver did not detect the connection state
+	  correctly so this fix the issue.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -43,6 +49,22 @@ void radeon_connector_hotplug(struct drm_connector *connector)
+ 	struct radeon_device *rdev = dev->dev_private;
+ 	struct radeon_connector *radeon_connector = to_radeon_connector(connector);
+ 
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++	/* gottwald@igel.com update status of connector */
++
++	if (connector->force) {
++		if (connector->force == DRM_FORCE_ON)
++			connector->status = connector_status_connected;
++		else
++			connector->status = connector_status_disconnected;
++		if (connector->funcs->force)
++			connector->funcs->force(connector);
++	}
++
++	if (connector->status == connector_status_disconnected) {
++		drm_connector_update_edid_property(connector, NULL);
++	}
++#endif
+ 	/* bail if the connector does not have hpd pin, e.g.,
+ 	 * VGA, TV, etc.
+ 	 */
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -73,6 +95,20 @@ void radeon_connector_hotplug(struct drm_connector *connector)
+ 		if (dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT &&
+ 		    radeon_hpd_sense(rdev, radeon_connector->hpd.hpd) &&
+ 		    radeon_dp_needs_link_train(radeon_connector)) {
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++			/*
++			 * lang@igel:
++			 * fix monitor dpms on, when connector is disconnected 
++			 */
++			if (connector->status != connector_status_connected)  {
++				enum drm_connector_status new_status;
++
++				new_status = connector->funcs->detect(connector, false);
++				DRM_INFO("run %s detection during hotplug: %s\n", 
++					 connector->name,
++					 drm_get_connector_status_name(new_status));
++			}
++#endif
+ 			/* Don't start link training before we have the DPCD */
+ 			if (!radeon_dp_getdpcd(radeon_connector))
+ 				return;
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1259,6 +1295,12 @@ radeon_dvi_detect(struct drm_connector *connector, bool force)
+ 		radeon_connector->detected_by_load = false;
+ 		radeon_connector_free_edid(connector);
+ 		radeon_connector_get_edid(connector);
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++		if (!radeon_connector->edid) {
++			msleep(500);
++			radeon_connector_get_edid(connector);
++		}
++#endif
+ 
+ 		if (!radeon_connector->edid) {
+ 			DRM_ERROR("%s: probed a monitor but no|invalid EDID\n",
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -1692,8 +1795,18 @@ radeon_dp_detect(struct drm_connector *connector, bool force)
+ 		radeon_dig_connector->dp_sink_type = radeon_dp_getsinktype(radeon_connector);
+ 		if (radeon_hpd_sense(rdev, radeon_connector->hpd.hpd)) {
+ 			ret = connector_status_connected;
+-			if (radeon_dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT)
++			if (radeon_dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT) {
++#ifdef CONFIG_IGEL_RADEON_FIX_CONNECTOR_STATUS
++				/* lang@igel: if we do not get dpcd, the connector should be disconnected */
++				if (! radeon_dp_getdpcd(radeon_connector)) {
++					msleep(200);
++					if (! radeon_dp_getdpcd(radeon_connector))
++						ret = connector_status_disconnected;
++				}
++#else
+ 				radeon_dp_getdpcd(radeon_connector);
++#endif
++			}
+ 		} else {
+ 			if (radeon_dig_connector->dp_sink_type == CONNECTOR_OBJECT_ID_DISPLAYPORT) {
+ 				if (radeon_dp_getdpcd(radeon_connector))

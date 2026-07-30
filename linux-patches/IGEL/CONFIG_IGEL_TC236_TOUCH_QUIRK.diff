@@ -1,0 +1,25 @@
+IGEL_TC236_TOUCH_QUIRK
+	  There seems to be a issue with TC236 devices reporting empty HID events
+	  which is fixed if this option is enabled.
+
+	  Source: IGEL
+diff --git a/drivers/hid/hid-input.c b/drivers/hid/hid-input.c
+index 32a96ae2946f..a6d596421c8c 100644
+--- a/drivers/hid/hid-input.c
+@@ -1744,7 +1750,16 @@ void hidinput_hid_event(struct hid_device *hid, struct hid_field *field, struct
+ 	    (!test_bit(usage->code, input->key)) == value)
+ 		input_event(input, EV_MSC, MSC_SCAN, usage->hid);
+ 
++#ifdef CONFIG_IGEL_TC236_TOUCH_QUIRK
++	/* freund@igel: fix TC236 touch with hid-core driver */
++	if (hid->vendor==USB_VENDOR_ID_XAT && hid->product==USB_DEVICE_ID_XAT_CSR
++	    && usage->type==EV_ABS && value==0)
++		dbg_hid("suppress EV_ABS with zero values on HID-TR-V1\n");
++	else
++		input_event(input, usage->type, usage->code, value);
++#else
+ 	input_event(input, usage->type, usage->code, value);
++#endif
+ 
+ 	if ((field->flags & HID_MAIN_ITEM_RELATIVE) &&
+ 	    usage->type == EV_KEY && value) {

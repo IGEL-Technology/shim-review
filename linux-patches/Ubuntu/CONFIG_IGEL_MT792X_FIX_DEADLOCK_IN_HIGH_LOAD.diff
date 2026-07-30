@@ -1,0 +1,23 @@
+IGEL_MT792X_FIX_DEADLOCK_IN_HIGH_LOAD
+	  A deadlock may occur between ps_work and mac_work when both run
+	  simultaneously and each calls cancel_delayed_work_sync() on the other.
+	  This replaces cancel_delayed_work_sync() with cancel_delayed_work()
+	  in ps_work to eliminate the deadlock.
+
+	  Source: Ubuntu
+	  Commit: 152d7b79cbd37be626db8503cc418859fbcf1b0b
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_mac.c b/drivers/net/wireless/mediatek/mt76/mt792x_mac.c
+index 3f1d9ba49076..111ece2482cb 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_mac.c
+@@ -375,7 +375,11 @@ void mt792x_pm_power_save_work(struct work_struct *work)
+ 	}
+ 
+ 	if (!mt792x_mcu_fw_pmctrl(dev)) {
++#ifdef CONFIG_IGEL_MT792X_FIX_DEADLOCK_IN_HIGH_LOAD
++		cancel_delayed_work(&mphy->mac_work);
++#else
+ 		cancel_delayed_work_sync(&mphy->mac_work);
++#endif /* CONFIG_IGEL_MT792X_FIX_DEADLOCK_IN_HIGH_LOAD */
+ 		return;
+ 	}
+ out:

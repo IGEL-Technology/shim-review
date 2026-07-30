@@ -1,0 +1,26 @@
+IGEL_CHANGE_OSS_DEVICE_NAMES
+	  For the oss devices dsp/audio/mixer we want a number 0 at the end of the
+	  device name because we create a device node link dsp -> dsp0.
+
+	  Source: IGEL
+diff --git a/sound/sound_core.c b/sound/sound_core.c
+index d81fed1c1226..ffb389af67c5 100644
+--- a/sound/sound_core.c
+@@ -251,7 +251,17 @@ static int sound_insert_unit(struct sound_unit **list, const struct file_operati
+ 	
+ 	if (r < 0)
+ 		goto fail;
++#ifdef CONFIG_IGEL_CHANGE_OSS_DEVICE_NAMES
++	/* lang@igel: for the oss devices dsp/audio/mixer we want
++	   a number "0" at the end of the device name, because we create
++	   a device node link dsp -> dsp0 */
++	else if (r < SOUND_STEP &&
++		 strncmp(name, "dsp", 3) != 0 &&
++		 strncmp(name, "audio", 5) != 0 &&
++		 strncmp(name, "mixer", 5) != 0)
++#else
+ 	else if (r < SOUND_STEP)
++#endif
+ 		sprintf(s->name, "sound/%s", name);
+ 	else
+ 		sprintf(s->name, "sound/%s%d", name, r / SOUND_STEP);

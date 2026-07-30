@@ -1,0 +1,116 @@
+IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX
+	  Work around buggy EFI firmware on some Microsoft Surface devices
+	  where the system fails to power off after PCI shutdown callbacks.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/pci/pci-driver.c b/drivers/pci/pci-driver.c
+index f9ead94d5ebb..9a6096ed9740 100644
+--- a/drivers/pci/pci-driver.c
+@@ -514,6 +514,11 @@ static void pci_device_shutdown(struct device *dev)
+ 	struct pci_dev *pci_dev = to_pci_dev(dev);
+ 	struct pci_driver *drv = pci_dev->driver;
+ 
++#ifdef CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX
++	if (pci_dev->no_shutdown)
++		return;
++#endif /* CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX */
++
+ 	pm_runtime_resume(dev);
+ 
+ 	if (drv && drv->shutdown)
+diff --git a/drivers/pci/quirks.c b/drivers/pci/quirks.c
+index d32a47e81fcf..cc5865db513a 100644
+--- a/drivers/pci/quirks.c
+@@ -6378,3 +6378,75 @@ static void pci_mask_replay_timer_timeout(struct pci_dev *pdev)
+ DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9750, pci_mask_replay_timer_timeout);
+ DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_GLI, 0x9755, pci_mask_replay_timer_timeout);
+ #endif
++
++#ifdef CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX
++static const struct dmi_system_id no_shutdown_dmi_table[] = {
++	/*
++	 * Systems on which some devices should not be touched during shutdown.
++	 */
++	{
++		.ident = "Microsoft Surface Pro 9",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Surface Pro 9"),
++		},
++	},
++	{
++		.ident = "Microsoft Surface Laptop 5",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Surface Laptop 5"),
++		},
++	},
++	{
++		.ident = "Microsoft Surface Laptop Studio 2",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Surface Laptop Studio 2"),
++		},
++	},
++	{
++		.ident = "Microsoft Surface Pro 10",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Surface Pro 10"),
++		},
++	},
++	{
++		.ident = "Microsoft Surface Pro 10 for Business",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "Microsoft Corporation"),
++			DMI_MATCH(DMI_PRODUCT_NAME, "Surface Pro 10 for Business"),
++		},
++	},
++	{}
++};
++
++static void quirk_no_shutdown(struct pci_dev *dev)
++{
++	if (!dmi_check_system(no_shutdown_dmi_table))
++		return;
++
++	dev->no_shutdown = 1;
++	pci_info(dev, "disabling shutdown ops for [%04x:%04x]\n",
++		 dev->vendor, dev->device);
++}
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x461e, quirk_no_shutdown);  // Thunderbolt 4 USB Controller
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x461f, quirk_no_shutdown);  // Thunderbolt 4 PCI Express Root Port
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x462f, quirk_no_shutdown);  // Thunderbolt 4 PCI Express Root Port
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x466d, quirk_no_shutdown);  // Thunderbolt 4 NHI
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x46a8, quirk_no_shutdown);  // GPU
++
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0xa76e, quirk_no_shutdown);  // Thunderbolt 4 USB Controller
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0xa71e, quirk_no_shutdown);  // Thunderbolt 4 PCI Express Root Port
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0xa73f, quirk_no_shutdown);  // Thunderbolt 4 PCI Express Root Port
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0xa73e, quirk_no_shutdown);  // Thunderbolt 4 NHI
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0xa7a0, quirk_no_shutdown);  // GPU
++
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x7ec0, quirk_no_shutdown);  // Thunderbolt 4 USB Controller
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x7ec5, quirk_no_shutdown);  // Thunderbolt 4 PCI Express Root Port
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x7ec6, quirk_no_shutdown);  // Thunderbolt 4 PCI Express Root Port
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x7ec2, quirk_no_shutdown);  // Thunderbolt 4 NHI
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x7ec3, quirk_no_shutdown);  // Thunderbolt 4 NHI
++DECLARE_PCI_FIXUP_FINAL(PCI_VENDOR_ID_INTEL, 0x7d45, quirk_no_shutdown);  // GPU
++#endif /*CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX */
+diff --git a/include/linux/pci.h b/include/linux/pci.h
+index 89f5a4290b6e..5cfd745bd13e 100644
+--- a/include/linux/pci.h
+@@ -488,6 +488,12 @@ struct pci_dev {
+ 	unsigned int	rom_bar_overlap:1;	/* ROM BAR disable broken */
+ 	unsigned int	rom_attr_enabled:1;	/* Display of ROM attribute enabled? */
+ 	unsigned int	non_mappable_bars:1;	/* BARs can't be mapped to user-space  */
++#ifdef CONFIG_IGEL_ALLOW_ASPM_FOR_VMD
++	unsigned int	aspm_os_control:1;	/* Allow OS ASPM control despite firmware policy */
++#endif /* CONFIG_IGEL_ALLOW_ASPM_FOR_VMD */
++#ifdef CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX
++	unsigned int	no_shutdown:1;		/* Do not touch device on shutdown */
++#endif /* CONFIG_IGEL_SURFACE_EFI_RESET_SHUTDOWN_FIX */
+ 	pci_dev_flags_t dev_flags;
+ 	atomic_t	enable_cnt;	/* pci_enable_device has been called */
+ 

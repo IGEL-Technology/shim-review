@@ -1,0 +1,20 @@
+IGEL_ADD_RTL8723BS_RFKILL_SWITCH_SUPPORT
+	  Add RFKILL switch support for realtek rtl8723bs driver.
+
+	  Source: patchwork-kernel
+	  URL: https://patchwork.kernel.org/project/linux-wireless/patch/20170408210520.2799-1-hdegoede@redhat.com/
+diff --git a/net/rfkill/rfkill-gpio.c b/net/rfkill/rfkill-gpio.c
+index cf2dcec6ce5a..49898b9da3f7 100644
+--- a/net/rfkill/rfkill-gpio.c
+@@ -193,6 +193,11 @@ static void rfkill_gpio_remove(struct platform_device *pdev)
+ static const struct acpi_device_id rfkill_acpi_match[] = {
+ 	{ "BCM4752", RFKILL_TYPE_GPS },
+ 	{ "LNV4752", RFKILL_TYPE_GPS },
++#ifdef CONFIG_IGEL_ADD_RTL8723BS_RFKILL_SWITCH_SUPPORT
++	/* gottwald@igel.com Added RFKILL switch support for realtek rtl8723bs driver
++	 * Patch taken from: https://patchwork.kernel.org/patch/9671285/ */
++	{ "OBDA8723", RFKILL_TYPE_BLUETOOTH },
++#endif
+ 	{ },
+ };
+ MODULE_DEVICE_TABLE(acpi, rfkill_acpi_match);

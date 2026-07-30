@@ -1,0 +1,79 @@
+--- a/grub-core/partmap/igel.c
++++ b/grub-core/partmap/igel.c
+@@ -869,7 +869,7 @@ find_root_partition_secure(grub_disk_t d
+ static grub_err_t
+ iterate_real (grub_disk_t disk, const grub_partition_t partition,
+ 	      struct grub_partition_map *pmap,
+-	      grub_partition_iterate_hook_t hook, void *hook_data)
++	      grub_partition_iterate_hook_t hook, void *hook_data, grub_uint32_t is_gpt)
+ {
+   grub_uint32_t pdir_magic;
+   grub_uint64_t bootreg_magic;
+@@ -918,6 +918,15 @@ iterate_real (grub_disk_t disk, const gr
+     return grub_error (GRUB_ERR_BAD_PART_TABLE, "no IGEL signature");
+   }
+ 
++
++  if (is_gpt == 1) {
++    grub_snprintf(string, sizeof(string), "gpt%u", partition->number + 1);
++  } else {
++    grub_snprintf(string, sizeof(string), "msdos%u", partition->number + 1);
++  }
++
++  grub_env_set("igel_part", string);
++
+   section = end_section;
+ 
+   /* if igel_part_check is set to true do not use directory */
+@@ -1113,6 +1122,7 @@ struct igelpartition_ctx
+   grub_partition_iterate_hook_t hook;
+   void *hook_data;
+   int count;
++  grub_uint32_t is_gpt;
+ };
+ 
+ /* Helper for igel_partition_map_iterate.  */
+@@ -1130,7 +1140,7 @@ check_msdos (grub_disk_t dsk, const grub
+   }
+ 
+   err = iterate_real (dsk, partition, ctx->pmap,
+-		      ctx->hook, ctx->hook_data);
++		      ctx->hook, ctx->hook_data, ctx->is_gpt);
+ 
+   if (err == GRUB_ERR_NONE)
+     {
+@@ -1156,7 +1166,7 @@ check_gpt (grub_disk_t dsk, const grub_p
+   grub_dprintf("partition", "check_gpt\n");
+ 
+   err = iterate_real (dsk, partition, ctx->pmap,
+-		          ctx->hook, ctx->hook_data);
++		          ctx->hook, ctx->hook_data, ctx->is_gpt);
+ 
+   if (err == GRUB_ERR_NONE)
+     {
+@@ -1191,7 +1201,8 @@ igel_partition_map_iterate (grub_disk_t
+     .pmap = &grub_igel_partition_map,
+     .hook = hook,
+     .hook_data = hook_data,
+-    .count = 0
++    .count = 0,
++    .is_gpt = 0
+   };
+   grub_err_t err;
+   struct grub_msdos_partition_mbr mbr;
+@@ -1208,6 +1219,7 @@ igel_partition_map_iterate (grub_disk_t
+           break;
+       if (i < 4) {
+         grub_dprintf("partition", "Search for IGEL partition (gpt partition table)\n");
++	ctx.is_gpt = 1;
+         err = grub_gpt_partition_map_iterate(disk, check_gpt, &ctx);
+         gpt = 1;
+       }
+@@ -1216,6 +1228,7 @@ igel_partition_map_iterate (grub_disk_t
+ 
+   if (gpt == 0) {
+     grub_dprintf("partition", "Search for IGEL partition (msdos partition table)\n");
++    ctx.is_gpt = 0;
+     err = grub_partition_msdos_iterate (disk, check_msdos, &ctx);
+   }
+ 

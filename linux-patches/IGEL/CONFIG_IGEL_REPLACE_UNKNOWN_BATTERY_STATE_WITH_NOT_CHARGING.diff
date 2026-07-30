@@ -1,0 +1,83 @@
+IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
+	  When the battery is neither charging or discharging and is not full,
+	  "not-charging" is a useful status description for the case in general.
+	  Currently this state is set as "unknown" by default, expect when this is
+	  explicitly replaced with "not-charging" on a per device or per vendor
+	  basis.
+
+	  Source: IGEL
+diff --git a/drivers/acpi/battery.c b/drivers/acpi/battery.c
+index 8196c17b5a97..703a7ac5bcbb 100644
+--- a/drivers/acpi/battery.c
+@@ -52,6 +52,9 @@ MODULE_LICENSE("GPL");
+ static int battery_bix_broken_package;
+ static int battery_notification_delay_ms;
+ static int battery_ac_is_broken;
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++static int battery_quirk_notcharging;
++#endif
+ static unsigned int cache_time = 1000;
+ module_param(cache_time, uint, 0644);
+ MODULE_PARM_DESC(cache_time, "cache time in milliseconds");
+diff --git a/drivers/acpi/battery.c b/drivers/acpi/battery.c
+index 8196c17b5a97..703a7ac5bcbb 100644
+--- a/drivers/acpi/battery.c
+@@ -224,8 +227,15 @@ static int acpi_battery_get_property(struct power_supply *psy,
+ 			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
+ 		else if (acpi_battery_is_charged(battery))
+ 			val->intval = POWER_SUPPLY_STATUS_FULL;
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++		else if (battery_quirk_notcharging)
++			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++		else
++			val->intval = POWER_SUPPLY_STATUS_UNKNOWN;
++#else
+ 		else
+ 			val->intval = POWER_SUPPLY_STATUS_NOT_CHARGING;
++#endif
+ 		break;
+ 	case POWER_SUPPLY_PROP_PRESENT:
+ 		val->intval = acpi_battery_present(battery);
+diff --git a/drivers/acpi/battery.c b/drivers/acpi/battery.c
+index 8196c17b5a97..703a7ac5bcbb 100644
+--- a/drivers/acpi/battery.c
+@@ -1154,6 +1164,14 @@ battery_ac_is_broken_quirk(const struct dmi_system_id *d)
+ 	return 0;
+ }
+ 
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++static int __init battery_quirk_not_charging(const struct dmi_system_id *d)
++{
++	battery_quirk_notcharging = 1;
++	return 0;
++}
++#endif
++
+ static const struct dmi_system_id bat_dmi_table[] __initconst = {
+ 	{
+ 		/* NEC LZ750/LS */
+diff --git a/drivers/acpi/battery.c b/drivers/acpi/battery.c
+index 8196c17b5a97..703a7ac5bcbb 100644
+--- a/drivers/acpi/battery.c
+@@ -1182,6 +1200,21 @@ static const struct dmi_system_id bat_dmi_table[] __initconst = {
+ 			DMI_MATCH(DMI_BIOS_DATE, "08/22/2014"),
+ 		},
+ 	},
++#ifndef CONFIG_IGEL_REPLACE_UNKNOWN_BATTERY_STATE_WITH_NOT_CHARGING
++	{
++		/*
++		 * On Lenovo ThinkPads the BIOS specification defines
++		 * a state when the bits for charging and discharging
++		 * are both set to 0. That state is "Not Charging".
++		 */
++		.callback = battery_quirk_not_charging,
++		.ident = "Lenovo ThinkPad",
++		.matches = {
++			DMI_MATCH(DMI_SYS_VENDOR, "LENOVO"),
++			DMI_MATCH(DMI_PRODUCT_VERSION, "ThinkPad"),
++		},
++	},
++#endif
+ 	{
+ 		/* Microsoft Surface Go 3 */
+ 		.callback = battery_notification_delay_quirk,

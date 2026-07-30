@@ -1,0 +1,234 @@
+IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
+          With kernel 6.9-rc1 and above, virtual machines crash with segfault
+	  (lightdm error in libc.so.6) if FB_SIMPLE and SYSFB_SIMPLE both are not set.
+	  This patch is partly a revert of commit
+	  "firmware/sysfb: Set firmware-framebuffer parent device"
+	  - identified as bad commit after bisecting.
+
+	  Source: IGEL-downgraded
+	  Version: 6.8, 6.10
+	  URL: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/drivers/firmware/sysfb.c?h=linux-6.10.y
+	  URL: https://git.kernel.org/pub/scm/linux/kernel/git/stable/linux.git/tree/drivers/firmware/sysfb_simplefb.c?h=linux-6.8.y
+diff --git a/drivers/firmware/sysfb.c b/drivers/firmware/sysfb.c
+index 889e5b05c739..c376ab44ef2e 100644
+--- a/drivers/firmware/sysfb.c
+@@ -29,17 +29,24 @@
+ #include <linux/init.h>
+ #include <linux/kernel.h>
+ #include <linux/mm.h>
++#ifndef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
+ #include <linux/pci.h>
++#endif
+ #include <linux/platform_data/simplefb.h>
+ #include <linux/platform_device.h>
+ #include <linux/screen_info.h>
+ #include <linux/sysfb.h>
++#ifdef CONFIG_IGEL_VMWGFX_FIX
++#include <linux/pci.h>
++#endif
+ 
+ static struct platform_device *pd;
+ static DEFINE_MUTEX(disable_lock);
+ static bool disabled;
+ 
++#ifndef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
+ static struct device *sysfb_parent_dev(const struct screen_info *si);
++#endif
+ 
+ static bool sysfb_unregister(void)
+ {
+diff --git a/drivers/firmware/sysfb.c b/drivers/firmware/sysfb.c
+index 889e5b05c739..c376ab44ef2e 100644
+--- a/drivers/firmware/sysfb.c
+@@ -64,6 +71,16 @@ static bool sysfb_unregister(void)
+  * Context: The function can sleep. A @disable_lock mutex is acquired to serialize
+  *          against sysfb_init(), that registers a system framebuffer device.
+  */
++#ifdef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
++void sysfb_disable(struct device *dev)
++{
++	mutex_lock(&disable_lock);
++	sysfb_unregister();
++	disabled = true;
++	mutex_unlock(&disable_lock);
++}
++EXPORT_SYMBOL_GPL(sysfb_disable);
++#else
+ void sysfb_disable(struct device *dev)
+ {
+ 	struct screen_info *si = &screen_info;
+diff --git a/drivers/firmware/sysfb.c b/drivers/firmware/sysfb.c
+index 889e5b05c739..c376ab44ef2e 100644
+--- a/drivers/firmware/sysfb.c
+@@ -78,6 +95,7 @@ void sysfb_disable(struct device *dev)
+ 	mutex_unlock(&disable_lock);
+ }
+ EXPORT_SYMBOL_GPL(sysfb_disable);
++#endif /* CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT */
+ 
+ /**
+  * sysfb_handles_screen_info() - reports if sysfb handles the global screen_info
+diff --git a/drivers/firmware/sysfb.c b/drivers/firmware/sysfb.c
+index 889e5b05c739..c376ab44ef2e 100644
+--- a/drivers/firmware/sysfb.c
+@@ -98,6 +116,7 @@ bool sysfb_handles_screen_info(void)
+ }
+ EXPORT_SYMBOL_GPL(sysfb_handles_screen_info);
+ 
++#ifndef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
+ #if defined(CONFIG_PCI)
+ static bool sysfb_pci_dev_is_enabled(struct pci_dev *pdev)
+ {
+diff --git a/drivers/firmware/sysfb.c b/drivers/firmware/sysfb.c
+index 889e5b05c739..c376ab44ef2e 100644
+--- a/drivers/firmware/sysfb.c
+@@ -138,7 +157,77 @@ static struct device *sysfb_parent_dev(const struct screen_info *si)
+ 
+ 	return NULL;
+ }
++#endif /* ifndef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT */
++
++#ifdef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
++static __init int sysfb_init(void)
++{
++	struct screen_info *si = &screen_info;
++	struct simplefb_platform_data mode;
++	const char *name;
++	bool compatible;
++	int ret = 0;
++
++	mutex_lock(&disable_lock);
++	if (disabled)
++		goto unlock_mutex;
++
++	sysfb_apply_efi_quirks();
++
++	/* try to create a simple-framebuffer device */
++# ifdef CONFIG_IGEL_VMWGFX_FIX
++	if (pci_get_device(0x15ad, 0x0405, NULL) ||
++	    pci_get_device(0x15ad, 0x0406, NULL)) {
++		compatible = 0;
++	} else {
++		compatible = sysfb_parse_mode(si, &mode);
++	}
++# else
++	compatible = sysfb_parse_mode(si, &mode);
++# endif
++
++	if (compatible) {
++		pd = sysfb_create_simplefb(si, &mode);
++		if (!IS_ERR(pd))
++			goto unlock_mutex;
++	}
++
++	/* if the FB is incompatible, create a legacy framebuffer device */
++	if (si->orig_video_isVGA == VIDEO_TYPE_EFI)
++		name = "efi-framebuffer";
++	else if (si->orig_video_isVGA == VIDEO_TYPE_VLFB)
++		name = "vesa-framebuffer";
++	else if (si->orig_video_isVGA == VIDEO_TYPE_VGAC)
++		name = "vga-framebuffer";
++	else if (si->orig_video_isVGA == VIDEO_TYPE_EGAC)
++		name = "ega-framebuffer";
++	else
++		name = "platform-framebuffer";
++
++	pd = platform_device_alloc(name, 0);
++	if (!pd) {
++		ret = -ENOMEM;
++		goto unlock_mutex;
++	}
++
++	sysfb_set_efifb_fwnode(pd);
+ 
++	ret = platform_device_add_data(pd, si, sizeof(*si));
++	if (ret)
++		goto err;
++
++	ret = platform_device_add(pd);
++	if (ret)
++		goto err;
++
++	goto unlock_mutex;
++err:
++	platform_device_put(pd);
++unlock_mutex:
++	mutex_unlock(&disable_lock);
++	return ret;
++}
++#else /* ifndef  CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT */
+ static __init int sysfb_init(void)
+ {
+ 	struct screen_info *si = &screen_info;
+diff --git a/drivers/firmware/sysfb.c b/drivers/firmware/sysfb.c
+index 889e5b05c739..c376ab44ef2e 100644
+--- a/drivers/firmware/sysfb.c
+@@ -219,6 +318,7 @@ static __init int sysfb_init(void)
+ 	mutex_unlock(&disable_lock);
+ 	return ret;
+ }
++#endif /* CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT */
+ 
+ /* must execute after PCI subsystem for EFI quirks */
+ device_initcall(sysfb_init);
+diff --git a/drivers/firmware/sysfb_simplefb.c b/drivers/firmware/sysfb_simplefb.c
+index 592d8a644619..258bfa7ac574 100644
+--- a/drivers/firmware/sysfb_simplefb.c
+@@ -62,8 +62,12 @@ __init bool sysfb_parse_mode(const struct screen_info *si,
+ }
+ 
+ __init struct platform_device *sysfb_create_simplefb(const struct screen_info *si,
++#ifdef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
++						     const struct simplefb_platform_data *mode)
++#else
+ 						     const struct simplefb_platform_data *mode,
+ 						     struct device *parent)
++#endif
+ {
+ 	struct platform_device *pd;
+ 	struct resource res;
+diff --git a/drivers/firmware/sysfb_simplefb.c b/drivers/firmware/sysfb_simplefb.c
+index 592d8a644619..258bfa7ac574 100644
+--- a/drivers/firmware/sysfb_simplefb.c
+@@ -115,7 +119,9 @@ __init struct platform_device *sysfb_create_simplefb(const struct screen_info *s
+ 	if (!pd)
+ 		return ERR_PTR(-ENOMEM);
+ 
++#ifndef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
+ 	pd->dev.parent = parent;
++#endif
+ 
+ 	sysfb_set_efifb_fwnode(pd);
+ 
+diff --git a/include/linux/sysfb.h b/include/linux/sysfb.h
+index b449665c686a..dbd58fabb182 100644
+--- a/include/linux/sysfb.h
+@@ -102,8 +102,12 @@ static inline void sysfb_set_efifb_fwnode(struct platform_device *pd)
+ bool sysfb_parse_mode(const struct screen_info *si,
+ 		      struct simplefb_platform_data *mode);
+ struct platform_device *sysfb_create_simplefb(const struct screen_info *si,
++# ifdef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
++					      const struct simplefb_platform_data *mode);
++# else
+ 					      const struct simplefb_platform_data *mode,
+ 					      struct device *parent);
++# endif
+ 
+ #else /* CONFIG_SYSFB_SIMPLE */
+ 
+diff --git a/include/linux/sysfb.h b/include/linux/sysfb.h
+index b449665c686a..dbd58fabb182 100644
+--- a/include/linux/sysfb.h
+@@ -114,8 +118,12 @@ static inline bool sysfb_parse_mode(const struct screen_info *si,
+ }
+ 
+ static inline struct platform_device *sysfb_create_simplefb(const struct screen_info *si,
++# ifdef CONFIG_IGEL_NO_SIMPLEFB_PREVENT_VM_SEGFAULT
++							    const struct simplefb_platform_data *mode)
++# else
+ 							    const struct simplefb_platform_data *mode,
+ 							    struct device *parent)
++# endif
+ {
+ 	return ERR_PTR(-EINVAL);
+ }

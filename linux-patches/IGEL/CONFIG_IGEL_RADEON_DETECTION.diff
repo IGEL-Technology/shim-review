@@ -1,0 +1,149 @@
+IGEL_RADEON_DETECTION
+	  Detect radeon devices which needs a special handling.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -31,7 +31,10 @@
+ #include <drm/radeon_drm.h>
+ 
+ #include "radeon.h"
+-
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include "radeon_drv.h"
++#include <linux/dmi.h>
++#endif
+ #include "atom.h"
+ #include "atom-bits.h"
+ #include "radeon_asic.h"
+diff --git a/drivers/gpu/drm/radeon/radeon_atombios.c b/drivers/gpu/drm/radeon/radeon_atombios.c
+index 81a0a91921b9..65f02ff2a33b 100644
+--- a/drivers/gpu/drm/radeon/radeon_atombios.c
+@@ -287,6 +290,18 @@ static bool radeon_atom_apply_quirks(struct drm_device *dev,
+ {
+ 	struct pci_dev *pdev = to_pci_dev(dev->dev);
+ 
++#if defined(CONFIG_IGEL_RADEON_DETECTION) || defined(CONFIG_IGEL_FUJITSU_DVI_VGA_SPLIT_QUIRKS)
++	const char *product;
++#endif
++#ifdef CONFIG_IGEL_RADEON_LVDS_SWITCH
++	/* lang@igel.de:
++	   if the user selected lvds=0 don't try and add the connector */
++	if ((*connector_type == DRM_MODE_CONNECTOR_LVDS) &&
++	    (radeon_lvds == 0)) {
++		DRM_INFO("apply quirk: LVDS is disabled by module parameter\n");
++		return false;
++	}
++#endif
+ 	/* Asus M2A-VM HDMI board lists the DVI port as HDMI */
+ 	if ((pdev->device == 0x791e) &&
+ 	    (pdev->subsystem_vendor == 0x1043) &&
+diff --git a/drivers/gpu/drm/radeon/radeon_connectors.c b/drivers/gpu/drm/radeon/radeon_connectors.c
+index 9f6a3df951ba..32898fa59f2c 100644
+--- a/drivers/gpu/drm/radeon/radeon_connectors.c
+@@ -31,11 +31,17 @@
+ #include <drm/drm_probe_helper.h>
+ #include <drm/radeon_drm.h>
+ #include "radeon.h"
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include "radeon_drv.h"
++#endif
+ #include "radeon_audio.h"
+ #include "atom.h"
+ 
+ #include <linux/pm_runtime.h>
+ #include <linux/vga_switcheroo.h>
++#ifdef CONFIG_IGEL_SAMSUNG_TC2_DVI_VGA_QUIRK
++#include <linux/pci.h>
++#endif
+ 
+ void radeon_connector_hotplug(struct drm_connector *connector)
+ {
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.c b/drivers/gpu/drm/radeon/radeon_drv.c
+index 9c8907bc61d9..4a19addb85a0 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.c
+@@ -36,6 +36,9 @@
+ #include <linux/vga_switcheroo.h>
+ #include <linux/mmu_notifier.h>
+ #include <linux/pci.h>
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++#include <linux/dmi.h>
++#endif
+ 
+ #include <drm/clients/drm_client_setup.h>
+ #include <drm/drm_drv.h>
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.c b/drivers/gpu/drm/radeon/radeon_drv.c
+index 9c8907bc61d9..4a19addb85a0 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.c
+@@ -148,6 +157,14 @@ int radeon_auxch = -1;
+ int radeon_uvd = 1;
+ int radeon_vce = 1;
+ 
++#ifdef CONFIG_IGEL_RADEON_DP_DVI_ADAPTER_PROBE_WORKAROUND
++int radeon_dp_dvi_probe_workaround = 0;
++#endif
++
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++enum igel_platforms igel_platform = NO_IGEL_PLATFORM;
++#endif
++
+ MODULE_PARM_DESC(no_wb, "Disable AGP writeback for scratch registers");
+ module_param_named(no_wb, radeon_no_wb, int, 0444);
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.c b/drivers/gpu/drm/radeon/radeon_drv.c
+index 9c8907bc61d9..4a19addb85a0 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.c
+@@ -603,9 +634,29 @@ static struct pci_driver radeon_kms_pci_driver = {
+ 
+ static int __init radeon_module_init(void)
+ {
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++	const char *product;
++	const char *vendor;
++#endif
+ 	if (drm_firmware_drivers_only() && radeon_modeset == -1)
+ 		radeon_modeset = 0;
+ 
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++	if (igel_platform == NO_IGEL_PLATFORM) {
++		product = dmi_get_system_info(DMI_PRODUCT_NAME);
++		vendor = dmi_get_system_info(DMI_SYS_VENDOR);
++		if (product != NULL && vendor != NULL) {
++			if (strstr(product, "TC2") && 
++			strstr(vendor, "Samsung Electronics Co., Ltd")) {
++				igel_platform = SAMSUNG_TC2;
++			} else if (strstr(product, "M340C") && 
++			strstr(vendor, "IGEL Technology GmbH")) {
++				igel_platform = IGEL_M340C;
++			}
++		}
++	}
++#endif
++
+ 	if (radeon_modeset == 0)
+ 		return -EINVAL;
+ 
+diff --git a/drivers/gpu/drm/radeon/radeon_drv.h b/drivers/gpu/drm/radeon/radeon_drv.h
+index 0f3dbffc492d..82c0c4a74233 100644
+--- a/drivers/gpu/drm/radeon/radeon_drv.h
+@@ -113,6 +113,19 @@
+ #define DRIVER_MINOR		34
+ #define DRIVER_PATCHLEVEL	0
+ 
++#ifdef CONFIG_IGEL_RADEON_DETECTION
++/* gottwald@igel.com: define enum for IGEL platforms,
++ * that require special treatment. Also in radeon.h */
++enum igel_platforms {
++	NO_IGEL_PLATFORM = -1,
++	IGEL_M340C,
++	SAMSUNG_TC2,
++};
++extern enum igel_platforms igel_platform;
++#define IS_IGEL_M340C (igel_platform==IGEL_M340C)
++#define IS_SAMSUNG_TC2 (igel_platform==SAMSUNG_TC2)
++#endif
++
+ long radeon_drm_ioctl(struct file *filp,
+ 		      unsigned int cmd, unsigned long arg);
+ 

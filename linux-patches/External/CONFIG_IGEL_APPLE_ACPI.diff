@@ -1,0 +1,22 @@
+IGEL_APPLE_ACPI
+	  This change fixes acpica for zero arguments acpi calls.
+
+	  Source: External
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/2001-fix-acpica-for-zero-arguments-acpi-calls.patch
+
+source "drivers/hid/amd-sfh-hid/Kconfig"
+diff --git a/drivers/acpi/acpica/dswexec.c b/drivers/acpi/acpica/dswexec.c
+index 5c5c6d8a4e48..8445417b61d3 100644
+--- a/drivers/acpi/acpica/dswexec.c
+@@ -393,7 +393,11 @@ acpi_status acpi_ds_exec_end_op(struct acpi_walk_state *walk_state)
+ 		 * take no arguments.
+ 		 */
+ 		if (!(walk_state->op_info->flags & AML_NO_OPERAND_RESOLVE) &&
++#ifdef CONFIG_IGEL_APPLE_ACPI
++			walk_state->num_operands > 0) {
++#else
+ 		    (walk_state->op_info->flags & AML_HAS_ARGS)) {
++#endif
+ 
+ 			/* Resolve all operands */
+ 

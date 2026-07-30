@@ -1,0 +1,21 @@
+IGEL_APPLE_HID_CHANGES
+	  Some changes are needed on the generic HID parts to get the applesmc
+	  working properly.
+
+	  Source: External
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/1006-HID-hid-apple-magic-backlight-Add-driver-for-keyboar.patch
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/1007-HID-apple-ibridge-Add-Apple-iBridge-HID-driver-for-T.patch
+	  URL: https://github.com/t2linux/linux-t2-patches/blob/6.1/1008-HID-apple-touchbar-Add-driver-for-the-Touch-Bar-on-M.patch
+diff --git a/drivers/hid/hid-ids.h b/drivers/hid/hid-ids.h
+index 96a9fa53e4ad..15dd84fa0880 100644
+--- a/drivers/hid/hid-ids.h
+@@ -200,6 +206,9 @@
+ #define USB_DEVICE_ID_APPLE_IRCONTROL5	0x8243
+ #define USB_DEVICE_ID_APPLE_TOUCHBAR_BACKLIGHT 0x8102
+ #define USB_DEVICE_ID_APPLE_TOUCHBAR_DISPLAY 0x8302
++#ifdef CONFIG_IGEL_APPLE_HID_CHANGES
++#define USB_DEVICE_ID_APPLE_IBRIDGE	0x8600
++#endif
+ 
+ #define USB_VENDOR_ID_ASETEK			0x2433
+ #define USB_DEVICE_ID_ASETEK_INVICTA		0xf300

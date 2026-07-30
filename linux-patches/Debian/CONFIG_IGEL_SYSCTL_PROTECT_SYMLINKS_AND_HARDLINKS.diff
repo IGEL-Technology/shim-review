@@ -1,0 +1,26 @@
+IGEL_SYSCTL_PROTECT_SYMLINKS_AND_HARDLINKS
+	  Changed default so sysctl will protected symlinks and hardlinks
+	  without the need to set a sysctl option.
+
+	  Source: Debian
+	  URL: https://salsa.debian.org/kernel-team/linux/-/blob/debian/5.10/bullseye/debian/patches/debian/fs-enable-link-security-restrictions-by-default.patch?ref_type=heads
+diff --git a/fs/namei.c b/fs/namei.c
+index 7377020a2cba..0155df8fd3e5 100644
+--- a/fs/namei.c
+@@ -1094,9 +1094,15 @@ static inline void put_link(struct nameidata *nd)
+ 	if (!(nd->flags & LOOKUP_RCU))
+ 		path_put(&last->link);
+ }
+-
++#ifdef CONFIG_IGEL_SYSCTL_PROTECT_SYMLINKS_AND_HARDLINKS
++/* gottwald@igel.com : Enable Link security restrictions by default
++ * Patch taken from debian Change some defaults for security reasons */
++static int sysctl_protected_symlinks __read_mostly = 1;
++static int sysctl_protected_hardlinks __read_mostly = 1;
++#else
+ static int sysctl_protected_symlinks __read_mostly;
+ static int sysctl_protected_hardlinks __read_mostly;
++#endif
+ static int sysctl_protected_fifos __read_mostly;
+ static int sysctl_protected_regular __read_mostly;
+ 

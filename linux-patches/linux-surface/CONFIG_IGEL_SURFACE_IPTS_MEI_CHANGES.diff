@@ -1,0 +1,187 @@
+IGEL_SURFACE_IPTS_MEI_CHANGES
+	  This will enable a intel mei me change to support IPTS devices so
+	  if you plan to use touch on microsoft surface devices you need to
+	  enable this. The ipts.ko itself is not in thirdparty modules for
+	  easier maintain and update it.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -39,6 +39,22 @@
+ #define IS_ISA_DEVICE(pdev) ((pdev->class >> 8) == PCI_CLASS_BRIDGE_ISA)
+ #define IS_AZALIA(pdev) ((pdev)->vendor == 0x8086 && (pdev)->device == 0x3a3e)
+ 
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++#define IS_IPTS(pdev) ( \
++		((pdev)->vendor == PCI_VENDOR_ID_INTEL && (pdev)->device == 0x9D3E) || \
++		((pdev)->vendor == PCI_VENDOR_ID_INTEL && (pdev)->device == 0x34E4) \
++	)
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define IS_INTEL_IPU(pdev) ((pdev)->vendor == PCI_VENDOR_ID_INTEL &&	\
++			   ((pdev)->device == 0x9a19 ||		\
++			    (pdev)->device == 0x9a39 ||		\
++			    (pdev)->device == 0x4e19 ||		\
++			    (pdev)->device == 0x465d ||		\
++			    (pdev)->device == 0x1919))
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
+ #define IOAPIC_RANGE_START	(0xfee00000)
+ #define IOAPIC_RANGE_END	(0xfeefffff)
+ #define IOVA_START_ADDR		(0x1000)
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -209,12 +225,24 @@ int intel_iommu_sm = IS_ENABLED(CONFIG_INTEL_IOMMU_SCALABLE_MODE_DEFAULT_ON);
+ int intel_iommu_enabled = 0;
+ EXPORT_SYMBOL_GPL(intel_iommu_enabled);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++static int dmar_map_ipts = 1;
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++static int dmar_map_ipu = 1;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
+ static int intel_iommu_superpage = 1;
+ static int iommu_identity_mapping;
+ static int iommu_skip_te_disable;
+ static int disable_igfx_iommu;
+ 
+ #define IDENTMAP_AZALIA		4
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++#define IDENTMAP_IPU		8
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++#define IDENTMAP_IPTS		16
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
+ 
+ const struct iommu_ops intel_iommu_ops;
+ static const struct iommu_dirty_ops intel_dirty_ops;
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -1881,6 +1909,16 @@ static int device_def_domain_type(struct device *dev)
+ 
+ 		if ((iommu_identity_mapping & IDENTMAP_AZALIA) && IS_AZALIA(pdev))
+ 			return IOMMU_DOMAIN_IDENTITY;
++
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++		if ((iommu_identity_mapping & IDENTMAP_IPU) && IS_INTEL_IPU(pdev))
++			return IOMMU_DOMAIN_IDENTITY;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++		if ((iommu_identity_mapping & IDENTMAP_IPTS) && IS_IPTS(pdev))
++			return IOMMU_DOMAIN_IDENTITY;
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
+ 	}
+ 
+ 	return 0;
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -2171,6 +2209,16 @@ static int __init init_dmars(void)
+ 		iommu_set_root_entry(iommu);
+ 	}
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++	if (!dmar_map_ipu)
++		iommu_identity_mapping |= IDENTMAP_IPU;
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++	if (!dmar_map_ipts)
++		iommu_identity_mapping |= IDENTMAP_IPTS;
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
+ 	check_tylersburg_isoch();
+ 
+ 	/*
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -4518,6 +4566,34 @@ static void quirk_iommu_igfx(struct pci_dev *dev)
+ 	disable_igfx_iommu = 1;
+ }
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++static void quirk_iommu_ipu(struct pci_dev *dev)
++{
++	if (!IS_INTEL_IPU(dev))
++		return;
++
++	if (risky_device(dev))
++		return;
++
++	pci_info(dev, "Passthrough IOMMU for integrated Intel IPU\n");
++	dmar_map_ipu = 0;
++}
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++static void quirk_iommu_ipts(struct pci_dev *dev)
++{
++	if (!IS_IPTS(dev))
++		return;
++
++	if (risky_device(dev))
++		return;
++
++	pci_info(dev, "Passthrough IOMMU for IPTS\n");
++	dmar_map_ipts = 0;
++}
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
+ /* Q35 integrated gfx dmar support is totally busted. */
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x29b2, quirk_iommu_igfx);
+ 
+diff --git a/drivers/iommu/intel/iommu.c b/drivers/iommu/intel/iommu.c
+index 79676188f60f..558bb44c90c7 100644
+--- a/drivers/iommu/intel/iommu.c
+@@ -4559,6 +4635,17 @@ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x1632, quirk_iommu_igfx);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163A, quirk_iommu_igfx);
+ DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x163D, quirk_iommu_igfx);
+ 
++#ifdef CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT
++/* disable IPU dmar support */
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, PCI_ANY_ID, quirk_iommu_ipu);
++#endif /* CONFIG_IGEL_SURFACE_IMPROVE_CAMERA_SUPPORT */
++
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++/* disable IPTS dmar support */
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x9D3E, quirk_iommu_ipts);
++DECLARE_PCI_FIXUP_HEADER(PCI_VENDOR_ID_INTEL, 0x34E4, quirk_iommu_ipts);
++#endif /* CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES */
++
+ static void quirk_iommu_rwbf(struct pci_dev *dev)
+ {
+ 	if (risky_device(dev))
+diff --git a/drivers/misc/mei/hw-me-regs.h b/drivers/misc/mei/hw-me-regs.h
+index 5967f95891a1..4d6e06bc2664 100644
+--- a/drivers/misc/mei/hw-me-regs.h
+@@ -92,6 +92,9 @@
+ #define PCI_DEVICE_ID_INTEL_MEI_CDF        0x18D3  /* Cedar Fork */
+ 
+ #define PCI_DEVICE_ID_INTEL_MEI_ICP_LP     0x34E0  /* Ice Lake Point LP */
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++#define PCI_DEVICE_ID_INTEL_MEI_ID_ICP_LP_3   0x34E4  /* Ice Lake Point LP 3 (iTouch) */
++#endif
+ #define PCI_DEVICE_ID_INTEL_MEI_ICP_N      0x38E0  /* Ice Lake Point N */
+ 
+ #define PCI_DEVICE_ID_INTEL_MEI_JSP_N      0x4DE0  /* Jasper Lake Point N */
+diff --git a/drivers/misc/mei/pci-me.c b/drivers/misc/mei/pci-me.c
+index 5b6aaa4d3a1c..49bc56eea87a 100644
+--- a/drivers/misc/mei/pci-me.c
+@@ -97,6 +97,9 @@ static const struct pci_device_id mei_me_pci_tbl[] = {
+ 	{PCI_DEVICE_DATA(INTEL, MEI_CMP_H_3, MEI_ME_PCH8_ITOUCH_CFG)},
+ 
+ 	{PCI_DEVICE_DATA(INTEL, MEI_ICP_LP, MEI_ME_PCH12_CFG)},
++#ifdef CONFIG_IGEL_SURFACE_IPTS_MEI_CHANGES
++	{PCI_DEVICE_DATA(INTEL, MEI_ID_ICP_LP_3, MEI_ME_PCH12_CFG)},
++#endif
+ 	{PCI_DEVICE_DATA(INTEL, MEI_ICP_N, MEI_ME_PCH12_CFG)},
+ 
+ 	{PCI_DEVICE_DATA(INTEL, MEI_TGP_LP, MEI_ME_PCH15_CFG)},

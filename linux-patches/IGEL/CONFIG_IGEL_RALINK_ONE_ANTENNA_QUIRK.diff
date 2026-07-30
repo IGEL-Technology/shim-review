@@ -1,0 +1,243 @@
+IGEL_RALINK_ONE_ANTENNA_QUIRK
+	  This changes the ralink driver to better work with only one antenna and
+	  to control the tx power.
+
+	  Source: IGEL
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -5377,8 +5377,14 @@ static void rt2800_config_txpower_rt28xx(struct rt2x00_dev *rt2x00dev,
+ 	 * maximum tx power. For other devices we take user power_level into
+ 	 * consideration on rt2800_compensate_txpower().
+ 	 */
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for control tx power */
++	delta += rt2800_get_txpower_reg_delta(rt2x00dev, power_level,
++					      chan->max_reg_power);
++#else
+ 	delta += rt2800_get_txpower_reg_delta(rt2x00dev, power_level,
+ 					      chan->max_power);
++#endif
+ 
+ 	/*
+ 	 * BBP_R1 controls TX power for all rates, it allow to set the following
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -5394,6 +5400,12 @@ static void rt2800_config_txpower_rt28xx(struct rt2x00_dev *rt2x00dev,
+ 	} else if (delta <= -6) {
+ 		power_ctrl = 1;
+ 		delta += 6;
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for control tx power */
++	} else if (delta > 0) {
++		power_ctrl = 3;
++		delta -= 6;
++#endif
+ 	} else {
+ 		power_ctrl = 0;
+ 	}
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -6044,7 +6056,16 @@ static int rt2800_init_registers(struct rt2x00_dev *rt2x00dev)
+ 	rt2800_register_write(rt2x00dev, TX_TIMEOUT_CFG, reg);
+ 
+ 	reg = rt2800_register_read(rt2x00dev, MAX_LEN_CFG);
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for frame aggregation with one antenna */
++	if (rt2x00dev->default_ant.tx_chain_num < 2) {
++		rt2x00_set_field32(&reg, MAX_LEN_CFG_MAX_MPDU, DATA_FRAME_SIZE);
++	} else {
++		rt2x00_set_field32(&reg, MAX_LEN_CFG_MAX_MPDU, AGGREGATION_SIZE);
++	}
++#else
+ 	rt2x00_set_field32(&reg, MAX_LEN_CFG_MAX_MPDU, AGGREGATION_SIZE);
++#endif
+ 	if (rt2x00_is_usb(rt2x00dev)) {
+ 		drv_data->max_psdu = 3;
+ 	} else if (rt2x00_rt_rev_gte(rt2x00dev, RT2872, REV_RT2872E) ||
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -11140,6 +11161,9 @@ static int rt2800_init_eeprom(struct rt2x00_dev *rt2x00dev)
+ 	u16 value;
+ 	u16 eeprom;
+ 	u16 rf;
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	int n;
++#endif
+ 
+ 	/*
+ 	 * Read EEPROM word for configuration.
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -11204,10 +11228,24 @@ static int rt2800_init_eeprom(struct rt2x00_dev *rt2x00dev)
+ 	/*
+ 	 * Identify default antenna configuration.
+ 	 */
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	if ((n = rt2800_get_chain_number(rt2x00dev)) > 0) {
++		/* set chain number from the module parameter */
++		rt2x00dev->default_ant.tx_chain_num = n;
++		rt2x00dev->default_ant.rx_chain_num = n;
++	} else {
++		rt2x00dev->default_ant.tx_chain_num =
++		    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_TXPATH);
++		rt2x00dev->default_ant.rx_chain_num =
++		    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_RXPATH);
++	}
++#else
+ 	rt2x00dev->default_ant.tx_chain_num =
+ 	    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_TXPATH);
+ 	rt2x00dev->default_ant.rx_chain_num =
+ 	    rt2x00_get_field16(eeprom, EEPROM_NIC_CONF0_RXPATH);
++#endif
+ 
+ 	eeprom = rt2800_eeprom_read(rt2x00dev, EEPROM_NIC_CONF1);
+ 
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -11717,7 +11755,13 @@ static int rt2800_probe_hw_mode(struct rt2x00_dev *rt2x00dev)
+ 	 * Initialize all hw fields.
+ 	 */
+ 	ieee80211_hw_set(rt2x00dev->hw, REPORTS_TX_ACK_STATUS);
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com fix for AMPDU with one antenna */
++	if (rt2x00dev->default_ant.tx_chain_num > 1)
++		ieee80211_hw_set(rt2x00dev->hw, AMPDU_AGGREGATION);
++#else
+ 	ieee80211_hw_set(rt2x00dev->hw, AMPDU_AGGREGATION);
++#endif
+ 	ieee80211_hw_set(rt2x00dev->hw, PS_NULLFUNC_STACK);
+ 	ieee80211_hw_set(rt2x00dev->hw, SIGNAL_DBM);
+ 	ieee80211_hw_set(rt2x00dev->hw, SUPPORTS_PS);
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c b/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+index b264ed0af923..9a854f9d2acd 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.c
+@@ -11830,10 +11874,24 @@ static int rt2800_probe_hw_mode(struct rt2x00_dev *rt2x00dev)
+ 	/*
+ 	 * Initialize HT information.
+ 	 */
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	if (!rt2x00_rf(rt2x00dev, RF2020)) {
++		if (rt2800_ht_disabled(rt2x00dev)) {
++			spec->ht.ht_supported = false;
++			rt2x00_info(rt2x00dev, "HT is disabled.\n");
++		} else {
++			spec->ht.ht_supported = true;
++		}
++	} else {
++		spec->ht.ht_supported = false;
++	}
++#else
+ 	if (!rt2x00_rf(rt2x00dev, RF2020))
+ 		spec->ht.ht_supported = true;
+ 	else
+ 		spec->ht.ht_supported = false;
++#endif
+ 
+ 	spec->ht.cap =
+ 	    IEEE80211_HT_CAP_SUP_WIDTH_20_40 |
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.h b/drivers/net/wireless/ralink/rt2x00/rt2800lib.h
+index 620a3d9872ce..765434b6869a 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.h
+@@ -76,6 +76,12 @@ struct rt2800_ops {
+ 	int (*drv_init_registers)(struct rt2x00_dev *rt2x00dev);
+ 	__le32 *(*drv_get_txwi)(struct queue_entry *entry);
+ 	unsigned int (*drv_get_dma_done)(struct data_queue *queue);
++
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	bool (*ht_disabled)(struct rt2x00_dev *rt2x00dev);
++	int (*get_chain_number)(struct rt2x00_dev *rt2x00dev);
++#endif
+ };
+ 
+ static inline u32 rt2800_register_read(struct rt2x00_dev *rt2x00dev,
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800lib.h b/drivers/net/wireless/ralink/rt2x00/rt2800lib.h
+index 620a3d9872ce..765434b6869a 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800lib.h
+@@ -155,6 +161,30 @@ static inline bool rt2800_hwcrypt_disabled(struct rt2x00_dev *rt2x00dev)
+ 	return rt2800ops->hwcrypt_disabled(rt2x00dev);
+ }
+ 
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++/* hamburg@igel.com adapted for using with one antenna */
++
++static inline bool rt2800_ht_disabled(struct rt2x00_dev *rt2x00dev)
++{
++	const struct rt2800_ops *rt2800ops = rt2x00dev->ops->drv;
++	if (NULL == rt2800ops->ht_disabled) {
++		return false;
++	}
++	return rt2800ops->ht_disabled(rt2x00dev);
++}
++
++/* hamburg@igel.com adapted for using with one antenna */
++
++static inline int rt2800_get_chain_number(struct rt2x00_dev *rt2x00dev)
++{
++	const struct rt2800_ops *rt2800ops = rt2x00dev->ops->drv;
++	if (NULL == rt2800ops->get_chain_number) {
++		return -1;
++	}
++	return rt2800ops->get_chain_number(rt2x00dev);
++}
++#endif
++
+ static inline int rt2800_drv_write_firmware(struct rt2x00_dev *rt2x00dev,
+ 					    const u8 *data, const size_t len)
+ {
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800usb.c b/drivers/net/wireless/ralink/rt2x00/rt2800usb.c
+index b51a23300ba2..db6103084694 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800usb.c
+@@ -40,6 +40,29 @@ static bool rt2800usb_hwcrypt_disabled(struct rt2x00_dev *rt2x00dev)
+ 	return modparam_nohwcrypt;
+ }
+ 
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++/* hamburg@igel.com adapted for using with one antenna */
++
++static bool modparam_noht;
++module_param_named(noht, modparam_noht, bool, S_IRUGO);
++MODULE_PARM_DESC(noht, "Disable HT capabilities.");
++
++static bool rt2800usb_ht_disabled(struct rt2x00_dev *rt2x00dev)
++{
++	return modparam_noht;
++}
++
++/* hamburg@igel.com adapted for using with one antenna */
++
++static int modparam_chain_num = -1;
++module_param_named(chain_num, modparam_chain_num, int, S_IRUGO);
++MODULE_PARM_DESC(chain_num, "Set RX/TX chain number.");
++
++static int rt2800usb_modparam_chain_num(struct rt2x00_dev *rt2x00dev)
++{
++	return modparam_chain_num;
++}
++#endif
+ /*
+  * Queue handlers.
+  */
+diff --git a/drivers/net/wireless/ralink/rt2x00/rt2800usb.c b/drivers/net/wireless/ralink/rt2x00/rt2800usb.c
+index b51a23300ba2..db6103084694 100644
+--- a/drivers/net/wireless/ralink/rt2x00/rt2800usb.c
+@@ -676,6 +699,11 @@ static const struct rt2800_ops rt2800usb_rt2800_ops = {
+ 	.drv_init_registers	= rt2800usb_init_registers,
+ 	.drv_get_txwi		= rt2800usb_get_txwi,
+ 	.drv_get_dma_done	= rt2800usb_get_dma_done,
++#ifdef CONFIG_IGEL_RALINK_ONE_ANTENNA_QUIRK
++	/* hamburg@igel.com adapted for using with one antenna */
++	.ht_disabled		= rt2800usb_ht_disabled,
++	.get_chain_number	= rt2800usb_modparam_chain_num,
++#endif
+ };
+ 
+ static const struct rt2x00lib_ops rt2800usb_rt2x00_ops = {

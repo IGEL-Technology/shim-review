@@ -1,0 +1,52 @@
+IGEL_3DCONNEXION_BATTERY_QUIRK
+	  The 3D Connexion mouse will crash HID if the battery charge level is
+	  reported. So the HID driver needs to ignore the battery charge level
+	  from this device so the device is usable.
+
+	  Source: IGEL
+diff --git a/drivers/hid/hid-ids.h b/drivers/hid/hid-ids.h
+index 96a9fa53e4ad..15dd84fa0880 100644
+--- a/drivers/hid/hid-ids.h
+@@ -17,6 +17,12 @@
+ #define USB_VENDOR_ID_258A		0x258a
+ #define USB_DEVICE_ID_258A_6A88		0x6a88
+ 
++#ifdef CONFIG_IGEL_3DCONNEXION_BATTERY_QUIRK
++#define USB_VENDOR_ID_3DCONNEXION	0x256f
++#define USB_DEVICE_ID_3DCONNEXION_SM_W	0xc62e
++#define USB_DEVIDE_ID_3DCONNEXION_SM_PRO_W	0xc631
++#endif
++
+ #define USB_VENDOR_ID_3M		0x0596
+ #define USB_DEVICE_ID_3M1968		0x0500
+ #define USB_DEVICE_ID_3M2256		0x0502
+diff --git a/drivers/hid/hid-input.c b/drivers/hid/hid-input.c
+index 32a96ae2946f..a6d596421c8c 100644
+--- a/drivers/hid/hid-input.c
+@@ -398,6 +398,12 @@ static const struct hid_device_id hid_battery_quirks[] = {
+ 	  HID_BATTERY_QUIRK_AVOID_QUERY },
+ 	{ HID_I2C_DEVICE(USB_VENDOR_ID_ELAN, I2C_DEVICE_ID_CHROMEBOOK_TROGDOR_POMPOM),
+ 	  HID_BATTERY_QUIRK_AVOID_QUERY },
++#ifdef CONFIG_IGEL_3DCONNEXION_BATTERY_QUIRK
++	{ HID_USB_DEVICE(USB_VENDOR_ID_3DCONNEXION, USB_DEVICE_ID_3DCONNEXION_SM_W),
++	  HID_BATTERY_QUIRK_IGNORE },
++	{ HID_USB_DEVICE(USB_VENDOR_ID_3DCONNEXION, USB_DEVIDE_ID_3DCONNEXION_SM_PRO_W),
++	  HID_BATTERY_QUIRK_IGNORE },
++#endif
+ 	/*
+ 	 * Elan HID touchscreens seem to all report a non present battery,
+ 	 * set HID_BATTERY_QUIRK_IGNORE for all Elan I2C and USB HID devices.
+diff --git a/drivers/hid/hid-quirks.c b/drivers/hid/hid-quirks.c
+index ebf865c2dbb3..fba9d4e5921a 100644
+--- a/drivers/hid/hid-quirks.c
+@@ -235,6 +235,10 @@ static const struct hid_device_id hid_quirks[] = {
+  * used as a driver. See hid_scan_report().
+  */
+ static const struct hid_device_id hid_have_special_driver[] = {
++#ifdef CONFIG_IGEL_3DCONNEXION_BATTERY_QUIRK
++	{ HID_USB_DEVICE(USB_VENDOR_ID_3DCONNEXION, USB_DEVICE_ID_3DCONNEXION_SM_W) },
++	{ HID_USB_DEVICE(USB_VENDOR_ID_3DCONNEXION, USB_DEVIDE_ID_3DCONNEXION_SM_PRO_W) },
++#endif
+ #if IS_ENABLED(CONFIG_USB_APPLEDISPLAY)
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, 0x9218) },
+ 	{ HID_USB_DEVICE(USB_VENDOR_ID_APPLE, 0x9219) },

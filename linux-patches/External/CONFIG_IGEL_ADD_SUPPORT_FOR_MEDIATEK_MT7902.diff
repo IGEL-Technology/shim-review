@@ -1,0 +1,939 @@
+IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
+	  Add support for mt7902 (backport) into the kernel.
+
+	  Source: External
+	  URL: https://github.com/jetm/mediatek-mt7927-dkms/blob/master/mt7902-wifi-6.19.patch
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac.h b/drivers/net/wireless/mediatek/mt76/mt76_connac.h
+index 192dcc374a64..a44fc91dc19f 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac.h
+@@ -172,25 +172,57 @@ struct mt76_connac_tx_free {
+ 
+ extern const struct wiphy_wowlan_support mt76_connac_wowlan_support;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++static inline bool is_mt7925(struct mt76_dev *dev)
++{
++	return mt76_chip(dev) == 0x7925 || mt76_chip(dev) == 0x7927;
++}
++
++static inline bool is_mt7927(struct mt76_dev *dev)
++{
++	return mt76_chip(dev) == 0x7927;
++}
++
++static inline bool is_320mhz_supported(struct mt76_dev *dev)
++{
++	return is_mt7927(dev);
++}
++#else
+ static inline bool is_mt7925(struct mt76_dev *dev)
+ {
+ 	return mt76_chip(dev) == 0x7925;
+ }
++#endif
+ 
+ static inline bool is_mt7920(struct mt76_dev *dev)
+ {
+ 	return mt76_chip(dev) == 0x7920;
+ }
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++static inline bool is_mt7902(struct mt76_dev *dev)
++{
++	return mt76_chip(dev) == 0x7902;
++}
++#endif
++
+ static inline bool is_mt7922(struct mt76_dev *dev)
+ {
+ 	return mt76_chip(dev) == 0x7922;
+ }
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++static inline bool is_connac2(struct mt76_dev *dev)
++{
++	return mt76_chip(dev) == 0x7961 || is_mt7922(dev) || is_mt7920(dev) ||
++				is_mt7902(dev);
++}
++#else
+ static inline bool is_mt7921(struct mt76_dev *dev)
+ {
+ 	return mt76_chip(dev) == 0x7961 || is_mt7922(dev) || is_mt7920(dev);
+ }
++#endif
+ 
+ static inline bool is_mt7663(struct mt76_dev *dev)
+ {
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac.h b/drivers/net/wireless/mediatek/mt76/mt76_connac.h
+index 192dcc374a64..a44fc91dc19f 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac.h
+@@ -271,7 +303,13 @@ static inline bool is_mt76_fw_txp(struct mt76_dev *dev)
+ 	case 0x7961:
+ 	case 0x7920:
+ 	case 0x7922:
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	case 0x7902:
++#endif
+ 	case 0x7925:
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++	case 0x7927:
++#endif
+ 	case 0x7663:
+ 	case 0x7622:
+ 		return false;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -173,7 +173,11 @@ void mt76_connac_write_hw_txp(struct mt76_dev *dev,
+ 
+ 	txp->msdu_id[0] = cpu_to_le16(id | MT_MSDU_ID_VALID);
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_mt7663(dev) || is_connac2(dev) || is_mt7925(dev))
++#else
+ 	if (is_mt7663(dev) || is_mt7921(dev) || is_mt7925(dev))
++#endif
+ 		last_mask = MT_TXD_LEN_LAST;
+ 	else
+ 		last_mask = MT_TXD_LEN_AMSDU_LAST |
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -217,7 +221,11 @@ mt76_connac_txp_skb_unmap_hw(struct mt76_dev *dev,
+ 	u32 last_mask;
+ 	int i;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_mt7663(dev) || is_connac2(dev) || is_mt7925(dev))
++#else
+ 	if (is_mt7663(dev) || is_mt7921(dev) || is_mt7925(dev))
++#endif
+ 		last_mask = MT_TXD_LEN_LAST;
+ 	else
+ 		last_mask = MT_TXD_LEN_MSDU_LAST;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -307,7 +315,11 @@ u16 mt76_connac2_mac_tx_rate_val(struct mt76_phy *mphy,
+ 	if (!conf)
+ 		goto legacy;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(mphy->dev)) {
++#else
+ 	if (is_mt7921(mphy->dev)) {
++#endif
+ 		rateidx = ffs(conf->basic_rates) - 1;
+ 		goto legacy;
+ 	}
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -546,7 +558,11 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
+ 	val = MT_TXD1_LONG_FORMAT |
+ 	      FIELD_PREP(MT_TXD1_WLAN_IDX, wcid->idx) |
+ 	      FIELD_PREP(MT_TXD1_OWN_MAC, omac_idx);
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (!is_connac2(dev))
++#else
+ 	if (!is_mt7921(dev))
++#endif
+ 		val |= MT_TXD1_VTA;
+ 	if (phy_idx || band_idx)
+ 		val |= MT_TXD1_TGID;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -555,7 +571,11 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
+ 	txwi[2] = 0;
+ 
+ 	val = FIELD_PREP(MT_TXD3_REM_TX_COUNT, 15);
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (!is_connac2(dev))
++#else
+ 	if (!is_mt7921(dev))
++#endif
+ 		val |= MT_TXD3_SW_POWER_MGMT;
+ 	if (key)
+ 		val |= MT_TXD3_PROTECT_FRAME;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -596,7 +616,11 @@ void mt76_connac2_mac_write_txwi(struct mt76_dev *dev, __le32 *txwi,
+ 		txwi[6] |= cpu_to_le32(val);
+ 		txwi[3] |= cpu_to_le32(MT_TXD3_BA_DISABLE);
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++		if (!is_connac2(dev)) {
++#else
+ 		if (!is_mt7921(dev)) {
++#endif
+ 			u8 spe_idx = mt76_connac_spe_idx(mphy->antenna_mask);
+ 
+ 			if (!spe_idx)
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -828,7 +852,11 @@ mt76_connac2_mac_decode_he_mu_radiotap(struct mt76_dev *dev, struct sk_buff *skb
+ 	};
+ 	struct ieee80211_radiotap_he_mu *he_mu;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(dev)) {
++#else
+ 	if (is_mt7921(dev)) {
++#endif
+ 		mu_known.flags1 |= HE_BITS(MU_FLAGS1_SIG_B_COMP_KNOWN);
+ 		mu_known.flags2 |= HE_BITS(MU_FLAGS2_PUNC_FROM_SIG_A_BW_KNOWN);
+ 	}
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+index b78cfa1324f3..5e5e980e8cac 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mac.c
+@@ -1044,7 +1072,11 @@ int mt76_connac2_mac_fill_rx_rate(struct mt76_dev *dev,
+ 		stbc = FIELD_GET(MT_PRXV_HT_STBC, v0);
+ 		gi = FIELD_GET(MT_PRXV_HT_SGI, v0);
+ 		*mode = FIELD_GET(MT_PRXV_TX_MODE, v0);
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++		if (is_connac2(dev))
++#else
+ 		if (is_mt7921(dev))
++#endif
+ 			dcm = !!(idx & MT_PRXV_TX_DCM);
+ 		else
+ 			dcm = FIELD_GET(MT_PRXV_DCM, v0);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -4,6 +4,9 @@
+ #include <linux/firmware.h>
+ #include "mt76_connac2_mac.h"
+ #include "mt76_connac_mcu.h"
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++#include "mt792x_regs.h"
++#endif
+ 
+ int mt76_connac_mcu_start_firmware(struct mt76_dev *dev, u32 addr, u32 option)
+ {
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -65,7 +68,11 @@ int mt76_connac_mcu_init_download(struct mt76_dev *dev, u32 addr, u32 len,
+ 	int cmd;
+ 
+ 	if ((!is_connac_v1(dev) && addr == MCU_PATCH_ADDRESS) ||
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	    (is_connac2(dev) && addr == 0x900000) ||
++#else
+ 	    (is_mt7921(dev) && addr == 0x900000) ||
++#endif
+ 	    (is_mt7925(dev) && (addr == 0x900000 || addr == 0xe0002800)) ||
+ 	    (is_mt799x(dev) && addr == 0x900000))
+ 		cmd = MCU_CMD(PATCH_START_REQ);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -402,7 +409,11 @@ void mt76_connac_mcu_sta_basic_tlv(struct mt76_dev *dev, struct sk_buff *skb,
+ 	switch (vif->type) {
+ 	case NL80211_IFTYPE_MESH_POINT:
+ 	case NL80211_IFTYPE_AP:
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++		if (vif->p2p && !is_connac2(dev))
++#else
+ 		if (vif->p2p && !is_mt7921(dev))
++#endif
+ 			conn_type = CONNECTION_P2P_GC;
+ 		else
+ 			conn_type = CONNECTION_INFRA_STA;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -410,7 +421,11 @@ void mt76_connac_mcu_sta_basic_tlv(struct mt76_dev *dev, struct sk_buff *skb,
+ 		basic->aid = cpu_to_le16(link_sta->sta->aid);
+ 		break;
+ 	case NL80211_IFTYPE_STATION:
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++		if (vif->p2p && !is_connac2(dev))
++#else
+ 		if (vif->p2p && !is_mt7921(dev))
++#endif
+ 			conn_type = CONNECTION_P2P_GO;
+ 		else
+ 			conn_type = CONNECTION_INFRA_AP;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -874,7 +889,11 @@ void mt76_connac_mcu_sta_tlv(struct mt76_phy *mphy, struct sk_buff *skb,
+ 		struct sta_rec_vht *vht;
+ 		int len;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++		len = is_connac2(dev) ? sizeof(*vht) : sizeof(*vht) - 4;
++#else
+ 		len = is_mt7921(dev) ? sizeof(*vht) : sizeof(*vht) - 4;
++#endif
+ 		tlv = mt76_connac_mcu_add_tlv(skb, STA_REC_VHT, len);
+ 		vht = (struct sta_rec_vht *)tlv;
+ 		vht->vht_cap = cpu_to_le32(sta->deflink.vht_cap.cap);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -885,8 +904,13 @@ void mt76_connac_mcu_sta_tlv(struct mt76_phy *mphy, struct sk_buff *skb,
+ 	/* starec uapsd */
+ 	mt76_connac_mcu_sta_uapsd(skb, vif, sta);
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (!is_connac2(dev))
++		return;
++#else
+ 	if (!is_mt7921(dev))
+ 		return;
++#endif
+ 
+ 	if (sta->deflink.ht_cap.ht_supported || sta->deflink.he_cap.has_he)
+ 		mt76_connac_mcu_sta_amsdu_tlv(skb, sta, vif);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -1774,7 +1798,11 @@ int mt76_connac_mcu_hw_scan(struct mt76_phy *phy, struct ieee80211_vif *vif,
+ 	req->ssid_type_ext = n_ssids ? BIT(0) : 0;
+ 	req->ssids_num = n_ssids;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	duration = is_connac2(phy->dev) ? 0 : MT76_CONNAC_SCAN_CHANNEL_TIME;
++#else
+ 	duration = is_mt7921(phy->dev) ? 0 : MT76_CONNAC_SCAN_CHANNEL_TIME;
++#endif
+ 	/* increase channel time for passive scan */
+ 	if (!sreq->n_ssids)
+ 		duration *= 2;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -1817,7 +1845,11 @@ int mt76_connac_mcu_hw_scan(struct mt76_phy *phy, struct ieee80211_vif *vif,
+ 		req->ies_len = cpu_to_le16(sreq->ie_len);
+ 	}
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(phy->dev))
++#else
+ 	if (is_mt7921(phy->dev))
++#endif
+ 		req->scan_func |= SCAN_FUNC_SPLIT_SCAN;
+ 
+ 	memcpy(req->bssid, sreq->bssid, ETH_ALEN);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -1893,7 +1925,11 @@ int mt76_connac_mcu_sched_scan_req(struct mt76_phy *phy,
+ 		get_random_mask_addr(addr, sreq->mac_addr,
+ 				     sreq->mac_addr_mask);
+ 	}
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(phy->dev)) {
++#else
+ 	if (is_mt7921(phy->dev)) {
++#endif
+ 		req->mt7921.bss_idx = mvif->idx;
+ 		req->mt7921.delay = cpu_to_le32(sreq->delay);
+ 	}
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -2033,7 +2069,11 @@ mt76_connac_mcu_build_sku(struct mt76_dev *dev, s8 *sku,
+ 			  struct mt76_power_limits *limits,
+ 			  enum nl80211_band band)
+ {
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	int max_power = is_connac2(dev) ? 127 : 63;
++#else
+ 	int max_power = is_mt7921(dev) ? 127 : 63;
++#endif
+ 	int i, offset = sizeof(limits->cck);
+ 
+ 	memset(sku, max_power, MT_SKU_POWER_LIMIT);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -2061,8 +2101,13 @@ mt76_connac_mcu_build_sku(struct mt76_dev *dev, s8 *sku,
+ 		offset += 12;
+ 	}
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (!is_connac2(dev))
++		return;
++#else
+ 	if (!is_mt7921(dev))
+ 		return;
++#endif
+ 
+ 	/* he */
+ 	for (i = 0; i < ARRAY_SIZE(limits->ru); i++) {
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -2117,7 +2162,11 @@ mt76_connac_mcu_rate_txpower_band(struct mt76_phy *phy,
+ 				  enum nl80211_band band)
+ {
+ 	struct mt76_dev *dev = phy->dev;
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	int sku_len, batch_len = is_connac2(dev) ? 8 : 16;
++#else
+ 	int sku_len, batch_len = is_mt7921(dev) ? 8 : 16;
++#endif
+ 	static const u8 chan_list_2ghz[] = {
+ 		1, 2,  3,  4,  5,  6,  7,
+ 		8, 9, 10, 11, 12, 13, 14
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -2158,7 +2207,11 @@ mt76_connac_mcu_rate_txpower_band(struct mt76_phy *phy,
+ 	if (!limits)
+ 		return -ENOMEM;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	sku_len = is_connac2(dev) ? sizeof(sku_tlbv) : sizeof(sku_tlbv) - 92;
++#else
+ 	sku_len = is_mt7921(dev) ? sizeof(sku_tlbv) : sizeof(sku_tlbv) - 92;
++#endif
+ 	tx_power = 2 * phy->hw->conf.power_level;
+ 	if (!tx_power)
+ 		tx_power = 127;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -2242,6 +2295,12 @@ mt76_connac_mcu_rate_txpower_band(struct mt76_phy *phy,
+ 					    false);
+ 		if (err < 0)
+ 			goto out;
++
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++		/* read a CR to avoid PSE buffer underflow */
++		if (is_mt7902(dev))
++			mt76_connac_mcu_reg_rr(dev, MT_PSE_BASE);
++#endif
+ 	}
+ 
+ out:
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+index fc3e6728fcfb..a76daaebb57a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.c
+@@ -3072,8 +3131,13 @@ static u32 mt76_connac2_get_data_mode(struct mt76_dev *dev, u32 info)
+ {
+ 	u32 mode = DL_MODE_NEED_RSP;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if ((!is_connac2(dev) && !is_mt7925(dev)) || info == PATCH_SEC_NOT_SUPPORT)
++		return mode;
++#else
+ 	if ((!is_mt7921(dev) && !is_mt7925(dev)) || info == PATCH_SEC_NOT_SUPPORT)
+ 		return mode;
++#endif
+ 
+ 	switch (FIELD_GET(PATCH_SEC_ENC_TYPE_MASK, info)) {
+ 	case PATCH_SEC_ENC_TYPE_PLAIN:
+diff --git a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h b/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h
+index 0b02f34c40a4..3e39e7702d54 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt76_connac_mcu.h
+@@ -1865,7 +1865,11 @@ mt76_connac_mcu_gen_dl_mode(struct mt76_dev *dev, u8 feature_set, bool is_wa)
+ 
+ 	ret |= feature_set & FW_FEATURE_SET_ENCRYPT ?
+ 	       DL_MODE_ENCRYPT | DL_MODE_RESET_SEC_IV : 0;
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(dev) || is_mt7925(dev))
++#else
+ 	if (is_mt7921(dev) || is_mt7925(dev))
++#endif
+ 		ret |= feature_set & FW_FEATURE_ENCRY_MODE ?
+ 		       DL_CONFIG_ENCRY_MODE_SEL : 0;
+ 	ret |= FIELD_PREP(DL_MODE_KEY_IDX,
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/init.c b/drivers/net/wireless/mediatek/mt76/mt7921/init.c
+index b9098a7331b1..b1ab7454f23b 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/init.c
+@@ -302,7 +302,13 @@ int mt7921_register_device(struct mt792x_dev *dev)
+ 	dev->pm.idle_timeout = MT792x_PM_TIMEOUT;
+ 	dev->pm.stats.last_wake_event = jiffies;
+ 	dev->pm.stats.last_doze_event = jiffies;
++
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (!mt76_is_usb(&dev->mt76) &&
++	    !is_mt7902(&dev->mt76)) {
++#else
+ 	if (!mt76_is_usb(&dev->mt76)) {
++#endif
+ 		dev->pm.enable_user = true;
+ 		dev->pm.enable = true;
+ 		dev->pm.ds_enable_user = true;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/mt7921.h b/drivers/net/wireless/mediatek/mt76/mt7921/mt7921.h
+index faa0d9398214..bb34aaae60cd 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/mt7921.h
+@@ -17,6 +17,11 @@
+ #define MT7921_RX_MCU_RING_SIZE		8
+ #define MT7921_RX_MCU_WA_RING_SIZE	512
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++/* MT7902 Rx Ring0 is for both Rx Event and Tx Done Event */
++#define MT7902_RX_MCU_RING_SIZE		512
++#endif
++
+ #define MT7921_EEPROM_SIZE		3584
+ #define MT7921_TOKEN_SIZE		8192
+ 
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/mt7921.h b/drivers/net/wireless/mediatek/mt76/mt7921/mt7921.h
+index faa0d9398214..bb34aaae60cd 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/mt7921.h
+@@ -119,6 +124,19 @@ enum mt7921_rxq_id {
+ 	MT7921_RXQ_MCU_WM = 0,
+ };
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++/* MT7902 assigns its MCU-WM TXQ at index 15 */
++enum mt7902_txq_id {
++	MT7902_TXQ_MCU_WM = 15,
++};
++
++struct mt7921_dma_layout {
++	u8 mcu_wm_txq;
++	u16 mcu_rxdone_ring_size;
++	bool has_mcu_wa;
++};
++#endif
++
+ enum {
+ 	MT7921_CLC_POWER,
+ 	MT7921_CLC_CHAN,
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+index a0c9df3c2cc7..d9ea5c991687 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+@@ -26,6 +26,10 @@ static const struct pci_device_id mt7921_pci_device_table[] = {
+ 		.driver_data = (kernel_ulong_t)MT7922_FIRMWARE_WM },
+ 	{ PCI_DEVICE(PCI_VENDOR_ID_MEDIATEK, 0x7920),
+ 		.driver_data = (kernel_ulong_t)MT7920_FIRMWARE_WM },
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	{ PCI_DEVICE(PCI_VENDOR_ID_MEDIATEK, 0x7902),
++		.driver_data = (kernel_ulong_t)MT7902_FIRMWARE_WM },
++#endif
+ 	{ },
+ };
+ 
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+index a0c9df3c2cc7..d9ea5c991687 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+@@ -167,8 +171,30 @@ static u32 mt7921_rmw(struct mt76_dev *mdev, u32 offset, u32 mask, u32 val)
+ 
+ static int mt7921_dma_init(struct mt792x_dev *dev)
+ {
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	struct mt7921_dma_layout layout = {
++		/* General case: MT7921 / MT7922 /MT7920 */
++		.mcu_wm_txq            = MT7921_TXQ_MCU_WM,
++		.mcu_rxdone_ring_size  = MT7921_RX_MCU_RING_SIZE,
++		.has_mcu_wa            = true,
++	};
++#endif
+ 	int ret;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	/*
++	 * MT7902 special case:
++	 *   - MCU-WM TXQ uses index 15
++	 *   - RX Ring0 is larger and shared for event/TX-done
++	 *   - MT7902 does not use the MCU_WA ring
++	 */
++	if (is_mt7902(&dev->mt76)) {
++		layout.mcu_wm_txq           = MT7902_TXQ_MCU_WM;
++		layout.mcu_rxdone_ring_size = MT7902_RX_MCU_RING_SIZE;
++		layout.has_mcu_wa           = false;
++	}
++#endif
++
+ 	mt76_dma_attach(&dev->mt76);
+ 
+ 	ret = mt792x_dma_disable(dev, true);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+index a0c9df3c2cc7..d9ea5c991687 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+@@ -185,8 +211,13 @@ static int mt7921_dma_init(struct mt792x_dev *dev)
+ 	mt76_wr(dev, MT_WFDMA0_TX_RING0_EXT_CTRL, 0x4);
+ 
+ 	/* command to WM */
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	ret = mt76_init_mcu_queue(&dev->mt76, MT_MCUQ_WM, layout.mcu_wm_txq,
++				  MT7921_TX_MCU_RING_SIZE, MT_TX_RING_BASE);
++#else
+ 	ret = mt76_init_mcu_queue(&dev->mt76, MT_MCUQ_WM, MT7921_TXQ_MCU_WM,
+ 				  MT7921_TX_MCU_RING_SIZE, MT_TX_RING_BASE);
++#endif
+ 	if (ret)
+ 		return ret;
+ 
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+index a0c9df3c2cc7..d9ea5c991687 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+@@ -199,11 +230,26 @@ static int mt7921_dma_init(struct mt792x_dev *dev)
+ 	/* event from WM before firmware download */
+ 	ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MCU],
+ 			       MT7921_RXQ_MCU_WM,
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++			       layout.mcu_rxdone_ring_size,
++#else
+ 			       MT7921_RX_MCU_RING_SIZE,
++#endif
+ 			       MT_RX_BUF_SIZE, MT_RX_EVENT_RING_BASE);
+ 	if (ret)
+ 		return ret;
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (layout.has_mcu_wa) {
++		/* Change mcu queue after firmware download */
++		ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MCU_WA],
++				       MT7921_RXQ_MCU_WM,
++				       MT7921_RX_MCU_WA_RING_SIZE,
++				       MT_RX_BUF_SIZE, MT_WFDMA0(0x540));
++		if (ret)
++			return ret;
++	}
++#else
+ 	/* Change mcu queue after firmware download */
+ 	ret = mt76_queue_alloc(dev, &dev->mt76.q_rx[MT_RXQ_MCU_WA],
+ 			       MT7921_RXQ_MCU_WM,
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+index a0c9df3c2cc7..d9ea5c991687 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+@@ -326,6 +373,22 @@ static int mt7921_pci_probe(struct pci_dev *pdev,
+ 	dev->hif_ops = &mt7921_pcie_ops;
+ 	dev->irq_map = &irq_map;
+ 	mt76_mmio_init(&dev->mt76, pcim_iomap_table(pdev)[0]);
++
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (id->device == 0x7902) {
++		struct mt792x_irq_map *map;
++
++		/* MT7902 needs a mutable copy because wm2_complete_mask differs */
++		map = devm_kmemdup(&pdev->dev, &irq_map,
++				   sizeof(irq_map), GFP_KERNEL);
++		if (!map)
++			return -ENOMEM;
++
++		map->rx.wm2_complete_mask = 0;
++		dev->irq_map = map;
++	}
++#endif
++
+ 	tasklet_init(&mdev->irq_tasklet, mt792x_irq_tasklet, (unsigned long)dev);
+ 
+ 	dev->phy.dev = dev;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+index a0c9df3c2cc7..d9ea5c991687 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci.c
+@@ -579,6 +642,10 @@ MODULE_FIRMWARE(MT7921_FIRMWARE_WM);
+ MODULE_FIRMWARE(MT7921_ROM_PATCH);
+ MODULE_FIRMWARE(MT7922_FIRMWARE_WM);
+ MODULE_FIRMWARE(MT7922_ROM_PATCH);
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++MODULE_FIRMWARE(MT7902_FIRMWARE_WM);
++MODULE_FIRMWARE(MT7902_ROM_PATCH);
++#endif
+ MODULE_AUTHOR("Sean Wang <sean.wang@mediatek.com>");
+ MODULE_AUTHOR("Lorenzo Bianconi <lorenzo@kernel.org>");
+ MODULE_DESCRIPTION("MediaTek MT7921E (PCIe) wireless driver");
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/pci_mac.c b/drivers/net/wireless/mediatek/mt76/mt7921/pci_mac.c
+index 881812ba03ff..3e7a55fd02b3 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/pci_mac.c
+@@ -71,9 +71,15 @@ int mt7921e_mac_reset(struct mt792x_dev *dev)
+ 	mt76_txq_schedule_all(&dev->mphy);
+ 
+ 	mt76_worker_disable(&dev->mt76.tx_worker);
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	mt76_for_each_q_rx(&dev->mt76, i) {
++		napi_disable(&dev->mt76.napi[i]);
++	}
++#else
+ 	napi_disable(&dev->mt76.napi[MT_RXQ_MAIN]);
+ 	napi_disable(&dev->mt76.napi[MT_RXQ_MCU]);
+ 	napi_disable(&dev->mt76.napi[MT_RXQ_MCU_WA]);
++#endif
+ 	napi_disable(&dev->mt76.tx_napi);
+ 
+ 	mt76_connac2_tx_token_put(&dev->mt76);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/sdio.c b/drivers/net/wireless/mediatek/mt76/mt7921/sdio.c
+index d8d36b3c3068..e345728cab99 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/sdio.c
+@@ -19,6 +19,10 @@
+ static const struct sdio_device_id mt7921s_table[] = {
+ 	{ SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, 0x7901),
+ 		.driver_data = (kernel_ulong_t)MT7921_FIRMWARE_WM },
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	{ SDIO_DEVICE(SDIO_VENDOR_ID_MEDIATEK, 0x7902),
++		.driver_data = (kernel_ulong_t)MT7902_FIRMWARE_WM },
++#endif
+ 	{ }	/* Terminating entry */
+ };
+ 
+diff --git a/drivers/net/wireless/mediatek/mt76/mt7921/sdio.c b/drivers/net/wireless/mediatek/mt76/mt7921/sdio.c
+index d8d36b3c3068..e345728cab99 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt7921/sdio.c
+@@ -317,6 +321,10 @@ static int mt7921s_resume(struct device *__dev)
+ MODULE_DEVICE_TABLE(sdio, mt7921s_table);
+ MODULE_FIRMWARE(MT7921_FIRMWARE_WM);
+ MODULE_FIRMWARE(MT7921_ROM_PATCH);
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++MODULE_FIRMWARE(MT7902_FIRMWARE_WM);
++MODULE_FIRMWARE(MT7902_ROM_PATCH);
++#endif
+ 
+ static DEFINE_SIMPLE_DEV_PM_OPS(mt7921s_pm_ops, mt7921s_suspend, mt7921s_resume);
+ 
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x.h b/drivers/net/wireless/mediatek/mt76/mt792x.h
+index f2c8b9e4aa0f..78be2cbec4c7 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x.h
+@@ -40,15 +40,27 @@
+ #define MT792x_MCU_INIT_RETRY_COUNT	10
+ #define MT792x_WFSYS_INIT_RETRY_COUNT	2
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++#define MT7902_FIRMWARE_WM	"mediatek/WIFI_RAM_CODE_MT7902_1.bin"
++#endif
+ #define MT7920_FIRMWARE_WM	"mediatek/WIFI_RAM_CODE_MT7961_1a.bin"
+ #define MT7921_FIRMWARE_WM	"mediatek/WIFI_RAM_CODE_MT7961_1.bin"
+ #define MT7922_FIRMWARE_WM	"mediatek/WIFI_RAM_CODE_MT7922_1.bin"
+ #define MT7925_FIRMWARE_WM	"mediatek/mt7925/WIFI_RAM_CODE_MT7925_1_1.bin"
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++#define MT7927_FIRMWARE_WM	"mediatek/mt7927/WIFI_RAM_CODE_MT6639_2_1.bin"
++#endif
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++#define MT7902_ROM_PATCH	"mediatek/WIFI_MT7902_patch_mcu_1_1_hdr.bin"
++#endif
+ #define MT7920_ROM_PATCH	"mediatek/WIFI_MT7961_patch_mcu_1a_2_hdr.bin"
+ #define MT7921_ROM_PATCH	"mediatek/WIFI_MT7961_patch_mcu_1_2_hdr.bin"
+ #define MT7922_ROM_PATCH	"mediatek/WIFI_MT7922_patch_mcu_1_1_hdr.bin"
+ #define MT7925_ROM_PATCH	"mediatek/mt7925/WIFI_MT7925_PATCH_MCU_1_1_hdr.bin"
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++#define MT7927_ROM_PATCH	"mediatek/mt7927/WIFI_MT6639_PATCH_MCU_2_1_hdr.bin"
++#endif
+ 
+ #define MT792x_SDIO_HDR_TX_BYTES	GENMASK(15, 0)
+ #define MT792x_SDIO_HDR_PKT_TYPE	GENMASK(17, 16)
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x.h b/drivers/net/wireless/mediatek/mt76/mt792x.h
+index f2c8b9e4aa0f..78be2cbec4c7 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x.h
+@@ -446,12 +496,20 @@ void mt792x_config_mac_addr_list(struct mt792x_dev *dev);
+ static inline char *mt792x_ram_name(struct mt792x_dev *dev)
+ {
+ 	switch (mt76_chip(&dev->mt76)) {
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	case 0x7902:
++		return MT7902_FIRMWARE_WM;
++#endif
+ 	case 0x7920:
+ 		return MT7920_FIRMWARE_WM;
+ 	case 0x7922:
+ 		return MT7922_FIRMWARE_WM;
+ 	case 0x7925:
+ 		return MT7925_FIRMWARE_WM;
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++	case 0x7927:
++		return MT7927_FIRMWARE_WM;
++#endif
+ 	default:
+ 		return MT7921_FIRMWARE_WM;
+ 	}
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x.h b/drivers/net/wireless/mediatek/mt76/mt792x.h
+index f2c8b9e4aa0f..78be2cbec4c7 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x.h
+@@ -460,12 +518,20 @@ static inline char *mt792x_ram_name(struct mt792x_dev *dev)
+ static inline char *mt792x_patch_name(struct mt792x_dev *dev)
+ {
+ 	switch (mt76_chip(&dev->mt76)) {
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	case 0x7902:
++		return MT7902_ROM_PATCH;
++#endif
+ 	case 0x7920:
+ 		return MT7920_ROM_PATCH;
+ 	case 0x7922:
+ 		return MT7922_ROM_PATCH;
+ 	case 0x7925:
+ 		return MT7925_ROM_PATCH;
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++	case 0x7927:
++		return MT7927_ROM_PATCH;
++#endif
+ 	default:
+ 		return MT7921_ROM_PATCH;
+ 	}
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_core.c b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+index 9cad572c34a3..1fbeb57d478a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+@@ -151,7 +169,11 @@ void mt792x_stop(struct ieee80211_hw *hw, bool suspend)
+ 	cancel_work_sync(&dev->reset_work);
+ 	mt76_connac_free_pending_tx_skbs(&dev->pm, NULL);
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(&dev->mt76)) {
++#else
+ 	if (is_mt7921(&dev->mt76)) {
++#endif
+ 		mt792x_mutex_acquire(dev);
+ 		mt76_connac_mcu_set_mac_enable(&dev->mt76, 0, false, false);
+ 		mt792x_mutex_release(dev);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_core.c b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+index 9cad572c34a3..1fbeb57d478a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+@@ -691,7 +713,11 @@ int mt792x_init_wiphy(struct ieee80211_hw *hw)
+ 	ieee80211_hw_set(hw, SUPPORTS_MULTI_BSSID);
+ 	ieee80211_hw_set(hw, SUPPORTS_ONLY_HE_MULTI_BSSID);
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_connac2(&dev->mt76)) {
++#else
+ 	if (is_mt7921(&dev->mt76)) {
++#endif
+ 		ieee80211_hw_set(hw, CHANCTX_STA_CSA);
+ 	}
+ 
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_core.c b/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+index 9cad572c34a3..1fbeb57d478a 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_core.c
+@@ -927,6 +953,27 @@ int mt792x_load_firmware(struct mt792x_dev *dev)
+ {
+ 	int ret;
+ 
++#ifdef CONFIG_IGEL_MEDIATEK_MT7925_WIFI_DRIVER_FIX
++	/* Release semaphore if taken by previous failed load attempt.
++	 * This prevents "Failed to get patch semaphore" errors when
++	 * recovering from firmware crashes or suspend/resume failures.
++	 */
++	ret = mt76_connac_mcu_patch_sem_ctrl(&dev->mt76, false);
++	if (ret < 0)
++		dev_dbg(dev->mt76.dev, "Semaphore release returned %d (may be expected)\n", ret);
++#endif /* CONFIG_IGEL_MEDIATEK_MT7925_WIFI_DRIVER_FIX */
++
++#if defined(CONFIG_IGEL_MEDIATEK_MT7925_WIFI_DRIVER_FIX) || defined(CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902)
++	/* Always restart MCU to ensure clean state before loading firmware */
++	mt76_connac_mcu_restart(&dev->mt76);
++
++	/* Wait for MCU to be ready after restart */
++	if (!mt76_poll_msec(dev, MT_CONN_ON_MISC, MT_TOP_MISC_FW_STATE,
++			    MT_TOP_MISC2_FW_PWR_ON, 1000))
++		dev_warn(dev->mt76.dev,
++			 "MCU is not ready for firmware download\n");
++#endif
++
+ 	ret = mt76_connac2_load_patch(&dev->mt76, mt792x_patch_name(dev));
+ 	if (ret)
+ 		return ret;
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c b/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+index 69217ce91130..35808bab04d8 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+@@ -90,6 +90,53 @@ EXPORT_SYMBOL_GPL(mt792x_rx_poll_complete);
+ #define PREFETCH(base, depth)	((base) << 16 | (depth))
+ static void mt792x_dma_prefetch(struct mt792x_dev *dev)
+ {
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7927
++	/* mt7925 family uses per-chip prefetch via dma_config callback */
++	if (dev->dma_config && dev->dma_config->dma_prefetch) {
++		dev->dma_config->dma_prefetch(dev);
++		return;
++	}
++
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	if (is_mt7902(&dev->mt76)) {
++		/* rx ring */
++		mt76_wr(dev, MT_WFDMA0_RX_RING0_EXT_CTRL, PREFETCH(0x0000, 0x4));
++		mt76_wr(dev, MT_WFDMA0_RX_RING1_EXT_CTRL, PREFETCH(0x0040, 0x4));
++		mt76_wr(dev, MT_WFDMA0_RX_RING2_EXT_CTRL, PREFETCH(0x0080, 0x4));
++		mt76_wr(dev, MT_WFDMA0_RX_RING3_EXT_CTRL, PREFETCH(0x00c0, 0x4));
++		/* tx ring */
++		mt76_wr(dev, MT_WFDMA0_TX_RING0_EXT_CTRL, PREFETCH(0x0100, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING1_EXT_CTRL, PREFETCH(0x0140, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING2_EXT_CTRL, PREFETCH(0x0180, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING3_EXT_CTRL, PREFETCH(0x01c0, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING4_EXT_CTRL, PREFETCH(0x0200, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING5_EXT_CTRL, PREFETCH(0x0240, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING6_EXT_CTRL, PREFETCH(0x0280, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING15_EXT_CTRL, PREFETCH(0x02c0, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING16_EXT_CTRL, PREFETCH(0x0300, 0x4));
++		return;
++	}
++#endif
++
++	/* mt7921/mt7922 legacy prefetch */
++	/* rx ring */
++	mt76_wr(dev, MT_WFDMA0_RX_RING0_EXT_CTRL, PREFETCH(0x0, 0x4));
++	mt76_wr(dev, MT_WFDMA0_RX_RING2_EXT_CTRL, PREFETCH(0x40, 0x4));
++	mt76_wr(dev, MT_WFDMA0_RX_RING3_EXT_CTRL, PREFETCH(0x80, 0x4));
++	mt76_wr(dev, MT_WFDMA0_RX_RING4_EXT_CTRL, PREFETCH(0xc0, 0x4));
++	mt76_wr(dev, MT_WFDMA0_RX_RING5_EXT_CTRL, PREFETCH(0x100, 0x4));
++	/* tx ring */
++	mt76_wr(dev, MT_WFDMA0_TX_RING0_EXT_CTRL, PREFETCH(0x140, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING1_EXT_CTRL, PREFETCH(0x180, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING2_EXT_CTRL, PREFETCH(0x1c0, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING3_EXT_CTRL, PREFETCH(0x200, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING4_EXT_CTRL, PREFETCH(0x240, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING5_EXT_CTRL, PREFETCH(0x280, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING6_EXT_CTRL, PREFETCH(0x2c0, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING16_EXT_CTRL, PREFETCH(0x340, 0x4));
++	mt76_wr(dev, MT_WFDMA0_TX_RING17_EXT_CTRL, PREFETCH(0x380, 0x4));
++
++#else
+ 	if (is_mt7925(&dev->mt76)) {
+ 		/* rx ring */
+ 		mt76_wr(dev, MT_WFDMA0_RX_RING0_EXT_CTRL, PREFETCH(0x0000, 0x4));
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c b/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+index 69217ce91130..35808bab04d8 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+@@ -103,6 +150,24 @@ static void mt792x_dma_prefetch(struct mt792x_dev *dev)
+ 		mt76_wr(dev, MT_WFDMA0_TX_RING3_EXT_CTRL, PREFETCH(0x0400, 0x10));
+ 		mt76_wr(dev, MT_WFDMA0_TX_RING15_EXT_CTRL, PREFETCH(0x0500, 0x4));
+ 		mt76_wr(dev, MT_WFDMA0_TX_RING16_EXT_CTRL, PREFETCH(0x0540, 0x4));
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	} else if (is_mt7902(&dev->mt76)) {
++		/* rx ring */
++		mt76_wr(dev, MT_WFDMA0_RX_RING0_EXT_CTRL, PREFETCH(0x0000, 0x4));
++		mt76_wr(dev, MT_WFDMA0_RX_RING1_EXT_CTRL, PREFETCH(0x0040, 0x4));
++		mt76_wr(dev, MT_WFDMA0_RX_RING2_EXT_CTRL, PREFETCH(0x0080, 0x4));
++		mt76_wr(dev, MT_WFDMA0_RX_RING3_EXT_CTRL, PREFETCH(0x00c0, 0x4));
++		/* tx ring */
++		mt76_wr(dev, MT_WFDMA0_TX_RING0_EXT_CTRL, PREFETCH(0x0100, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING1_EXT_CTRL, PREFETCH(0x0140, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING2_EXT_CTRL, PREFETCH(0x0180, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING3_EXT_CTRL, PREFETCH(0x01c0, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING4_EXT_CTRL, PREFETCH(0x0200, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING5_EXT_CTRL, PREFETCH(0x0240, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING6_EXT_CTRL, PREFETCH(0x0280, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING15_EXT_CTRL, PREFETCH(0x02c0, 0x4));
++		mt76_wr(dev, MT_WFDMA0_TX_RING16_EXT_CTRL, PREFETCH(0x0300, 0x4));
++#endif
+ 	} else {
+ 		/* rx ring */
+ 		mt76_wr(dev, MT_WFDMA0_RX_RING0_EXT_CTRL, PREFETCH(0x0, 0x4));
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c b/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+index 69217ce91130..35808bab04d8 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_dma.c
+@@ -356,7 +441,11 @@ EXPORT_SYMBOL_GPL(mt792x_poll_rx);
+ 
+ int mt792x_wfsys_reset(struct mt792x_dev *dev)
+ {
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++	u32 addr = is_connac2(&dev->mt76) ? 0x18000140 : 0x7c000140;
++#else
+ 	u32 addr = is_mt7921(&dev->mt76) ? 0x18000140 : 0x7c000140;
++#endif
+ 
+ 	mt76_clear(dev, addr, WFSYS_SW_RST_B);
+ 	msleep(50);
+diff --git a/drivers/net/wireless/mediatek/mt76/mt792x_regs.h b/drivers/net/wireless/mediatek/mt76/mt792x_regs.h
+index b0c6dfa55cc6..3953f20ad179 100644
+--- a/drivers/net/wireless/mediatek/mt76/mt792x_regs.h
+@@ -25,6 +25,10 @@
+ #define MT_PLE_AC_QEMPTY(_n)		MT_PLE(0x500 + 0x40 * (_n))
+ #define MT_PLE_AMSDU_PACK_MSDU_CNT(n)	MT_PLE(0x10e0 + ((n) << 2))
+ 
++#ifdef CONFIG_IGEL_ADD_SUPPORT_FOR_MEDIATEK_MT7902
++#define MT_PSE_BASE			0x820c8000
++#endif
++
+ /* TMAC: band 0(0x21000), band 1(0xa1000) */
+ #define MT_WF_TMAC_BASE(_band)		((_band) ? 0x820f4000 : 0x820e4000)
+ #define MT_WF_TMAC(_band, ofs)		(MT_WF_TMAC_BASE(_band) + (ofs))

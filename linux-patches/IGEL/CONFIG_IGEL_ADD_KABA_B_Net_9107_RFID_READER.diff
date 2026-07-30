@@ -1,0 +1,19 @@
+IGEL_ADD_KABA_B_Net_9107_RFID_READER
+	  Added KABA B-Net 9107 Legic RFID reader to FTDI supported device list to
+	  get the device working.
+
+	  Source: IGEL
+diff --git a/drivers/usb/serial/ftdi_sio.c b/drivers/usb/serial/ftdi_sio.c
+index ceddfb1852e1..b68399318585 100644
+--- a/drivers/usb/serial/ftdi_sio.c
+@@ -1005,6 +1005,10 @@ static const struct usb_device_id id_table_combined[] = {
+ 	{ USB_DEVICE(BRAINBOXES_VID, BRAINBOXES_US_842_4_PID) },
+ 	/* ekey Devices */
+ 	{ USB_DEVICE(FTDI_VID, FTDI_EKEY_CONV_USB_PID) },
++#ifdef CONFIG_IGEL_ADD_KABA_B_Net_9107_RFID_READER
++	/* freund@igel: KABA B-Net 9107 Legic RFID reader */
++	{ USB_DEVICE(KABA_VID, KABA_B_Net_9107_PID) },
++#endif
+ 	/* Infineon Devices */
+ 	{ USB_DEVICE_INTERFACE_NUMBER(INFINEON_VID, INFINEON_TRIBOARD_TC1798_PID, 1) },
+ 	{ USB_DEVICE_INTERFACE_NUMBER(INFINEON_VID, INFINEON_TRIBOARD_TC2X7_PID, 1) },

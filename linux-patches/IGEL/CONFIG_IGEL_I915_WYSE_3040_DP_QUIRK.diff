@@ -1,0 +1,111 @@
+IGEL_I915_WYSE_3040_DP_QUIRK
+	  Added a quirk in the i915 driver to do not use DPMS with DisplayPort on
+	  Dell Wyse 3040 device. If using DPMS off some monitors will not wake up
+	  again as the i915 driver would not recognize the monitor afterwards.
+
+	  Source: IGEL
+diff --git a/drivers/gpu/drm/i915/display/intel_quirks.c b/drivers/gpu/drm/i915/display/intel_quirks.c
+index 1abbdd426e58..a07e7d5217d9 100644
+--- a/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -10,6 +10,9 @@
+ #include "intel_display_core.h"
+ #include "intel_display_types.h"
+ #include "intel_quirks.h"
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++#include "i915_drv.h"
++#endif
+ 
+ static void intel_set_quirk(struct intel_display *display, enum intel_quirk_id quirk)
+ {
+diff --git a/drivers/gpu/drm/i915/display/intel_quirks.c b/drivers/gpu/drm/i915/display/intel_quirks.c
+index 1abbdd426e58..a07e7d5217d9 100644
+--- a/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -66,12 +69,37 @@ static void quirk_increase_ddi_disabled_time(struct intel_display *display)
+ 	drm_info(display->drm, "Applying Increase DDI Disabled quirk\n");
+ }
+ 
++#ifdef CONFIG_IGEL_APPLE_GMUX
++/*
++ * In some cases, the firmware might not set the lane count to 4 (for example,
++ * when booting in some dual GPU Macs with the dGPU as the default GPU), this
++ * quirk is used to force it as otherwise it might not be possible to compute a
++ * valid link configuration.
++ */
++static void quirk_ddi_a_force_4_lanes(struct intel_display *display)
++{
++	intel_set_quirk(display, QUIRK_DDI_A_FORCE_4_LANES);
++	drm_info(display->drm, "Applying DDI A Forced 4 Lanes quirk\n");
++}
++#endif
++
+ static void quirk_no_pps_backlight_power_hook(struct intel_display *display)
+ {
+ 	intel_set_quirk(display, QUIRK_NO_PPS_BACKLIGHT_POWER_HOOK);
+ 	drm_info(display->drm, "Applying no pps backlight power quirk\n");
+ }
+ 
++#if defined(CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK) && defined(_I915_DRV_H_)
++/* Dell Wyse 3040 doesn't work well with some Dell monitors (E-series).
++ * Workaround this by skipping DP DPMS D3 transition.
++ */
++static void quirk_disable_dp_dpms_d3(struct intel_display *display)
++{
++	intel_set_quirk(display, QUIRK_SKIP_DP_DPMS_D3);
++	DRM_INFO("Applying Wyse 3040 quirk\n");
++}
++#endif
++
+ static void quirk_fw_sync_len(struct intel_dp *intel_dp)
+ {
+ 	struct intel_display *display = to_intel_display(intel_dp);
+diff --git a/drivers/gpu/drm/i915/display/intel_quirks.c b/drivers/gpu/drm/i915/display/intel_quirks.c
+index 1abbdd426e58..a07e7d5217d9 100644
+--- a/drivers/gpu/drm/i915/display/intel_quirks.c
+@@ -235,6 +263,14 @@ static struct intel_quirk intel_quirks[] = {
+ 	/* ECS Liva Q2 */
+ 	{ 0x3185, 0x1019, 0xa94d, quirk_increase_ddi_disabled_time },
+ 	{ 0x3184, 0x1019, 0xa94d, quirk_increase_ddi_disabled_time },
++#if defined(CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK) && defined(_I915_DRV_H_)
++	/* Dell Wyse 3040 */
++	{ 0x22b0, 0x1028, 0x07c1, quirk_disable_dp_dpms_d3 },
++#endif
++#ifdef CONFIG_IGEL_APPLE_GMUX
++	/* Apple MacBookPro15,1 */
++	{ 0x3e9b, 0x106b, 0x0176, quirk_ddi_a_force_4_lanes },
++#endif
+ 	/* HP Notebook - 14-r206nv */
+ 	{ 0x0f31, 0x103c, 0x220f, quirk_invert_brightness },
+ 
+diff --git a/drivers/gpu/drm/i915/i915_drv.h b/drivers/gpu/drm/i915/i915_drv.h
+index 6a768aad8edd..388488130e55 100644
+--- a/drivers/gpu/drm/i915/i915_drv.h
+@@ -60,12 +60,29 @@
+ #include "intel_step.h"
+ #include "intel_uncore.h"
+ 
++#ifdef CONFIG_IGEL_ADD_I915_HW_DETECTION
++/* nagel@igel.com: define enum for IGEL platforms,
++ * that require special treatment. */
++enum igel_platforms {
++	NO_IGEL_PLATFORM = -1,
++	IGEL_H830C,
++	IGEL_TC215B
++};
++extern enum igel_platforms igel_platform;
++#define IS_IGEL_H830C (igel_platform==IGEL_H830C)
++#define IS_IGEL_TC215B (igel_platform==IGEL_TC215B)
++#endif
++
+ struct dram_info;
+ struct drm_i915_clock_gating_funcs;
+ struct intel_display;
+ struct intel_pxp;
+ struct vlv_s0ix_state;
+ 
++#ifdef CONFIG_IGEL_I915_WYSE_3040_DP_QUIRK
++#define QUIRK_SKIP_DP_DPMS_D3 (1<<15)
++#endif
++
+ /* Data Stolen Memory (DSM) aka "i915 stolen memory" */
+ struct i915_dsm {
+ 	/*

@@ -1,0 +1,76 @@
+IGEL_SURFACE_BOOK1_DGPU_SWITCH
+	  This driver provides a sysfs switch to set the power-state of the
+	  discrete GPU found on the Microsoft Surface Book 1.
+
+	  Source: linux-surface
+	  URL: https://github.com/linux-surface/linux-surface/tree/master/patches
+diff --git a/drivers/i2c/i2c-core-acpi.c b/drivers/i2c/i2c-core-acpi.c
+index ed90858a27b7..220914b6abc1 100644
+--- a/drivers/i2c/i2c-core-acpi.c
+@@ -662,6 +662,30 @@ static int acpi_gsb_i2c_write_bytes(struct i2c_client *client,
+ 	return (ret == 1) ? 0 : -EIO;
+ }
+ 
++#if IS_ENABLED(CONFIG_IGEL_SURFACE_BOOK1_DGPU_SWITCH)
++static int acpi_gsb_i2c_write_raw_bytes(struct i2c_client *client,
++		u8 *data, u8 data_len)
++{
++	struct i2c_msg msgs[1];
++	int ret = AE_OK;
++
++	msgs[0].addr = client->addr;
++	msgs[0].flags = client->flags;
++	msgs[0].len = data_len + 1;
++	msgs[0].buf = data;
++
++	ret = i2c_transfer(client->adapter, msgs, ARRAY_SIZE(msgs));
++
++	if (ret < 0) {
++		dev_err(&client->adapter->dev, "i2c write failed: %d\n", ret);
++		return ret;
++	}
++
++	/* 1 transfer must have completed successfully */
++	return (ret == 1) ? 0 : -EIO;
++}
++#endif
++
+ static acpi_status
+ i2c_acpi_space_handler(u32 function, acpi_physical_address command,
+ 			u32 bits, u64 *value64,
+diff --git a/drivers/i2c/i2c-core-acpi.c b/drivers/i2c/i2c-core-acpi.c
+index ed90858a27b7..220914b6abc1 100644
+--- a/drivers/i2c/i2c-core-acpi.c
+@@ -763,6 +787,21 @@ i2c_acpi_space_handler(u32 function, acpi_physical_address command,
+ 		}
+ 		break;
+ 
++#if IS_ENABLED(CONFIG_IGEL_SURFACE_BOOK1_DGPU_SWITCH)
++	case ACPI_GSB_ACCESS_ATTRIB_RAW_BYTES:
++		if (action == ACPI_READ) {
++			dev_warn(&adapter->dev,
++				 "protocol 0x%02x not supported for client 0x%02x\n",
++				 accessor_type, client->addr);
++			ret = AE_BAD_PARAMETER;
++			goto err;
++		} else {
++			status = acpi_gsb_i2c_write_raw_bytes(client,
++					gsb->data, info->access_length);
++		}
++		break;
++#endif
++
+ 	default:
+ 		dev_warn(&adapter->dev, "protocol 0x%02x not supported for client 0x%02x\n",
+ 			 accessor_type, client->addr);
+diff --git a/drivers/platform/surface/Makefile b/drivers/platform/surface/Makefile
+index 53344330939b..7abd699e8c88 100644
+--- a/drivers/platform/surface/Makefile
+@@ -12,6 +12,7 @@ obj-$(CONFIG_SURFACE_AGGREGATOR_CDEV)	+= surface_aggregator_cdev.o
+ obj-$(CONFIG_SURFACE_AGGREGATOR_HUB)	+= surface_aggregator_hub.o
+ obj-$(CONFIG_SURFACE_AGGREGATOR_REGISTRY) += surface_aggregator_registry.o
+ obj-$(CONFIG_SURFACE_AGGREGATOR_TABLET_SWITCH) += surface_aggregator_tabletsw.o
++obj-$(CONFIG_IGEL_SURFACE_BOOK1_DGPU_SWITCH) += surfacebook1_dgpu_switch.o
+ obj-$(CONFIG_SURFACE_DTX)		+= surface_dtx.o
+ obj-$(CONFIG_SURFACE_GPE)		+= surface_gpe.o
+ obj-$(CONFIG_SURFACE_HOTPLUG)		+= surface_hotplug.o

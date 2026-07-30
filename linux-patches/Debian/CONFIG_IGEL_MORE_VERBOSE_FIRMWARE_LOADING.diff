@@ -1,0 +1,95 @@
+IGEL_MORE_VERBOSE_FIRMWARE_LOADING
+	  Improve the log messaages for firmware loading. With this changes
+	  you see which firmware is tried to be loaded if it was successful
+	  or not. This can help with debugging firmware related problems.
+
+	  Source: Debian
+	  URL: https://salsa.debian.org/kernel-team/linux/-/blob/debian/5.10/bullseye/debian/patches/bugfix/all/firmware_class-log-every-success-and-failure.patch?ref_type=heads
+diff --git a/drivers/base/firmware_loader/fallback.c b/drivers/base/firmware_loader/fallback.c
+index 3ef0b312ae71..bd4de3b6fb15 100644
+--- a/drivers/base/firmware_loader/fallback.c
+@@ -139,7 +139,13 @@ static int fw_load_from_user_helper(struct firmware *firmware,
+ 	if (opt_flags & FW_OPT_NOWAIT) {
+ 		timeout = usermodehelper_read_lock_wait(timeout);
+ 		if (!timeout) {
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++			/* gottwald@igel.com : Take patch from debian firmware_class-log-every-success-and-failure.patch
++			 * to improve the log messages for firmware loading */
++			dev_err(device, "firmware: %s loading timed out\n",
++#else
+ 			dev_dbg(device, "firmware: %s loading timed out\n",
++#endif
+ 				name);
+ 			return -EBUSY;
+ 		}
+diff --git a/drivers/base/firmware_loader/main.c b/drivers/base/firmware_loader/main.c
+index 6942c62fa59d..138aa94b83ca 100644
+--- a/drivers/base/firmware_loader/main.c
+@@ -553,9 +553,15 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv,
+ 		if (rc < 0) {
+ 			if (!(fw_priv->opt_flags & FW_OPT_NO_WARN)) {
+ 				if (rc != -ENOENT)
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++					dev_dbg(device,
++						 "loading %s failed with error %d\n",
++						 path, rc);
++#else
+ 					dev_warn(device,
+ 						 "loading %s failed with error %d\n",
+ 						 path, rc);
++#endif
+ 				else
+ 					dev_dbg(device,
+ 						"loading %s failed for no such file or directory.\n",
+diff --git a/drivers/base/firmware_loader/main.c b/drivers/base/firmware_loader/main.c
+index 6942c62fa59d..138aa94b83ca 100644
+--- a/drivers/base/firmware_loader/main.c
+@@ -568,8 +574,13 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv,
+ 
+ 		dev_dbg(device, "Loading firmware from %s\n", path);
+ 		if (decompress) {
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++			dev_info(device, "firmware: f/w decompressing %s\n",
++				 fw_priv->fw_name);
++#else
+ 			dev_dbg(device, "f/w decompressing %s\n",
+ 				fw_priv->fw_name);
++#endif
+ 			rc = decompress(device, fw_priv, size, buffer);
+ 			/* discard the superfluous original content */
+ 			vfree(buffer);
+diff --git a/drivers/base/firmware_loader/main.c b/drivers/base/firmware_loader/main.c
+index 6942c62fa59d..138aa94b83ca 100644
+--- a/drivers/base/firmware_loader/main.c
+@@ -579,8 +590,13 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv,
+ 				continue;
+ 			}
+ 		} else {
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++			dev_info(device, "firmware: direct-loading %s\n",
++				 fw_priv->fw_name);
++#else
+ 			dev_dbg(device, "direct-loading %s\n",
+ 				fw_priv->fw_name);
++#endif
+ 			if (!fw_priv->data)
+ 				fw_priv->data = buffer;
+ 			fw_priv->size = size;
+diff --git a/drivers/base/firmware_loader/main.c b/drivers/base/firmware_loader/main.c
+index 6942c62fa59d..138aa94b83ca 100644
+--- a/drivers/base/firmware_loader/main.c
+@@ -589,6 +605,14 @@ fw_get_filesystem_firmware(struct device *device, struct fw_priv *fw_priv,
+ 		break;
+ 	}
+ 	__putname(path);
++#ifdef CONFIG_IGEL_MORE_VERBOSE_FIRMWARE_LOADING
++	if (rc == -ENOENT)
++		dev_err(device, "firmware: failed to load %s (no such file or directory)\n",
++			fw_priv->fw_name);
++	else if (rc)
++		dev_err(device, "firmware: failed to load %s (errorcode: %d)\n",
++			fw_priv->fw_name, rc);
++#endif
+ 
+ 	return rc;
+ }

@@ -1,0 +1,48 @@
+--- a/grub-core/fs/igelfs.c
++++ b/grub-core/fs/igelfs.c
+@@ -254,6 +254,9 @@ grub_igelconfig_bootreg_to_config(unsign
+   char *empty = (char *) grub_zalloc(1*sizeof(char));
+   const char *custom_splash, *dualboot = NULL, *efidev = NULL;
+   unsigned long value;
++  long value_l = 0;
++  int value_i = 0;
++  unsigned int value_u = 0;
+   int bootreg_type = -1;
+   bootreg_data* bt_data = (bootreg_data*) grub_zalloc(sizeof(bootreg_data)); //Use this to wrapper new libbottreg functions, TODO HEap malloc???
+   bt_data->mode = BOOTREG_RDONLY;
+@@ -772,6 +775,35 @@ fi\n\n", efidev, efidev, efidev, efidev)
+ 
+   test_and_free(val);
+ 
++  bootreg_get (bt_data, "wolfssl_enable", &val);
++  if (NULL != val) {
++    value_l = grub_strtol (val, NULL, 10);
++    if (!(grub_errno)) {
++      if ((GRUB_INT_MAX >= value_l) && (GRUB_INT_MIN <= value_l)) {
++        /* <meme>If I sits, it fits.</meme> */
++        value_i = value_l;
++        grub_snprintf (&(cmdline[grub_strlen (cmdline)]),
++                       4096 - grub_strlen (cmdline),
++                       " wolfssl_enable=%d", value_i);
++      }
++    }
++  }
++  test_and_free (val);
++
++  bootreg_get (bt_data, "wolfssl_delay", &val);
++  if (NULL != val) {
++    value_l = grub_strtol (val, NULL, 10);
++    if (!(grub_errno)) {
++      if (((long)(GRUB_UINT_MAX) >= value_l) && (0 <= value_l)) {
++        value_u = value_l;
++        grub_snprintf (&(cmdline[grub_strlen (cmdline)]),
++                       4096 - grub_strlen (cmdline),
++                       " wolfssl_delay=%u", value_u);
++      }
++    }
++  }
++  test_and_free (val);
++
+   bootreg_get(bt_data, "use_2nd_kernel_as_default", &val);
+   if (val != NULL && val[0] == 't' && val[1] == 'r' && val[2] == 'u' && val[3] == 'e') {
+     add2 = added1;

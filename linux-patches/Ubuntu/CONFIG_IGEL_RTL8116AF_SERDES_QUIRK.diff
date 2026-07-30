@@ -1,0 +1,84 @@
+IGEL_RTL8116AF_SERDES_QUIRK
+	  RTL8116af is a variation of RTL8168fp. It uses SerDes instead of PHY,
+	  but SerDes status will not reflect to PHY. So it needs a quirk to
+	  reflect SerDes status during PHY read.
+
+	  Source: Ubuntu
+	  Commit: c7d0a206df17d4cbb364d27532f6275e1486eda0
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -1192,6 +1195,36 @@ static int r8168g_mdio_read(struct rtl8169_private *tp, int reg)
+ 	return r8168_phy_ocp_read(tp, tp->ocp_base + reg * 2);
+ }
+ 
++#ifdef CONFIG_IGEL_RTL8116AF_SERDES_QUIRK
++/* The quirk reflects RTL8116af SerDes status. */
++static int r8116af_mdio_read_quirk(struct rtl8169_private *tp, int reg)
++{
++	u8 phyStatus = RTL_R8(tp, PHYstatus);
++
++	if (!(phyStatus & LinkStatus))
++		return 0;
++
++	/* BMSR */
++	if (tp->ocp_base == OCP_STD_PHY_BASE && reg == MII_BMSR)
++		return BMSR_ANEGCOMPLETE | BMSR_LSTATUS;
++
++	/* PHYSR */
++	if (tp->ocp_base == 0xa430 && reg == 0x12) {
++		if (phyStatus & _1000bpsF)
++			return 0x0028;
++		else if (phyStatus & _100bps)
++			return 0x0018;
++	}
++
++	return 0;
++}
++
++static int r8116af_mdio_read(struct rtl8169_private *tp, int reg)
++{
++	return r8168g_mdio_read(tp, reg) | r8116af_mdio_read_quirk(tp, reg);
++}
++#endif /* CONFIG_IGEL_RTL8116AF_SERDES_QUIRK */
++
+ static void mac_mcu_write(struct rtl8169_private *tp, int reg, int value)
+ {
+ 	if (reg == 0x1f) {
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -1285,6 +1318,15 @@ static int r8168dp_2_mdio_read(struct rtl8169_private *tp, int reg)
+ 	return value;
+ }
+ 
++#ifdef CONFIG_IGEL_RTL8116AF_SERDES_QUIRK
++static bool rtl_is_8116af(struct rtl8169_private *tp)
++{
++	return tp->mac_version == RTL_GIGA_MAC_VER_52 &&
++		(r8168_mac_ocp_read(tp, 0xdc00) & 0x0078) == 0x0030 &&
++		(r8168_mac_ocp_read(tp, 0xd006) & 0x00ff) == 0x0000;
++}
++#endif /* CONFIG_IGEL_RTL8116AF_SERDES_QUIRK */
++
+ static void rtl_writephy(struct rtl8169_private *tp, int location, int val)
+ {
+ 	switch (tp->mac_version) {
+diff --git a/drivers/net/ethernet/realtek/r8169_main.c b/drivers/net/ethernet/realtek/r8169_main.c
+index d407b031cc2a..0e623deb8f50 100644
+--- a/drivers/net/ethernet/realtek/r8169_main.c
+@@ -1308,7 +1350,14 @@ static int rtl_readphy(struct rtl8169_private *tp, int location)
+ 	case RTL_GIGA_MAC_VER_31:
+ 		return r8168dp_2_mdio_read(tp, location);
+ 	case RTL_GIGA_MAC_VER_40 ... RTL_GIGA_MAC_VER_LAST:
++#ifdef CONFIG_IGEL_RTL8116AF_SERDES_QUIRK
++		if (rtl_is_8116af(tp))
++			return r8116af_mdio_read(tp, location);
++		else
++			return r8168g_mdio_read(tp, location);
++#else
+ 		return r8168g_mdio_read(tp, location);
++#endif /* CONFIG_IGEL_RTL8116AF_SERDES_QUIRK */
+ 	default:
+ 		return r8169_mdio_read(tp, location);
+ 	}

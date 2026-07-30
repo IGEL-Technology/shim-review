@@ -1,0 +1,38 @@
+IGEL_E1000E_OPTIPLEX_WORKAROUND
+	  On a Dell Optiplex Micro 7020 we encounter the issue that the
+	  phy_id can not be determined after a reboot. This option uses
+	  a hardcoded phy_id in this case (DMI data is used for Optiplex
+	  detection). Also the hardcoded phy_id is only used in error case.
+
+	  Source: IGEL
+diff --git a/drivers/net/ethernet/intel/e1000e/ich8lan.c b/drivers/net/ethernet/intel/e1000e/ich8lan.c
+index f9328caefe44..57e5a7981dde 100644
+--- a/drivers/net/ethernet/intel/e1000e/ich8lan.c
+@@ -40,6 +40,10 @@
+ 
+ #include "e1000.h"
+ 
++#ifdef CONFIG_IGEL_E1000E_OPTIPLEX_WORKAROUND
++#include <linux/dmi.h>
++#endif
++
+ /* ICH GbE Flash Hardware Sequencing Flash Status Register bit breakdown */
+ /* Offset 04h HSFSTS */
+ union ich8_hws_flash_status {
+diff --git a/drivers/net/ethernet/intel/e1000e/ich8lan.c b/drivers/net/ethernet/intel/e1000e/ich8lan.c
+index f9328caefe44..57e5a7981dde 100644
+--- a/drivers/net/ethernet/intel/e1000e/ich8lan.c
+@@ -203,6 +207,13 @@ static bool e1000_phy_is_accessible_pchlan(struct e1000_hw *hw)
+ 		hw->phy.id = phy_id;
+ 		hw->phy.revision = (u32)(phy_reg & ~PHY_REVISION_MASK);
+ 		goto out;
++#ifdef CONFIG_IGEL_E1000E_OPTIPLEX_WORKAROUND
++	} else if (dmi_match(DMI_PRODUCT_NAME, "OptiPlex Micro 7020") && dmi_match(DMI_SYS_VENDOR, "Dell Inc.")) {
++		pr_err("Workaround e1000e for Dell OptiPlex Micro 7020 triggered\n");
++		hw->phy.id = 22282400;
++		hw->phy.revision = (u32)6;
++		goto out;
++#endif
+ 	}
+ 
+ 	/* In case the PHY needs to be in mdio slow mode,
