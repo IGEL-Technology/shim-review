@@ -238,7 +238,9 @@ https://github.com/rhboot/shim/commit/e99bdbb827a50cde019393d3ca1e89397db221a7
 Skip this, if you're not using GRUB2, otherwise do you have an entry in your GRUB2 binary similar to:  
 `grub,5,Free Software Foundation,grub,GRUB_UPSTREAM_VERSION,https://www.gnu.org/software/grub/`?
 *******************************************************************************
-Yes. CVE-2022-28737 is actually not a GRUB CVE, but fixed in shim upstream here (and thus fixed in our build):
+Yes. Our GRUB2 binaries carry the upstream generation 5 entry:
+`grub,5,Free Software Foundation,grub,2.12,https://www.gnu.org/software/grub/`
+(see the full SBAT listings below).
 
 *******************************************************************************
 ### Were old shims hashes provided to Microsoft for verification and to be added to future DBX updates?
@@ -497,7 +499,6 @@ Skip this, if you're not using GRUB2.
 
 Hint: this is about those modules that are in the binary itself, not the `.mod` files in your filesystem.
 *******************************************************************************
-```
 igelx64.efi (104 modules):
 ```
 acpi all_video archelp bitmap bitmap_scale boot btrfs bufio cat chain
@@ -527,7 +528,6 @@ password_pbkdf2 pbkdf2 peimage pgp png priority_queue procfs raid6rec regexp
 search search_fs_file search_fs_uuid search_label set_next_boot setjmp
 squash4 terminal test tr trig true udf video video_colors video_fb
 videoinfo videotest winbootnext xzio yaml zstd
-```
 ```
 
 *******************************************************************************
@@ -563,7 +563,13 @@ Summarize in one or two sentences, how your secure bootchain works on higher lev
 *******************************************************************************
 ### Does your shim load any loaders that support loading unsigned kernels (e.g. certain GRUB2 configurations)?
 *******************************************************************************
-No.
+No — no unsigned kernel can be booted under Secure Boot.
+
+One patch may look like an exception at first glance and we want to call it out explicitly: `IGEL-disable-secure-boot-validation-in-failsafe.diff`. Despite its name, it does **not** disable kernel verification. Our custom IGEL-partition code (`grub-core/partmap/igel.c`) contained a *second, redundant* signature check performed while **selecting** which failsafe system partition to boot: it read the candidate kernel into a temporary buffer, called shim's verify protocol, and freed the buffer again. This patch removes that selection-time check.
+
+The kernel that is actually booted is loaded afterwards by GRUB's normal `linux` command (`linux $device/vmlinuz ... failsafe`) from the IGEL filesystem. That load goes through the upstream shim_lock verifier (`GRUB_FILE_TYPE_LINUX_KERNEL` is not skipped), so the failsafe kernel is still verified by shim before it is executed. All boot paths — normal, verbose, emergency, reset-to-factory and failsafe — load the kernel with the `linux` command. No boot path uses `linux16`, `chainloader`, `kexec` or a direct `LoadImage` for the kernel.
+
+Net effect of the patch: failsafe partition *selection* no longer pre-validates the signature, but an unsigned or tampered kernel is still refused by shim at load time.
 
 *******************************************************************************
 ### What kernel are you using? Which patches and configuration does it include to enforce Secure Boot?
@@ -585,7 +591,12 @@ A reasonable timeframe of waiting for a review can reach 2-3 months. Helping us 
 
 For newcomers, the applications labeled as [*easy to review*](https://github.com/rhboot/shim-review/issues?q=is%3Aopen+is%3Aissue+label%3A%22easy+to+review%22) are recommended to start the contribution process.
 *******************************************************************************
-None so far.
+- [ZeronsoftN shim-x86_64_ia32_aarch64-20240730](https://github.com/rhboot/shim-review/issues/433#issuecomment-2503931398)
+- [Shim 15.8 for UOS Linux (x86_64) by UnionTech](https://github.com/rhboot/shim-review/issues/431#issuecomment-2589423221)
+- [Parted Magic shim 16.1 x64](https://github.com/rhboot/shim-review/issues/588#issuecomment-5629812137)
+- [Shim 16.1 amd64 and arm64 for Pexip PexOS](https://github.com/rhboot/shim-review/issues/590#issuecomment-5829396839)
+
+We plant to continue with community reviews but the list might not be up to date.
 
 *******************************************************************************
 ### Add any additional information you think we may need to validate this shim signing application.
