@@ -596,7 +596,7 @@ For newcomers, the applications labeled as [*easy to review*](https://github.com
 - [Parted Magic shim 16.1 x64](https://github.com/rhboot/shim-review/issues/588#issuecomment-5629812137)
 - [Shim 16.1 amd64 and arm64 for Pexip PexOS](https://github.com/rhboot/shim-review/issues/590#issuecomment-5829396839)
 
-We plant to continue with community reviews but the list might not be up to date.
+We plan to continue with community reviews but the list might not be up to date.
 
 *******************************************************************************
 ### Add any additional information you think we may need to validate this shim signing application.
